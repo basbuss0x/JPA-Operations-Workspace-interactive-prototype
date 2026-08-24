@@ -15,3 +15,36 @@ The prototype should reduce what the operator must remember, copy, calculate, re
 The prototype source of truth lives under `docs/prototype/`.
 
 Read those documents before implementing features.
+
+## Run the Pass 1 prototype
+
+Requirements: Node.js 22+ and npm.
+
+```bash
+npm install
+npm run dev
+```
+
+The first pass implements:
+
+- `/` — Home / Kerjakan Sekarang
+- `/orders` — searchable and filterable Orders Explorer
+- `/orders/:orderId` — route-aware Order Workspace tabs
+- `/pipeline` and `/vendor-batches` — safe navigation placeholders for deferred task cards
+
+Prototype state is versioned and persisted under the `jpa-operations-prototype` localStorage key. Use **Reset Demo Data** in the app shell to restore all canonical scenarios.
+
+## Quality checks
+
+```bash
+npm run typecheck
+npm run lint
+npm test
+npm run build
+
+# Browser route/persistence/mobile smoke tests
+npx playwright install chromium
+npm run test:e2e
+```
+
+This branch intentionally stops after TASK 05 / Review Gate 1. Detailed ARKAS review, SIPLah execution, Vendor Batch, distribution, and finance workflows remain deferred to their later task cards.

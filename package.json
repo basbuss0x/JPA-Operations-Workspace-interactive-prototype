@@ -1,0 +1,50 @@
+{
+  "name": "jpa-operations-workspace-interactive-prototype",
+  "version": "1.0.0",
+  "description": "Interactive R&D prototype for an operations workspace that helps manage school procurement orders from ARKAS intake through HET validation, SIPLah purchasing, vendor batching, goods arrival, school distribution, payment, school benefit, and completion.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/basbuss0x/JPA-Operations-Workspace-interactive-prototype.git"
+  },
+  "keywords": [
+    "prototype",
+    "operations-workspace"
+  ],
+  "author": "JPA",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/basbuss0x/JPA-Operations-Workspace-interactive-prototype/issues"
+  },
+  "homepage": "https://github.com/basbuss0x/JPA-Operations-Workspace-interactive-prototype#readme",
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.18.2",
+    "zustand": "^5.0.11"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@playwright/test": "^1.62.1",
+    "@types/react": "^19.2.10",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.4",
+    "eslint": "^9.39.2",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.54.0",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18"
+  }
+}
