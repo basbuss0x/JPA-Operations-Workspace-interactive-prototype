@@ -6,11 +6,16 @@ import {
   setNextActionOverride,
   snoozeOrderAction,
 } from '../domain/transitions'
-import type { NextActionOverride, Order, PrototypeData, VendorBatch } from '../domain/types'
+import type { NextActionKind, NextActionOverride, Order, PrototypeData } from '../domain/types'
+import { migratePrototypeState } from './migrate-prototype-state'
 
 interface PrototypeStore extends PrototypeData {
   resetDemoData: () => void
-  snoozeNextAction: (orderIds: string[], until: string | null) => void
+  snoozeNextAction: (
+    orderIds: string[],
+    actionKind: NextActionKind,
+    until: string | null,
+  ) => void
   saveNextActionOverride: (
     orderId: string,
     override: Omit<NextActionOverride, 'createdAt'> | null,
@@ -38,9 +43,11 @@ export const usePrototypeStore = create<PrototypeStore>()(
     (set) => ({
       ...initialData,
       resetDemoData: () => set(createCanonicalDemoData()),
-      snoozeNextAction: (orderIds, until) =>
+      snoozeNextAction: (orderIds, actionKind, until) =>
         set((state) => ({
-          orders: updateOrders(state.orders, orderIds, (order) => snoozeOrderAction(order, until)),
+          orders: updateOrders(state.orders, orderIds, (order) =>
+            snoozeOrderAction(order, actionKind, until),
+          ),
         })),
       saveNextActionOverride: (orderId, override) =>
         set((state) => ({
@@ -62,16 +69,7 @@ export const usePrototypeStore = create<PrototypeStore>()(
         orders: state.orders,
         vendorBatches: state.vendorBatches,
       }),
-      migrate: (persistedState, version) => {
-        if (version !== DEMO_STATE_VERSION) return createCanonicalDemoData()
-        const persisted = persistedState as Partial<PrototypeData>
-        if (!persisted.orders || !persisted.vendorBatches) return createCanonicalDemoData()
-        return {
-          version: DEMO_STATE_VERSION,
-          orders: persisted.orders,
-          vendorBatches: persisted.vendorBatches as Record<string, VendorBatch>,
-        }
-      },
+      migrate: migratePrototypeState,
     },
   ),
 )

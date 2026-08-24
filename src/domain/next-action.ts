@@ -1,30 +1,57 @@
-import type { NextAction, Order, VendorBatch } from './types'
+import { getHetExceptionCount, isCompletionReady, isSiplahComplete } from './order-state'
+import type {
+  ActionDerivationContext,
+  NextAction,
+  NextActionKind,
+  Order,
+} from './types'
+
+function reached(dueAt: string | null, now: Date): boolean {
+  if (!dueAt) return false
+  const dueTime = new Date(dueAt).getTime()
+  return Number.isFinite(dueTime) && dueTime <= now.getTime()
+}
+
+export function getActionSnoozedUntil(order: Order, kind: NextActionKind): string | null {
+  return order.nextActionControl.controlsByActionKey[kind]?.snoozedUntil ?? null
+}
+
+export function isActionSnoozed(order: Order, kind: NextActionKind, now: Date): boolean {
+  const snoozedUntil = getActionSnoozedUntil(order, kind)
+  if (!snoozedUntil) return false
+  const snoozedTime = new Date(snoozedUntil).getTime()
+  return Number.isFinite(snoozedTime) && snoozedTime > now.getTime()
+}
 
 function action(
   order: Order,
-  input: Omit<NextAction, 'id' | 'orderId' | 'dueAt' | 'source'>,
+  now: Date,
+  input: Omit<NextAction, 'id' | 'orderId' | 'snoozedUntil' | 'availability' | 'source'>,
 ): NextAction {
+  const snoozedUntil = getActionSnoozedUntil(order, input.kind)
   return {
     ...input,
     id: `${order.id}:${input.kind}`,
     orderId: order.id,
-    dueAt: null,
+    snoozedUntil,
+    availability: isActionSnoozed(order, input.kind, now) ? 'SNOOZED' : 'ACTIVE',
     source: 'SYSTEM',
   }
 }
 
-export function isActionSnoozed(order: Order, now = new Date()): boolean {
-  const value = order.nextActionControl.snoozedUntil
-  return value !== null && new Date(value).getTime() > now.getTime()
-}
+export function deriveActionCandidates(
+  order: Order,
+  context: ActionDerivationContext,
+  now: Date,
+): NextAction[] {
+  if (order.stage === 'CLOSED') return []
 
-export function deriveNextAction(order: Order, batch: VendorBatch | null): NextAction | null {
-  if (order.stage === 'CLOSED') return null
-
+  const candidates: NextAction[] = []
   const override = order.nextActionControl.override
   if (override) {
-    return {
-      id: `${order.id}:manual`,
+    const snoozedUntil = getActionSnoozedUntil(order, 'MANUAL')
+    candidates.push({
+      id: `${order.id}:MANUAL`,
       kind: 'MANUAL',
       orderId: order.id,
       title: override.title,
@@ -33,141 +60,166 @@ export function deriveNextAction(order: Order, batch: VendorBatch | null): NextA
       ctaLabel: 'Buka order',
       priority: 0,
       dueAt: override.dueAt,
+      snoozedUntil,
+      availability: isActionSnoozed(order, 'MANUAL', now) ? 'SNOOZED' : 'ACTIVE',
       source: 'MANUAL',
-    }
+    })
   }
 
-  const exceptions = order.items.filter((item) =>
-    ['PRICE_MISMATCH', 'AMBIGUOUS_MATCH', 'NO_MATCH'].includes(item.matchStatus),
-  ).length
+  const exceptions = getHetExceptionCount(order)
   if (exceptions > 0) {
-    return action(order, {
-      kind: 'REVIEW_HET',
-      title: `Review ${exceptions} selisih HET`,
-      reason: 'Selisih harus diputuskan sebelum pesanan dapat diproses di SIPLah.',
-      href: `/orders/${order.id}?tab=arkas`,
-      ctaLabel: 'Review HET',
-      priority: 10,
-    })
+    candidates.push(
+      action(order, now, {
+        kind: 'REVIEW_HET',
+        title: `Review ${exceptions} selisih HET`,
+        reason: 'Selisih harus diputuskan sebelum pesanan dapat diproses di SIPLah.',
+        href: `/orders/${order.id}?tab=arkas`,
+        ctaLabel: 'Review HET',
+        priority: 10,
+        dueAt: null,
+      }),
+    )
   }
 
-  const siplah = order.siplah
-  const siplahComplete =
-    siplah.accessAvailable &&
-    siplah.orderPlaced &&
-    Boolean(siplah.orderNumber) &&
-    siplah.suratPesananAvailable &&
-    siplah.suratPesananAttached &&
-    siplah.suratPesananSentToSchool &&
-    siplah.adminCompleted
-
+  const siplahComplete = isSiplahComplete(order)
   if (order.het.status === 'APPROVED' && !siplahComplete) {
-    const title = siplah.orderPlaced
-      ? 'Lengkapi Surat Pesanan SIPLah'
-      : 'Belanjakan pesanan di TokoLadang/SIPLah'
-    return action(order, {
-      kind: 'COMPLETE_SIPLAH',
-      title,
-      reason: 'HET sudah disetujui; lanjutkan checkpoint SIPLah yang belum selesai.',
-      href: `/orders/${order.id}?tab=siplah`,
-      ctaLabel: 'Buka SIPLah',
-      priority: 20,
-    })
+    candidates.push(
+      action(order, now, {
+        kind: 'COMPLETE_SIPLAH',
+        title: order.siplah.orderPlaced
+          ? 'Lengkapi dokumen SIPLah'
+          : 'Belanjakan pesanan di TokoLadang/SIPLah',
+        reason: 'HET sudah disetujui; lanjutkan checkpoint SIPLah yang belum selesai.',
+        href: `/orders/${order.id}?tab=siplah`,
+        ctaLabel: 'Buka SIPLah',
+        priority: 20,
+        dueAt: null,
+      }),
+    )
   }
 
   if (siplahComplete && order.vendorBatchId === null) {
-    return action(order, {
-      kind: 'ADD_TO_VENDOR_BATCH',
-      title: 'Masukkan ke Vendor Batch',
-      reason: 'SIPLah selesai dan item siap digabung dengan pesanan sekolah lain.',
-      href: `/orders/${order.id}?tab=vendor`,
-      ctaLabel: 'Buka vendor',
-      priority: 30,
-    })
+    candidates.push(
+      action(order, now, {
+        kind: 'ADD_TO_VENDOR_BATCH',
+        title: 'Masukkan ke Vendor Batch',
+        reason: 'SIPLah selesai dan item siap digabung dengan pesanan sekolah lain.',
+        href: `/orders/${order.id}?tab=vendor`,
+        ctaLabel: 'Buka vendor',
+        priority: 30,
+        dueAt: null,
+      }),
+    )
   }
 
   if (order.goods.arrivedAt !== null && !order.goods.preDeliveryCheckCompleted) {
-    return action(order, {
-      kind: 'CHECK_GOODS',
-      title: 'Cek barang dan jadwalkan pengantaran',
-      reason: 'Barang sudah tiba di JPA tetapi belum melalui pemeriksaan pra-kirim.',
-      href: `/orders/${order.id}?tab=distribution`,
-      ctaLabel: 'Cek barang',
-      priority: 40,
-    })
+    candidates.push(
+      action(order, now, {
+        kind: 'CHECK_GOODS',
+        title: 'Cek barang dan jadwalkan pengantaran',
+        reason: 'Barang sudah tiba di JPA tetapi belum melalui pemeriksaan pra-kirim.',
+        href: `/orders/${order.id}?tab=distribution`,
+        ctaLabel: 'Cek barang',
+        priority: 40,
+        dueAt: null,
+      }),
+    )
   }
 
   if (order.fulfillment.remainingQty > 0 && order.goods.preDeliveryCheckCompleted) {
-    return action(order, {
-      kind: 'CONTINUE_FULFILLMENT',
-      title: `Lanjutkan pemenuhan · sisa ${order.fulfillment.remainingQty} buku`,
-      reason: `${order.fulfillment.problemCount} masalah masih tercatat di Kelengkapan Tracker.`,
-      href: `/orders/${order.id}?tab=distribution`,
-      ctaLabel: 'Lihat distribusi',
-      priority: 50,
-    })
+    candidates.push(
+      action(order, now, {
+        kind: 'CONTINUE_FULFILLMENT',
+        title: `Lanjutkan pemenuhan · sisa ${order.fulfillment.remainingQty} buku`,
+        reason: `${order.fulfillment.problemCount} masalah masih tercatat di Kelengkapan Tracker.`,
+        href: `/orders/${order.id}?tab=distribution`,
+        ctaLabel: 'Lihat distribusi',
+        priority: 50,
+        dueAt: null,
+      }),
+    )
   }
 
-  if (
-    order.schoolPayment.status === 'UNPAID' &&
-    order.schoolPayment.followUpDueAt !== null
-  ) {
-    return {
-      ...action(order, {
+  const paymentDueAt = order.schoolPayment.followUpDueAt
+  if (order.schoolPayment.status === 'UNPAID' && reached(paymentDueAt, now)) {
+    candidates.push(
+      action(order, now, {
         kind: 'FOLLOW_UP_PAYMENT',
         title: 'Follow-up pembayaran sekolah',
-        reason: 'Tanggal follow-up pembayaran sudah dijadwalkan.',
+        reason: 'Tanggal follow-up pembayaran sudah tercapai.',
         href: `/orders/${order.id}?tab=finance`,
         ctaLabel: 'Buka pembayaran',
         priority: 60,
+        dueAt: paymentDueAt,
       }),
-      dueAt: order.schoolPayment.followUpDueAt,
-    }
+    )
   }
 
   if (order.schoolPayment.status === 'LUNAS' && order.benefit.status === 'ELIGIBLE') {
-    const amount = Math.round(order.finalInvoiceAmount * 0.1)
-    return action(order, {
-      kind: 'PAY_BENEFIT',
-      title: `Bayar benefit ${new Intl.NumberFormat('id-ID', {
-        style: 'currency',
-        currency: 'IDR',
-        maximumFractionDigits: 0,
-      }).format(amount)}`,
-      reason: 'Pembayaran sekolah sudah LUNAS; benefit 10% belum dibayarkan.',
-      href: `/orders/${order.id}?tab=finance`,
-      ctaLabel: 'Buka benefit',
-      priority: 70,
-    })
+    const amount = order.benefit.obligationAmount
+    const title = amount === null
+      ? 'Bayar benefit sekolah'
+      : `Bayar benefit ${new Intl.NumberFormat('id-ID', {
+          style: 'currency',
+          currency: 'IDR',
+          maximumFractionDigits: 0,
+        }).format(amount)}`
+    candidates.push(
+      action(order, now, {
+        kind: 'PAY_BENEFIT',
+        title,
+        reason: 'Pembayaran sekolah sudah LUNAS; benefit 10% belum dibayarkan.',
+        href: `/orders/${order.id}?tab=finance`,
+        ctaLabel: 'Buka benefit',
+        priority: 70,
+        dueAt: null,
+      }),
+    )
   }
 
-  const completionReady =
-    order.fulfillment.progressPercent === 100 &&
-    order.goods.acceptedBySchoolAt !== null &&
-    siplahComplete &&
-    order.schoolPayment.status === 'LUNAS' &&
-    order.benefit.status === 'PAID'
-  if (completionReady) {
-    return action(order, {
-      kind: 'CLOSE_ORDER',
-      title: 'Tutup order',
-      reason: 'Checkpoint barang, SIPLah, pembayaran sekolah, dan benefit sudah lengkap.',
-      href: `/orders/${order.id}`,
-      ctaLabel: 'Review penutupan',
-      priority: 80,
-    })
+  if (isCompletionReady(order)) {
+    candidates.push(
+      action(order, now, {
+        kind: 'CLOSE_ORDER',
+        title: 'Tutup order',
+        reason: 'Checkpoint barang, SIPLah, pembayaran sekolah, dan benefit sudah lengkap.',
+        href: `/orders/${order.id}`,
+        ctaLabel: 'Review penutupan',
+        priority: 80,
+        dueAt: null,
+      }),
+    )
   }
 
-  if (batch && ['SENT_TO_VENDOR', 'VENDOR_CONFIRMED', 'PROCESSING'].includes(batch.status)) {
-    return action(order, {
-      kind: 'FOLLOW_UP_VENDOR',
-      title: 'Tunggu / follow-up vendor bila perlu',
-      reason: `${batch.id} sedang ${batch.status === 'PROCESSING' ? 'diproses vendor' : 'menunggu proses berikutnya'}.`,
-      href: `/orders/${order.id}?tab=vendor`,
-      ctaLabel: 'Lihat vendor',
-      priority: 90,
-    })
+  const batch = context.vendorBatch
+  if (
+    batch &&
+    ['SENT_TO_VENDOR', 'VENDOR_CONFIRMED', 'PROCESSING'].includes(batch.status) &&
+    reached(batch.followUpDueAt, now)
+  ) {
+    candidates.push(
+      action(order, now, {
+        kind: 'FOLLOW_UP_VENDOR',
+        title: 'Follow-up vendor',
+        reason: `Reminder ${batch.id} sudah tercapai; status saat ini ${batch.status.replaceAll('_', ' ')}.`,
+        href: `/orders/${order.id}?tab=vendor`,
+        ctaLabel: 'Lihat vendor',
+        priority: 90,
+        dueAt: batch.followUpDueAt,
+      }),
+    )
   }
 
-  return null
+  return candidates
+}
+
+export function getActiveActionCandidates(candidates: NextAction[]): NextAction[] {
+  return candidates.filter((candidate) => candidate.availability === 'ACTIVE')
+}
+
+export function derivePrimaryNextAction(candidates: NextAction[]): NextAction | null {
+  const activeCandidates = getActiveActionCandidates(candidates)
+  return [...activeCandidates].sort(
+    (left, right) => left.priority - right.priority || left.id.localeCompare(right.id),
+  )[0] ?? null
 }

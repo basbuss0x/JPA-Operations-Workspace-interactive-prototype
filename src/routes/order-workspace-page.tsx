@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { deriveNextAction } from '../domain/next-action'
-import { getHetExceptionCount, getOrderBatch } from '../domain/selectors'
+import { derivePrimaryNextAction } from '../domain/next-action'
+import { getHetExceptionCount, getOrderActionCandidates, getOrderBatch } from '../domain/selectors'
 import { lifecycleLabels } from '../domain/types'
 import { OrderTabContent, type OrderTab } from '../features/orders/order-tab-content'
 import { usePrototypeStore } from '../store/use-prototype-store'
@@ -14,6 +14,7 @@ import { Modal } from '../components/ui/modal'
 import { StatusChip } from '../components/ui/status-chip'
 import { Tabs } from '../components/ui/tabs'
 import { NextActionPanel } from '../components/work-queue/next-action-panel'
+import { OutstandingActions } from '../components/work-queue/outstanding-actions'
 
 const tabs: Array<{ id: OrderTab; label: string }> = [
   { id: 'overview', label: 'Overview' },
@@ -40,6 +41,7 @@ export function OrderWorkspacePage() {
   const snoozeNextAction = usePrototypeStore((state) => state.snoozeNextAction)
   const saveNextActionOverride = usePrototypeStore((state) => state.saveNextActionOverride)
   const [searchParams, setSearchParams] = useSearchParams()
+  const [renderedAt] = useState(() => new Date())
   const requestedTab = searchParams.get('tab')
   const activeTab: OrderTab = isOrderTab(requestedTab) ? requestedTab : 'overview'
   const [overrideOpen, setOverrideOpen] = useState(false)
@@ -48,10 +50,12 @@ export function OrderWorkspacePage() {
   const [overrideDue, setOverrideDue] = useState('')
 
   const batch = order ? getOrderBatch(order, vendorBatches) : null
-  const nextAction = useMemo(
-    () => (order ? deriveNextAction(order, batch) : null),
-    [batch, order],
+  const actionCandidates = useMemo(
+    () => order ? getOrderActionCandidates(order, vendorBatches, renderedAt) : [],
+    [order, renderedAt, vendorBatches],
   )
+  const nextAction = derivePrimaryNextAction(actionCandidates)
+  const otherActions = actionCandidates.filter((action) => action.id !== nextAction?.id)
 
   if (!order) {
     return (
@@ -114,10 +118,16 @@ export function OrderWorkspacePage() {
 
       <NextActionPanel
         action={nextAction}
-        snoozedUntil={order.nextActionControl.snoozedUntil}
-        onSnooze={nextAction ? () => snoozeNextAction([order.id], futureIsoDate(3)) : undefined}
-        onUnsnooze={order.nextActionControl.snoozedUntil ? () => snoozeNextAction([order.id], null) : undefined}
+        onSnooze={nextAction
+          ? () => snoozeNextAction([order.id], nextAction.kind, futureIsoDate(3))
+          : undefined}
         onCustomize={order.stage !== 'CLOSED' ? openOverride : undefined}
+      />
+
+      <OutstandingActions
+        actions={otherActions}
+        onSnooze={(kind) => snoozeNextAction([order.id], kind, futureIsoDate(3))}
+        onUnsnooze={(kind) => snoozeNextAction([order.id], kind, null)}
       />
 
       <Tabs items={tabs} active={activeTab} onChange={selectTab} label="Bagian order workspace" />
@@ -126,7 +136,7 @@ export function OrderWorkspacePage() {
       <Modal
         open={overrideOpen}
         title="Atur Next Action manual"
-        description="Override mengubah rekomendasi yang tampil, bukan state HET, SIPLah, vendor, atau pembayaran."
+        description="Aksi manual dapat dipin sebagai primary, tetapi kewajiban system tetap terlihat dan domain state tidak berubah."
         onClose={() => setOverrideOpen(false)}
         footer={
           <>

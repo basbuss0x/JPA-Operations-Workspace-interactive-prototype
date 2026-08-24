@@ -18,7 +18,7 @@ test('desktop routes render canonical operational context', async ({ page }, tes
 
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Kerjakan Sekarang' })).toBeVisible()
-  await expect(page.getByText('Review 2 selisih HET')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Review 2 selisih HET' })).toBeVisible()
   await expect(page.getByText('2 pesanan siap masuk Vendor Batch')).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('desktop-home.png'), fullPage: true })
 
@@ -45,7 +45,7 @@ test('desktop routes render canonical operational context', async ({ page }, tes
   expect(pageErrors).toEqual([])
 })
 
-test('snooze, override, persistence, and reset mutate real local state', async ({ page }) => {
+test('snooze, override, persistence, and reset mutate real local state', async ({ page }, testInfo) => {
   await page.goto('/')
 
   const hetWorkItem = page.locator('.next-action').filter({ hasText: 'Review 2 selisih HET' })
@@ -65,6 +65,9 @@ test('snooze, override, persistence, and reset mutate real local state', async (
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Konfirmasi harga dengan sekolah' })).toBeVisible()
   await expect(page.getByText('Override manual')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Aksi lain & yang disnooze' })).toBeVisible()
+  await expect(page.getByText('Review 2 selisih HET')).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('manual-plus-system-actions.png'), fullPage: true })
 
   await page.getByRole('button', { name: 'Reset Demo Data' }).click()
   await page.getByRole('button', { name: 'Reset sekarang' }).click()
@@ -72,12 +75,51 @@ test('snooze, override, persistence, and reset mutate real local state', async (
   await expect(page.getByText('Override manual')).toHaveCount(0)
 
   await page.evaluate(() => {
+    const key = 'jpa-operations-prototype'
+    const persisted = JSON.parse(window.localStorage.getItem(key) ?? '{}') as {
+      state?: { orders?: Record<string, Record<string, unknown>> }
+    }
+    const source = structuredClone(persisted.state?.orders?.['ORD-2026-068'])
+    if (!source) throw new Error('Missing source order for v1 migration')
+    source.schoolName = 'Migrated SDN 68'
+    source.finalInvoiceAmount = source.arkasBudgetAmount
+    delete source.arkasBudgetAmount
+    const reviewedAmount = source.hetReviewedAmount
+    delete source.hetReviewedAmount
+    const het = source.het as Record<string, unknown>
+    het.hetTotalAmount = reviewedAmount
+    const siplah = source.siplah as Record<string, unknown>
+    siplah.adminCompleted = true
+    const payment = source.schoolPayment as Record<string, unknown>
+    payment.amount = payment.schoolPaidAmount
+    delete payment.schoolPaidAmount
+    const benefit = source.benefit as Record<string, unknown>
+    delete benefit.baseAmount
+    delete benefit.obligationAmount
+    source.nextActionControl = { override: null, snoozedUntil: null }
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        state: { version: 1, orders: { 'ORD-2026-068': source }, vendorBatches: {} },
+        version: 1,
+      }),
+    )
+  })
+  await page.goto('/orders/ORD-2026-068')
+  await expect(page.getByRole('heading', { name: 'Migrated SDN 68' })).toBeVisible()
+  await expect.poll(async () => page.evaluate(() => {
+    const stored = JSON.parse(window.localStorage.getItem('jpa-operations-prototype') ?? '{}') as { version?: number }
+    return stored.version
+  })).toBe(2)
+
+  await page.evaluate(() => {
     window.localStorage.setItem(
       'jpa-operations-prototype',
       JSON.stringify({ state: { version: 999, orders: {}, vendorBatches: {} }, version: 999 }),
     )
   })
-  await page.reload()
+  await page.goto('/orders/ORD-2026-030')
+  await expect(page.getByRole('heading', { name: 'SDN 30 Ambon' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Review 2 selisih HET' })).toBeVisible()
 })
 

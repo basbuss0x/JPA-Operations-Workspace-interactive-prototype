@@ -5,26 +5,15 @@ import type {
   VendorBatch,
   WorkQueueItem,
 } from './types'
-import { deriveNextAction, isActionSnoozed } from './next-action'
+import { deriveActionCandidates, getActiveActionCandidates } from './next-action'
+import { getHetExceptionCount, isSiplahComplete } from './order-state'
 
-const unresolvedHetStatuses = new Set(['PRICE_MISMATCH', 'AMBIGUOUS_MATCH', 'NO_MATCH'])
-
-export function getHetExceptionCount(order: Order): number {
-  return order.items.filter((item) => unresolvedHetStatuses.has(item.matchStatus)).length
-}
-
-export function isSiplahComplete(order: Order): boolean {
-  const process = order.siplah
-  return (
-    process.accessAvailable &&
-    process.orderPlaced &&
-    Boolean(process.orderNumber) &&
-    process.suratPesananAvailable &&
-    process.suratPesananAttached &&
-    process.suratPesananSentToSchool &&
-    process.adminCompleted
-  )
-}
+export {
+  getHetExceptionCount,
+  isCompletionReady,
+  isSiplahAdminComplete,
+  isSiplahComplete,
+} from './order-state'
 
 export function isVendorBatchEligible(order: Order): boolean {
   return (
@@ -36,23 +25,15 @@ export function isVendorBatchEligible(order: Order): boolean {
   )
 }
 
-export function calculateBenefitAmount(order: Pick<Order, 'finalInvoiceAmount'>): number {
-  return Math.round(order.finalInvoiceAmount * 0.1)
+export function calculateBenefitAmount(
+  order: Pick<Order, 'finalInvoiceAmount' | 'benefit'>,
+): number | null {
+  if (order.benefit.obligationAmount !== null) return order.benefit.obligationAmount
+  return order.finalInvoiceAmount === null ? null : Math.round(order.finalInvoiceAmount * 0.1)
 }
 
 export function isBenefitEligible(order: Order): boolean {
-  return order.schoolPayment.status === 'LUNAS' && order.benefit.status !== 'PAID'
-}
-
-export function isCompletionReady(order: Order): boolean {
-  return (
-    order.fulfillment.progressPercent === 100 &&
-    order.fulfillment.remainingQty === 0 &&
-    order.goods.acceptedBySchoolAt !== null &&
-    isSiplahComplete(order) &&
-    order.schoolPayment.status === 'LUNAS' &&
-    order.benefit.status === 'PAID'
-  )
+  return order.schoolPayment.status === 'LUNAS' && order.benefit.status === 'ELIGIBLE'
 }
 
 export function getOrderBatch(order: Order, batches: Record<string, VendorBatch>): VendorBatch | null {
@@ -98,22 +79,32 @@ export function aggregateVendorItems(orders: Order[]): AggregatedVendorItem[] {
   return [...items.values()].sort((a, b) => a.title.localeCompare(b.title, 'id'))
 }
 
+export function getOrderActionCandidates(
+  order: Order,
+  batches: Record<string, VendorBatch>,
+  now: Date,
+) {
+  return deriveActionCandidates(order, { vendorBatch: getOrderBatch(order, batches) }, now)
+}
+
 export function deriveWorkQueue(
   data: Pick<PrototypeData, 'orders' | 'vendorBatches'>,
-  now = new Date(),
+  now: Date,
 ): WorkQueueItem[] {
   const items: WorkQueueItem[] = []
 
   for (const order of Object.values(data.orders)) {
-    if (isActionSnoozed(order, now)) continue
-    const action = deriveNextAction(order, getOrderBatch(order, data.vendorBatches))
-    if (!action) continue
-    items.push({
-      ...action,
-      schoolName: order.schoolName,
-      orderIds: [order.id],
-      context: `${order.schoolName} · ${order.id}`,
-    })
+    const candidates = getActiveActionCandidates(
+      getOrderActionCandidates(order, data.vendorBatches, now),
+    )
+    for (const action of candidates) {
+      items.push({
+        ...action,
+        schoolName: order.schoolName,
+        orderIds: [order.id],
+        context: `${order.schoolName} · ${order.id}`,
+      })
+    }
   }
 
   const vendorItems = items.filter((item) => item.kind === 'ADD_TO_VENDOR_BATCH')
@@ -152,13 +143,13 @@ export function matchesOrderFilter(
   order: Order,
   filter: OrderFilter,
   batches: Record<string, VendorBatch>,
-  now = new Date(),
+  now: Date,
 ): boolean {
   switch (filter) {
     case 'all':
       return true
     case 'needs-action':
-      return !isActionSnoozed(order, now) && deriveNextAction(order, getOrderBatch(order, batches)) !== null
+      return getActiveActionCandidates(getOrderActionCandidates(order, batches, now)).length > 0
     case 'het-problem':
       return getHetExceptionCount(order) > 0
     case 'ready-siplah':

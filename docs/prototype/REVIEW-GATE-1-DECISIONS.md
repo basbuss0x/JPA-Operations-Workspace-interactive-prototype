@@ -1,8 +1,8 @@
 # Review Gate 1 — Product Decisions for the Next Pass
 
-Status: Review Gate 1 provisionally accepted.
+Status: Review Gate 1.1 foundation corrections implemented; Pass 2 remains unauthorized.
 
-These decisions are binding input for future implementation passes. They are recorded here only; this commit does not begin TASK 06+ or retrofit the Pass 1 prototype.
+These decisions are binding for future implementation passes. Gate 1.1 updates the shared domain foundation only and does not begin TASK 06+.
 
 ## Work Queue — vendor follow-up
 
@@ -47,6 +47,15 @@ The benefit base is exactly 10% of `finalInvoiceAmount`.
 
 In the normal workflow, freeze the benefit base/amount once school payment is confirmed `LUNAS`. Later changes must not silently recalculate an already-established benefit obligation; any exceptional correction flow must be explicit.
 
-## Explicit deferral
+## Gate 1.1 implementation boundary
 
-Implementation consequences of these decisions are deferred until the relevant task cards are authorized. Do not begin TASK 06+ solely because these decisions have been recorded.
+The shared foundation now supports multiple action candidates, action-level snooze, reached-date reminders, targeted per-order goods arrival, separate financial amounts, frozen benefit obligations, and derived SIPLah admin completion.
+
+Still deferred:
+
+- automatic vendor stale thresholds, pending real operational evidence
+- detailed goods-arrival allocation UI (TASK 11)
+- full payment and benefit UI (TASK 12)
+- full SIPLah execution UI and required-document configuration (TASK 08)
+
+Do not begin TASK 06+ until separately authorized.

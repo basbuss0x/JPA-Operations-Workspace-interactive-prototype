@@ -1,5 +1,11 @@
 import { Link } from 'react-router-dom'
-import { getHetExceptionCount, isSiplahComplete, isVendorBatchEligible } from '../../domain/selectors'
+import {
+  calculateBenefitAmount,
+  getHetExceptionCount,
+  isSiplahAdminComplete,
+  isSiplahComplete,
+  isVendorBatchEligible,
+} from '../../domain/selectors'
 import type { Order, VendorBatch } from '../../domain/types'
 import { formatCurrency, formatDate, formatDateTime } from '../../utils/format'
 import { ExceptionIndicator } from '../../components/ui/exception-indicator'
@@ -119,7 +125,9 @@ function ArkasTab({ order }: { order: Order }) {
   const exceptions = order.items.filter((item) =>
     ['PRICE_MISMATCH', 'AMBIGUOUS_MATCH', 'NO_MATCH'].includes(item.matchStatus),
   )
-  const difference = order.het.hetTotalAmount - order.finalInvoiceAmount
+  const difference = order.hetReviewedAmount === null
+    ? null
+    : order.hetReviewedAmount - order.arkasBudgetAmount
   return (
     <section className="workspace-panel focused-workflow">
       <div className="panel-heading">
@@ -168,10 +176,10 @@ function ArkasTab({ order }: { order: Order }) {
       )}
 
       <div className="totals-strip">
-        <div><span>Total ARKAS</span><strong>{formatCurrency(order.finalInvoiceAmount)}</strong></div>
-        <div><span>Total HET</span><strong>{formatCurrency(order.het.hetTotalAmount)}</strong></div>
-        <div className={difference !== 0 ? 'is-warning' : ''}>
-          <span>Selisih</span><strong>{formatCurrency(Math.abs(difference))}</strong>
+        <div><span>Anggaran ARKAS</span><strong>{formatCurrency(order.arkasBudgetAmount)}</strong></div>
+        <div><span>Hasil review HET</span><strong>{order.hetReviewedAmount === null ? '—' : formatCurrency(order.hetReviewedAmount)}</strong></div>
+        <div className={difference !== null && difference !== 0 ? 'is-warning' : ''}>
+          <span>Selisih</span><strong>{difference === null ? '—' : formatCurrency(Math.abs(difference))}</strong>
         </div>
       </div>
     </section>
@@ -198,7 +206,11 @@ function SiplahTab({ order }: { order: Order }) {
         <ChecklistItem done={process.suratPesananAvailable} label="Surat Pesanan tersedia" />
         <ChecklistItem done={process.suratPesananAttached} label="Surat Pesanan terlampir" />
         <ChecklistItem done={process.suratPesananSentToSchool} label="Surat Pesanan dikirim ke sekolah" />
-        <ChecklistItem done={process.adminCompleted} label="Administrasi SIPLah selesai" />
+        <ChecklistItem
+          done={isSiplahAdminComplete(order)}
+          label="Administrasi SIPLah terverifikasi"
+          detail="Derived dari order SIPLah dan dokumen wajib di atas; bukan checkbox manual."
+        />
       </ol>
       {!isSiplahComplete(order) ? (
         <div className="deferred-action-note">
@@ -229,6 +241,7 @@ function VendorTab({ order, batch }: { order: Order; batch: VendorBatch | null }
           <DetailRow label="Dibuat" value={formatDate(batch.createdAt)} />
           <DetailRow label="Dikirim ke vendor" value={formatDate(batch.sentAt)} />
           <DetailRow label="Barang tiba" value={formatDate(batch.arrivedAt)} />
+          <DetailRow label="Reminder follow-up" value={formatDate(batch.followUpDueAt)} />
         </div>
       ) : isVendorBatchEligible(order) ? (
         <div className="callout callout--warning">
@@ -273,7 +286,7 @@ function DistributionTab({ order }: { order: Order }) {
 }
 
 function FinanceTab({ order }: { order: Order }) {
-  const benefitAmount = Math.round(order.finalInvoiceAmount * 0.1)
+  const benefitAmount = calculateBenefitAmount(order)
   return (
     <div className="workspace-grid">
       <section className="workspace-panel">
@@ -282,8 +295,10 @@ function FinanceTab({ order }: { order: Order }) {
           <StatusChip tone={order.schoolPayment.status === 'LUNAS' ? 'success' : 'warning'}>{order.schoolPayment.status}</StatusChip>
         </div>
         <div className="detail-list">
-          <DetailRow label="Invoice final" value={formatCurrency(order.finalInvoiceAmount)} />
-          <DetailRow label="Diterima" value={formatCurrency(order.schoolPayment.amount)} />
+          <DetailRow label="Anggaran ARKAS" value={formatCurrency(order.arkasBudgetAmount)} />
+          <DetailRow label="Hasil review HET" value={order.hetReviewedAmount === null ? '—' : formatCurrency(order.hetReviewedAmount)} />
+          <DetailRow label="Invoice final" value={order.finalInvoiceAmount === null ? 'Belum ditetapkan' : formatCurrency(order.finalInvoiceAmount)} />
+          <DetailRow label="Diterima sekolah" value={formatCurrency(order.schoolPayment.schoolPaidAmount)} />
           <DetailRow label="Tanggal" value={formatDate(order.schoolPayment.paidAt)} />
           <DetailRow label="Metode" value={order.schoolPayment.method ?? '—'} />
           <DetailRow label="Bukti" value={order.schoolPayment.evidenceName ?? 'Belum ada'} />
@@ -294,7 +309,10 @@ function FinanceTab({ order }: { order: Order }) {
           <div><h2>Benefit sekolah</h2><p>Tepat 10% dari invoice final, dibayar satu kali penuh.</p></div>
           <StatusChip tone={order.benefit.status === 'PAID' ? 'success' : order.benefit.status === 'ELIGIBLE' ? 'warning' : 'neutral'}>{order.benefit.status.replaceAll('_', ' ')}</StatusChip>
         </div>
-        <div className="benefit-amount"><span>Nominal benefit</span><strong>{formatCurrency(benefitAmount)}</strong></div>
+        <div className="benefit-amount">
+          <span>Nominal benefit {order.benefit.obligationAmount === null ? '(belum dibekukan)' : '(dibekukan saat LUNAS)'}</span>
+          <strong>{benefitAmount === null ? '—' : formatCurrency(benefitAmount)}</strong>
+        </div>
         <div className="detail-list">
           <DetailRow label="Eligible sejak" value={formatDate(order.benefit.eligibleAt)} />
           <DetailRow label="Dibayar" value={formatDate(order.benefit.paidAt)} />

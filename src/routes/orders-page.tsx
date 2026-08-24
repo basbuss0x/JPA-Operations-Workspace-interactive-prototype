@@ -1,10 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { deriveNextAction } from '../domain/next-action'
+import { derivePrimaryNextAction, getActiveActionCandidates } from '../domain/next-action'
 import { OrderStateSummary } from '../components/orders/order-state-summary'
 import { getOrderStateItems } from '../domain/presentation'
 import {
   getHetExceptionCount,
+  getOrderActionCandidates,
   getOrderBatch,
   getOrders,
   matchesOrderFilter,
@@ -37,6 +38,7 @@ export function OrdersPage() {
   const orders = usePrototypeStore((state) => state.orders)
   const vendorBatches = usePrototypeStore((state) => state.vendorBatches)
   const [searchParams, setSearchParams] = useSearchParams()
+  const [renderedAt] = useState(() => new Date())
   const query = searchParams.get('q') ?? ''
   const requestedFilter = searchParams.get('filter')
   const activeFilter: OrderFilter = isOrderFilter(requestedFilter) ? requestedFilter : 'all'
@@ -46,9 +48,9 @@ export function OrdersPage() {
       getOrders({ orders }).filter(
         (order) =>
           matchesOrderSearch(order, query) &&
-          matchesOrderFilter(order, activeFilter, vendorBatches),
+          matchesOrderFilter(order, activeFilter, vendorBatches, renderedAt),
       ),
-    [activeFilter, orders, query, vendorBatches],
+    [activeFilter, orders, query, renderedAt, vendorBatches],
   )
 
   const updateParam = (key: 'q' | 'filter', value: string) => {
@@ -117,7 +119,11 @@ export function OrdersPage() {
               <tbody>
                 {filteredOrders.map((order) => {
                   const batch = getOrderBatch(order, vendorBatches)
-                  const action = deriveNextAction(order, batch)
+                  const candidates = getActiveActionCandidates(
+                    getOrderActionCandidates(order, vendorBatches, renderedAt),
+                  )
+                  const action = derivePrimaryNextAction(candidates)
+                  const otherActionCount = Math.max(0, candidates.length - (action ? 1 : 0))
                   const exceptions = getHetExceptionCount(order)
                   const stateItems = getOrderStateItems(order, batch)
                   return (
@@ -134,6 +140,7 @@ export function OrdersPage() {
                         <Link to={action?.href ?? `/orders/${order.id}`}>
                           {action?.title ?? 'Tidak ada tindakan aktif'}
                         </Link>
+                        {otherActionCount > 0 ? <span className="other-action-count">+{otherActionCount} aksi lain</span> : null}
                       </td>
                       {stateItems.slice(0, 3).map((item) => (
                         <td key={item.label}><StatusChip tone={item.tone}>{item.value}</StatusChip></td>
@@ -151,7 +158,11 @@ export function OrdersPage() {
           <div className="orders-mobile-list">
             {filteredOrders.map((order) => {
               const batch = getOrderBatch(order, vendorBatches)
-              const action = deriveNextAction(order, batch)
+              const candidates = getActiveActionCandidates(
+                getOrderActionCandidates(order, vendorBatches, renderedAt),
+              )
+              const action = derivePrimaryNextAction(candidates)
+              const otherActionCount = Math.max(0, candidates.length - (action ? 1 : 0))
               const exceptions = getHetExceptionCount(order)
               return (
                 <article className="order-mobile-card" key={order.id}>
@@ -168,6 +179,7 @@ export function OrdersPage() {
                     <span>
                       <small>Next Action</small>
                       <strong>{action?.title ?? 'Tidak ada tindakan aktif'}</strong>
+                      {otherActionCount > 0 ? <small>+{otherActionCount} aksi lain</small> : null}
                     </span>
                     <span aria-hidden="true">→</span>
                   </Link>

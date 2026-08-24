@@ -174,8 +174,9 @@ orderNumber?
 suratPesananAvailable
 suratPesananAttached?
 suratPesananSentToSchool
-adminCompleted
 ```
+
+`adminCompleted` is derived from completion of the SIPLah order and verification of the required order documents. It is not an independently mutable checkbox and is independent from school payment.
 
 Do not store a school SIPLah password.
 
@@ -202,7 +203,7 @@ UNPAID
 LUNAS
 ```
 
-Store amount/date/method/evidence metadata in the model even if evidence is simulated.
+Store date/method/evidence metadata in the model even if evidence is simulated. Keep `arkasBudgetAmount`, `hetReviewedAmount`, `finalInvoiceAmount`, and `schoolPaidAmount` separately representable. ARKAS source amount is immutable.
 
 ### School benefit
 
@@ -212,7 +213,7 @@ ELIGIBLE
 PAID
 ```
 
-Benefit amount is derived from `finalInvoiceAmount * 0.10`.
+Benefit amount is established from `finalInvoiceAmount * 0.10`. Once school payment is confirmed `LUNAS`, freeze both the benefit base and obligation amount so later amount mutation cannot silently change the obligation.
 
 ### Fulfillment
 
@@ -259,8 +260,9 @@ operator marks sent
 vendor confirmed
 → VENDOR_CONFIRMED / PROCESSING
 
-goods arrival recorded
-→ PARTIALLY_ARRIVED or ARRIVED
+goods arrival recorded with explicit per-order allocations
+→ only allocated school orders receive arrival state
+→ batch becomes PARTIALLY_ARRIVED or ARRIVED from its member allocations
 → affected order can surface goods-check next action
 
 school payment set LUNAS
@@ -274,7 +276,7 @@ benefit recorded PAID
 
 Prefer selectors/derived logic for:
 
-- next action suggestion
+- action candidates and primary next action
 - vendor batch eligibility
 - HET exception counts
 - benefit amount
@@ -288,6 +290,16 @@ Do not duplicate these as manually maintained fields unless the prototype needs 
 
 ## Next Action engine
 
+Derive all independently actionable obligations before selecting a primary recommendation:
+
+```text
+deriveActionCandidates(order, context, now)
+→ NextAction[]
+
+derivePrimaryNextAction(candidates)
+→ NextAction | null
+```
+
 Suggested priority rules:
 
 1. unresolved HET exception
@@ -295,18 +307,14 @@ Suggested priority rules:
 3. SIPLah complete but not in an active/sent vendor batch
 4. vendor goods arrived and need checking
 5. fulfillment incomplete and actionable
-6. school payment follow-up where manually scheduled
+6. school payment follow-up only when its due date is reached
 7. school payment LUNAS + benefit ELIGIBLE
 8. order completion/close
+9. explicit vendor follow-up only when its due date is reached
 
-Support:
+A manual action may be pinned as primary, but system obligations remain candidates. Snooze controls are keyed by action kind so one concern cannot hide another. `PROCESSING` alone is passive; stale-threshold follow-up remains deferred until real operational evidence exists.
 
-- system-suggested action
-- manual override
-- snooze until date
-- due date/reminder metadata
-
-The system suggestion is not an immutable workflow lock.
+The primary suggestion is not an immutable workflow lock.
 
 ## Vendor aggregation
 

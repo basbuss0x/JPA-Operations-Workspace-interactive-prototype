@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { deriveNextAction } from '../../domain/next-action'
+import { derivePrimaryNextAction, getActiveActionCandidates } from '../../domain/next-action'
+import { getOrderActionCandidates } from '../../domain/selectors'
 import { getHetExceptionCount } from '../../domain/selectors'
 import type { Order, VendorBatch } from '../../domain/types'
 import { lifecycleLabels } from '../../domain/types'
@@ -9,10 +10,15 @@ import { StatusChip } from '../ui/status-chip'
 interface OrderSummaryRowProps {
   order: Order
   batch: VendorBatch | null
+  now: Date
 }
 
-export function OrderSummaryRow({ order, batch }: OrderSummaryRowProps) {
-  const action = deriveNextAction(order, batch)
+export function OrderSummaryRow({ order, batch, now }: OrderSummaryRowProps) {
+  const candidates = getActiveActionCandidates(
+    getOrderActionCandidates(order, batch ? { [batch.id]: batch } : {}, now),
+  )
+  const action = derivePrimaryNextAction(candidates)
+  const otherActionCount = Math.max(0, candidates.length - (action ? 1 : 0))
   const exceptions = getHetExceptionCount(order)
   return (
     <Link className="order-summary-row" to={`/orders/${order.id}`}>
@@ -24,9 +30,11 @@ export function OrderSummaryRow({ order, batch }: OrderSummaryRowProps) {
         {lifecycleLabels[order.stage]}
       </StatusChip>
       <div className="order-summary-row__signal">
-        {exceptions > 0 ? <ExceptionIndicator label={`${exceptions} selisih HET`} level="danger" /> : null}
-        {exceptions === 0 && action ? <span>{action.title}</span> : null}
-        {!action ? <span className="muted">Tidak ada tindakan aktif</span> : null}
+        {exceptions > 0 && action?.kind !== 'REVIEW_HET' ? (
+          <ExceptionIndicator label={`${exceptions} selisih HET`} level="danger" />
+        ) : null}
+        {action ? <span>{action.title}</span> : <span className="muted">Tidak ada tindakan aktif</span>}
+        {otherActionCount > 0 ? <span className="other-action-count">+{otherActionCount} aksi lain</span> : null}
       </div>
       <span className="order-summary-row__arrow" aria-hidden="true">→</span>
     </Link>

@@ -7,16 +7,28 @@ import {
   recordGoodsArrival,
   recordSchoolPayment,
   resolveHetException,
+  snoozeOrderAction,
   transitionVendorBatch,
 } from './transitions'
-import { deriveNextAction } from './next-action'
+import { deriveActionCandidates, derivePrimaryNextAction } from './next-action'
+import { calculateBenefitAmount } from './selectors'
+import type { Order, PrototypeData } from './types'
 
 const now = new Date('2026-02-21T08:00:00.000Z')
 
-function canonicalOrder(id: string) {
+function canonicalOrder(id: string): Order {
   const order = createCanonicalDemoData().orders[id]
   if (!order) throw new Error(`Missing canonical order ${id}`)
   return order
+}
+
+function createProcessingBatch(): PrototypeData {
+  const data = createCanonicalDemoData()
+  const draft = createVendorBatch(data, ['ORD-2026-040', 'ORD-2026-SLB'], 'VB-2026-010', now)
+  const recap = transitionVendorBatch(draft, 'VB-2026-010', 'RECAP_GENERATED', now)
+  const sent = transitionVendorBatch(recap, 'VB-2026-010', 'SENT_TO_VENDOR', now)
+  const confirmed = transitionVendorBatch(sent, 'VB-2026-010', 'VENDOR_CONFIRMED', now)
+  return transitionVendorBatch(confirmed, 'VB-2026-010', 'PROCESSING', now)
 }
 
 describe('important transitions', () => {
@@ -31,6 +43,7 @@ describe('important transitions', () => {
     const approved = confirmHetReview(second, now)
     expect(approved.het.status).toBe('APPROVED')
     expect(approved.stage).toBe('SIPLAH')
+    expect(approved.arkasBudgetAmount).toBe(order.arkasBudgetAmount)
   })
 
   it('creates a vendor batch as DRAFT and never implies it was sent', () => {
@@ -40,28 +53,42 @@ describe('important transitions', () => {
 
     expect(batch?.status).toBe('DRAFT')
     expect(batch?.sentAt).toBeNull()
+    expect(batch?.followUpDueAt).toBeNull()
     expect(next.orders['ORD-2026-040']?.vendorBatchId).toBe('VB-2026-010')
     expect(() => transitionVendorBatch(next, 'VB-2026-010', 'SENT_TO_VENDOR', now)).toThrow()
-
-    const recap = transitionVendorBatch(next, 'VB-2026-010', 'RECAP_GENERATED', now)
-    const sent = transitionVendorBatch(recap, 'VB-2026-010', 'SENT_TO_VENDOR', now)
-    expect(sent.vendorBatches['VB-2026-010']?.sentAt).toBe(now.toISOString())
   })
 
-  it('records goods arrival without implying the goods were checked', () => {
-    const data = createCanonicalDemoData()
-    const arrived = recordGoodsArrival(data, 'VB-2026-009', 'FULL', now)
-    const order = arrived.orders['ORD-2026-049']
+  it('targets goods arrival by order without mutating sibling batch members', () => {
+    const processing = createProcessingBatch()
+    const siblingBefore = processing.orders['ORD-2026-SLB']
+    const arrived = recordGoodsArrival(
+      processing,
+      'VB-2026-010',
+      [{ orderId: 'ORD-2026-040', arrivalType: 'FULL' }],
+      now,
+    )
+    const target = arrived.orders['ORD-2026-040']
+    const sibling = arrived.orders['ORD-2026-SLB']
 
-    expect(arrived.vendorBatches['VB-2026-009']?.status).toBe('ARRIVED')
-    expect(order?.stage).toBe('GOODS_ARRIVED')
-    expect(order?.goods.arrivedAt).toBe(now.toISOString())
-    expect(order?.goods.preDeliveryCheckCompleted).toBe(false)
-    expect(order ? deriveNextAction(order, arrived.vendorBatches['VB-2026-009'] ?? null)?.kind : null).toBe('CHECK_GOODS')
+    expect(arrived.vendorBatches['VB-2026-010']?.status).toBe('PARTIALLY_ARRIVED')
+    expect(target?.stage).toBe('GOODS_ARRIVED')
+    expect(target?.goods.arrivalType).toBe('FULL')
+    expect(target?.goods.preDeliveryCheckCompleted).toBe(false)
+    expect(sibling).toEqual(siblingBefore)
+    expect(sibling?.goods.arrivedAt).toBeNull()
+
+    if (!target) throw new Error('Missing arrived order')
+    const actions = deriveActionCandidates(
+      target,
+      { vendorBatch: arrived.vendorBatches['VB-2026-010'] ?? null },
+      now,
+    )
+    expect(derivePrimaryNextAction(actions)?.kind).toBe('CHECK_GOODS')
   })
 
-  it('makes benefit eligible after LUNAS but does not auto-pay or close it', () => {
+  it('makes benefit eligible after LUNAS without auto-paying or changing stage', () => {
     const order = canonicalOrder('ORD-2026-040')
+    if (order.finalInvoiceAmount === null) throw new Error('Expected finalized invoice')
     const paid = recordSchoolPayment(
       order,
       { amount: order.finalInvoiceAmount, method: 'Transfer bank', evidenceName: 'payment.pdf' },
@@ -69,13 +96,35 @@ describe('important transitions', () => {
     )
 
     expect(paid.schoolPayment.status).toBe('LUNAS')
+    expect(paid.schoolPayment.schoolPaidAmount).toBe(order.finalInvoiceAmount)
     expect(paid.benefit.status).toBe('ELIGIBLE')
+    expect(paid.benefit.baseAmount).toBe(order.finalInvoiceAmount)
+    expect(paid.benefit.obligationAmount).toBe(1_821_000)
     expect(paid.stage).toBe('SIPLAH')
+  })
 
+  it('freezes benefit obligation when LUNAS even if final invoice is later mutated', () => {
+    const order = canonicalOrder('ORD-2026-040')
+    if (order.finalInvoiceAmount === null) throw new Error('Expected finalized invoice')
+    const paid = recordSchoolPayment(
+      order,
+      { amount: order.finalInvoiceAmount, method: 'Transfer bank', evidenceName: 'payment.pdf' },
+      now,
+    )
+    const frozenAmount = paid.benefit.obligationAmount
+    const changedInvoice: Order = {
+      ...paid,
+      finalInvoiceAmount: order.finalInvoiceAmount + 5_000_000,
+    }
+
+    expect(frozenAmount).toBe(1_821_000)
+    expect(calculateBenefitAmount(changedInvoice)).toBe(frozenAmount)
+
+    if (frozenAmount === null) throw new Error('Expected frozen benefit')
     const benefitPaid = recordBenefitPayment(
-      paid,
+      changedInvoice,
       {
-        amount: Math.round(order.finalInvoiceAmount * 0.1),
+        amount: frozenAmount,
         method: 'Transfer bank',
         recipient: 'Bendahara sekolah',
         proofName: 'benefit.pdf',
@@ -83,22 +132,42 @@ describe('important transitions', () => {
       now,
     )
     expect(benefitPaid.benefit.status).toBe('PAID')
+    expect(benefitPaid.benefit.baseAmount).toBe(order.finalInvoiceAmount)
     expect(benefitPaid.stage).toBe('SIPLAH')
   })
 
-  it('recomputes Next Action after a real state transition', () => {
+  it('recomputes primary action after a real benefit transition', () => {
     const order = canonicalOrder('ORD-2026-068')
-    expect(deriveNextAction(order, null)?.kind).toBe('PAY_BENEFIT')
+    const before = deriveActionCandidates(order, { vendorBatch: null }, now)
+    expect(derivePrimaryNextAction(before)?.kind).toBe('PAY_BENEFIT')
+    const obligationAmount = calculateBenefitAmount(order)
+    if (obligationAmount === null) throw new Error('Expected benefit obligation')
     const paid = recordBenefitPayment(
       order,
       {
-        amount: 2_435_000,
+        amount: obligationAmount,
         method: 'Transfer bank',
         recipient: 'Kepala sekolah',
         proofName: 'benefit.pdf',
       },
       now,
     )
-    expect(deriveNextAction(paid, null)?.kind).toBe('CLOSE_ORDER')
+    const after = deriveActionCandidates(paid, { vendorBatch: null }, now)
+    expect(derivePrimaryNextAction(after)?.kind).toBe('CLOSE_ORDER')
+  })
+
+  it('stores snooze control only for the selected action kind', () => {
+    const order = canonicalOrder('ORD-2026-065')
+    const snoozed = snoozeOrderAction(
+      order,
+      'CONTINUE_FULFILLMENT',
+      '2026-02-24T08:00:00.000Z',
+      now,
+    )
+
+    expect(snoozed.nextActionControl.controlsByActionKey).toEqual({
+      CONTINUE_FULFILLMENT: { snoozedUntil: '2026-02-24T08:00:00.000Z' },
+    })
+    expect(snoozed.nextActionControl.controlsByActionKey.PAY_BENEFIT).toBeUndefined()
   })
 })

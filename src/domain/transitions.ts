@@ -1,5 +1,8 @@
-import { calculateBenefitAmount, getHetExceptionCount, isCompletionReady, isVendorBatchEligible } from './selectors'
+import { getHetExceptionCount, isCompletionReady } from './order-state'
+import { calculateBenefitAmount, isVendorBatchEligible } from './selectors'
 import type {
+  GoodsArrivalAllocation,
+  NextActionKind,
   NextActionOverride,
   Order,
   PrototypeData,
@@ -113,6 +116,7 @@ export function createVendorBatch(
         createdAt,
         sentAt: null,
         arrivedAt: null,
+        followUpDueAt: null,
         orderIds,
       },
     },
@@ -158,39 +162,53 @@ export function transitionVendorBatch(
 export function recordGoodsArrival(
   data: PrototypeData,
   batchId: string,
-  arrivalType: 'PARTIAL' | 'FULL',
+  allocations: GoodsArrivalAllocation[],
   now?: Date,
 ): PrototypeData {
   const batch = data.vendorBatches[batchId]
   if (!batch) throw new Error('Vendor batch tidak ditemukan.')
-  const targetStatus: VendorBatchStatus = arrivalType === 'FULL' ? 'ARRIVED' : 'PARTIALLY_ARRIVED'
-  if (!allowedBatchTransitions[batch.status].includes(targetStatus)) {
+  if (!['PROCESSING', 'PARTIALLY_ARRIVED'].includes(batch.status)) {
     throw new Error(`Barang tidak dapat dicatat dari status batch ${batch.status}.`)
+  }
+  if (allocations.length === 0) throw new Error('Pilih minimal satu alokasi order.')
+
+  const allocatedIds = new Set<string>()
+  for (const allocation of allocations) {
+    if (!batch.orderIds.includes(allocation.orderId)) {
+      throw new Error(`${allocation.orderId} bukan anggota ${batchId}.`)
+    }
+    if (allocatedIds.has(allocation.orderId)) {
+      throw new Error(`${allocation.orderId} memiliki alokasi duplikat.`)
+    }
+    allocatedIds.add(allocation.orderId)
   }
 
   const arrivedAt = timestamp(now)
   const nextOrders = { ...data.orders }
-  for (const orderId of batch.orderIds) {
-    const order = data.orders[orderId]
-    if (!order) continue
-    nextOrders[orderId] = withEvent(
+  for (const allocation of allocations) {
+    const order = data.orders[allocation.orderId]
+    if (!order) throw new Error(`Order ${allocation.orderId} tidak ditemukan.`)
+    nextOrders[allocation.orderId] = withEvent(
       {
         ...order,
         stage: 'GOODS_ARRIVED',
         goods: {
           ...order.goods,
           arrivedAt,
-          arrivalType,
+          arrivalType: allocation.arrivalType,
           preDeliveryCheckCompleted: false,
           checkedAt: null,
         },
       },
-      arrivalType === 'FULL' ? 'Barang tiba di JPA' : 'Sebagian barang tiba di JPA',
-      `${batchId} mencatat kedatangan ${arrivalType === 'FULL' ? 'penuh' : 'sebagian'}; pemeriksaan belum dilakukan.`,
+      allocation.arrivalType === 'FULL' ? 'Barang tiba di JPA' : 'Sebagian barang tiba di JPA',
+      `${batchId} mencatat kedatangan ${allocation.arrivalType === 'FULL' ? 'penuh' : 'sebagian'} untuk ${order.schoolName}; pemeriksaan belum dilakukan.`,
       now,
     )
   }
 
+  const batchFullyArrived = batch.orderIds.every(
+    (orderId) => nextOrders[orderId]?.goods.arrivalType === 'FULL',
+  )
   return {
     ...data,
     orders: nextOrders,
@@ -198,8 +216,8 @@ export function recordGoodsArrival(
       ...data.vendorBatches,
       [batchId]: {
         ...batch,
-        status: targetStatus,
-        arrivedAt: arrivalType === 'FULL' ? arrivedAt : batch.arrivedAt,
+        status: batchFullyArrived ? 'ARRIVED' : 'PARTIALLY_ARRIVED',
+        arrivedAt: batchFullyArrived ? arrivedAt : null,
       },
     },
   }
@@ -210,15 +228,19 @@ export function recordSchoolPayment(
   input: { amount: number; method: string; evidenceName: string },
   now?: Date,
 ): Order {
-  if (input.amount !== order.finalInvoiceAmount) {
-    throw new Error('Prototype hanya menerima pembayaran penuh sesuai invoice.')
+  if (order.schoolPayment.status === 'LUNAS') {
+    throw new Error('Pembayaran sekolah sudah dikonfirmasi LUNAS.')
+  }
+  if (order.finalInvoiceAmount === null || input.amount !== order.finalInvoiceAmount) {
+    throw new Error('Pembayaran penuh harus sesuai finalInvoiceAmount yang sudah ditetapkan.')
   }
   const paidAt = timestamp(now)
+  const benefitObligation = Math.round(order.finalInvoiceAmount * 0.1)
   const next: Order = {
     ...order,
     schoolPayment: {
       status: 'LUNAS',
-      amount: input.amount,
+      schoolPaidAmount: input.amount,
       paidAt,
       method: input.method,
       evidenceName: input.evidenceName,
@@ -227,12 +249,18 @@ export function recordSchoolPayment(
     benefit:
       order.benefit.status === 'PAID'
         ? order.benefit
-        : { ...order.benefit, status: 'ELIGIBLE', eligibleAt: paidAt },
+        : {
+            ...order.benefit,
+            status: 'ELIGIBLE',
+            baseAmount: order.finalInvoiceAmount,
+            obligationAmount: benefitObligation,
+            eligibleAt: paidAt,
+          },
   }
   return withEvent(
     next,
     'Pembayaran sekolah LUNAS',
-    `Pembayaran penuh tercatat. Benefit ${calculateBenefitAmount(order).toLocaleString('id-ID')} kini eligible.`,
+    `Pembayaran penuh tercatat. Benefit ${benefitObligation.toLocaleString('id-ID')} dibekukan dan kini eligible.`,
     now,
   )
 }
@@ -245,14 +273,17 @@ export function recordBenefitPayment(
   if (order.schoolPayment.status !== 'LUNAS' || order.benefit.status !== 'ELIGIBLE') {
     throw new Error('Benefit hanya dapat dibayar setelah pembayaran sekolah LUNAS.')
   }
-  if (input.amount !== calculateBenefitAmount(order)) {
-    throw new Error('Nominal benefit harus tepat 10% dari invoice final.')
+  const obligationAmount = calculateBenefitAmount(order)
+  if (obligationAmount === null || input.amount !== obligationAmount) {
+    throw new Error('Nominal benefit harus sesuai kewajiban yang dibekukan saat LUNAS.')
   }
   const paidAt = timestamp(now)
   const next: Order = {
     ...order,
     benefit: {
       status: 'PAID',
+      baseAmount: order.benefit.baseAmount,
+      obligationAmount,
       eligibleAt: order.benefit.eligibleAt,
       paidAt,
       method: input.method,
@@ -274,22 +305,32 @@ export function setNextActionOverride(
   now?: Date,
 ): Order {
   const createdAt = timestamp(now)
+  const controlsByActionKey = { ...order.nextActionControl.controlsByActionKey }
+  delete controlsByActionKey.MANUAL
   return {
     ...order,
     updatedAt: createdAt,
     nextActionControl: {
       ...order.nextActionControl,
       override: override ? { ...override, createdAt } : null,
-      snoozedUntil: null,
+      controlsByActionKey,
     },
   }
 }
 
-export function snoozeOrderAction(order: Order, until: string | null, now?: Date): Order {
+export function snoozeOrderAction(
+  order: Order,
+  actionKind: NextActionKind,
+  until: string | null,
+  now?: Date,
+): Order {
+  const controlsByActionKey = { ...order.nextActionControl.controlsByActionKey }
+  if (until === null) delete controlsByActionKey[actionKind]
+  else controlsByActionKey[actionKind] = { snoozedUntil: until }
   return {
     ...order,
     updatedAt: timestamp(now),
-    nextActionControl: { ...order.nextActionControl, snoozedUntil: until },
+    nextActionControl: { ...order.nextActionControl, controlsByActionKey },
   }
 }
 

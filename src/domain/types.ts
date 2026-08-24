@@ -60,7 +60,6 @@ export interface HetReview {
   status: HetReviewStatus
   detectedItemCount: number
   autoMatchedItemCount: number
-  hetTotalAmount: number
   approvedAt: string | null
 }
 
@@ -71,7 +70,6 @@ export interface SiplahProcess {
   suratPesananAvailable: boolean
   suratPesananAttached: boolean
   suratPesananSentToSchool: boolean
-  adminCompleted: boolean
 }
 
 export interface GoodsState {
@@ -94,7 +92,7 @@ export interface FulfillmentSummary {
 
 export interface SchoolPayment {
   status: SchoolPaymentStatus
-  amount: number
+  schoolPaidAmount: number
   paidAt: string | null
   method: string | null
   evidenceName: string | null
@@ -103,6 +101,8 @@ export interface SchoolPayment {
 
 export interface SchoolBenefit {
   status: BenefitStatus
+  baseAmount: number | null
+  obligationAmount: number | null
   eligibleAt: string | null
   paidAt: string | null
   method: string | null
@@ -123,9 +123,13 @@ export interface NextActionOverride {
   createdAt: string
 }
 
+export interface ActionControl {
+  snoozedUntil: string | null
+}
+
 export interface NextActionControl {
   override: NextActionOverride | null
-  snoozedUntil: string | null
+  controlsByActionKey: Partial<Record<NextActionKind, ActionControl>>
 }
 
 export interface TimelineEvent {
@@ -143,7 +147,9 @@ export interface Order {
   stage: LifecycleStage
   createdAt: string
   updatedAt: string
-  finalInvoiceAmount: number
+  readonly arkasBudgetAmount: number
+  hetReviewedAmount: number | null
+  finalInvoiceAmount: number | null
   arkas: ArkasDocument
   items: OrderItem[]
   het: HetReview
@@ -164,6 +170,7 @@ export interface VendorBatch {
   createdAt: string
   sentAt: string | null
   arrivedAt: string | null
+  followUpDueAt: string | null
   orderIds: string[]
 }
 
@@ -195,7 +202,18 @@ export interface NextAction {
   ctaLabel: string
   priority: number
   dueAt: string | null
+  snoozedUntil: string | null
+  availability: 'ACTIVE' | 'SNOOZED'
   source: 'SYSTEM' | 'MANUAL'
+}
+
+export interface ActionDerivationContext {
+  vendorBatch: VendorBatch | null
+}
+
+export interface GoodsArrivalAllocation {
+  orderId: string
+  arrivalType: 'PARTIAL' | 'FULL'
 }
 
 export interface WorkQueueItem extends NextAction {

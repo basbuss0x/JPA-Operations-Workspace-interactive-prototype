@@ -7,10 +7,15 @@ import {
   getHetExceptionCount,
   isBenefitEligible,
   isCompletionReady,
+  isSiplahAdminComplete,
+  isSiplahComplete,
   isVendorBatchEligible,
 } from './selectors'
+import type { Order } from './types'
 
-function canonicalOrder(id: string) {
+const now = new Date('2026-02-20T08:00:00.000Z')
+
+function canonicalOrder(id: string): Order {
   const order = createCanonicalDemoData().orders[id]
   if (!order) throw new Error(`Missing canonical order ${id}`)
   return order
@@ -22,10 +27,35 @@ describe('derived domain selectors', () => {
     expect(getHetExceptionCount(canonicalOrder('ORD-2026-071'))).toBe(0)
   })
 
-  it('calculates benefit from full final invoice amount', () => {
+  it('keeps ARKAS, HET-reviewed, final invoice, and school-paid amounts separate', () => {
+    const reviewOrder = canonicalOrder('ORD-2026-030')
+    const paidOrder = canonicalOrder('ORD-2026-068')
+
+    expect(reviewOrder.arkasBudgetAmount).toBe(18_940_000)
+    expect(reviewOrder.hetReviewedAmount).toBe(19_360_000)
+    expect(reviewOrder.finalInvoiceAmount).toBeNull()
+    expect(paidOrder.finalInvoiceAmount).toBe(24_350_000)
+    expect(paidOrder.schoolPayment.schoolPaidAmount).toBe(24_350_000)
+  })
+
+  it('uses a frozen benefit obligation after school payment is LUNAS', () => {
     const order = canonicalOrder('ORD-2026-068')
+    expect(order.benefit.baseAmount).toBe(24_350_000)
     expect(calculateBenefitAmount(order)).toBe(2_435_000)
     expect(isBenefitEligible(order)).toBe(true)
+  })
+
+  it('derives SIPLah admin completion from order and required document checkpoints', () => {
+    const complete = canonicalOrder('ORD-2026-040')
+    expect(isSiplahAdminComplete(complete)).toBe(true)
+    expect(isSiplahComplete(complete)).toBe(true)
+
+    const missingAttachment: Order = {
+      ...complete,
+      siplah: { ...complete.siplah, suratPesananAttached: false },
+    }
+    expect(isSiplahAdminComplete(missingAttachment)).toBe(false)
+    expect(isSiplahComplete(missingAttachment)).toBe(false)
   })
 
   it('keeps supplier liability outside completion readiness', () => {
@@ -57,12 +87,13 @@ describe('derived domain selectors', () => {
     expect(bahasa?.totalQuantity).toBe(21)
   })
 
-  it('groups vendor-ready orders into one actionable work item', () => {
+  it('groups vendor-ready orders and omits passive PROCESSING batches from Work Queue', () => {
     const data = createCanonicalDemoData()
-    const queue = deriveWorkQueue(data, new Date('2026-02-20T08:00:00.000Z'))
+    const queue = deriveWorkQueue(data, now)
     const vendorItem = queue.find((item) => item.kind === 'ADD_TO_VENDOR_BATCH')
 
     expect(vendorItem?.orderIds).toEqual(['ORD-2026-040', 'ORD-2026-SLB'])
     expect(vendorItem?.title).toBe('2 pesanan siap masuk Vendor Batch')
+    expect(queue.some((item) => item.kind === 'FOLLOW_UP_VENDOR')).toBe(false)
   })
 })

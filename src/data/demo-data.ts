@@ -13,7 +13,7 @@ import type {
   TimelineEvent,
 } from '../domain/types'
 
-export const DEMO_STATE_VERSION = 1
+export const DEMO_STATE_VERSION = 2
 
 const DATE = {
   created: '2026-01-12T08:00:00.000Z',
@@ -56,7 +56,6 @@ const incompleteSiplah: SiplahProcess = {
   suratPesananAvailable: false,
   suratPesananAttached: false,
   suratPesananSentToSchool: false,
-  adminCompleted: false,
 }
 
 const completeSiplah: SiplahProcess = {
@@ -66,7 +65,6 @@ const completeSiplah: SiplahProcess = {
   suratPesananAvailable: true,
   suratPesananAttached: true,
   suratPesananSentToSchool: true,
-  adminCompleted: true,
 }
 
 const noGoods: GoodsState = {
@@ -86,6 +84,9 @@ interface MakeOrderOptions {
   schoolName: string
   stage: LifecycleStage
   invoice: number
+  arkasBudgetAmount?: number
+  hetReviewedAmount?: number | null
+  finalInvoiceAmount?: number | null
   items: OrderItem[]
   het: HetReview
   siplah?: SiplahProcess
@@ -93,7 +94,7 @@ interface MakeOrderOptions {
   goods?: GoodsState
   fulfillment?: Order['fulfillment']
   paymentStatus?: SchoolPaymentStatus
-  paymentAmount?: number
+  schoolPaidAmount?: number
   paymentDate?: string | null
   benefitStatus?: BenefitStatus
   benefitDate?: string | null
@@ -104,7 +105,16 @@ interface MakeOrderOptions {
 
 function makeOrder(options: MakeOrderOptions): Order {
   const orderedQty = options.items.reduce((total, current) => total + current.quantity, 0)
-  const paymentAmount = options.paymentAmount ?? (options.paymentStatus === 'LUNAS' ? options.invoice : 0)
+  const finalInvoiceAmount = options.finalInvoiceAmount !== undefined
+    ? options.finalInvoiceAmount
+    : options.het.status === 'APPROVED' ? options.invoice : null
+  const schoolPaidAmount = options.schoolPaidAmount ?? (
+    options.paymentStatus === 'LUNAS' ? (finalInvoiceAmount ?? 0) : 0
+  )
+  const benefitStatus = options.benefitStatus ?? (
+    options.paymentStatus === 'LUNAS' ? 'ELIGIBLE' : 'NOT_ELIGIBLE'
+  )
+  const benefitFrozen = options.paymentStatus === 'LUNAS' || benefitStatus !== 'NOT_ELIGIBLE'
   return {
     id: options.id,
     schoolId: `SCH-${options.id.slice(-3)}`,
@@ -112,7 +122,11 @@ function makeOrder(options: MakeOrderOptions): Order {
     stage: options.stage,
     createdAt: DATE.created,
     updatedAt: DATE.today,
-    finalInvoiceAmount: options.invoice,
+    arkasBudgetAmount: options.arkasBudgetAmount ?? options.invoice,
+    hetReviewedAmount: options.hetReviewedAmount ?? (
+      options.het.status === 'APPROVED' ? options.invoice : null
+    ),
+    finalInvoiceAmount,
     arkas: {
       reference: `ARKAS-${options.id.slice(-3)}-2026`,
       sourceType: 'PDF',
@@ -121,11 +135,7 @@ function makeOrder(options: MakeOrderOptions): Order {
       extractedAt: DATE.created,
     },
     items: options.items,
-    het: {
-      ...options.het,
-      hetTotalAmount:
-        options.het.status === 'APPROVED' ? options.invoice : options.het.hetTotalAmount,
-    },
+    het: options.het,
     siplah: options.siplah ?? { ...incompleteSiplah },
     vendorBatchId: options.vendorBatchId ?? null,
     goods: options.goods ?? { ...noGoods },
@@ -140,31 +150,36 @@ function makeOrder(options: MakeOrderOptions): Order {
     },
     schoolPayment: {
       status: options.paymentStatus ?? 'UNPAID',
-      amount: paymentAmount,
+      schoolPaidAmount,
       paidAt: options.paymentDate ?? null,
       method: options.paymentStatus === 'LUNAS' ? 'Transfer bank' : null,
       evidenceName: options.paymentStatus === 'LUNAS' ? `Bukti-${options.id}.pdf` : null,
       followUpDueAt: null,
     },
     benefit: {
-      status: options.benefitStatus ?? 'NOT_ELIGIBLE',
+      status: benefitStatus,
+      baseAmount: benefitFrozen ? finalInvoiceAmount : null,
+      obligationAmount:
+        benefitFrozen && finalInvoiceAmount !== null
+          ? Math.round(finalInvoiceAmount * 0.1)
+          : null,
       eligibleAt:
-        options.benefitStatus === 'ELIGIBLE' || options.benefitStatus === 'PAID'
+        benefitStatus === 'ELIGIBLE' || benefitStatus === 'PAID'
           ? (options.paymentDate ?? DATE.recent)
           : null,
       paidAt: options.benefitDate ?? null,
-      method: options.benefitStatus === 'PAID' ? 'Transfer bank' : null,
-      recipient: options.benefitStatus === 'PAID' ? 'Penerima resmi sekolah' : null,
-      proofName: options.benefitStatus === 'PAID' ? `Benefit-${options.id}.pdf` : null,
+      method: benefitStatus === 'PAID' ? 'Transfer bank' : null,
+      recipient: benefitStatus === 'PAID' ? 'Penerima resmi sekolah' : null,
+      proofName: benefitStatus === 'PAID' ? `Benefit-${options.id}.pdf` : null,
     },
     supplierPayment: {
       status: options.supplierStatus ?? 'UNPAID',
-      obligationAmount: Math.round(options.invoice * 0.72),
+      obligationAmount: Math.round((finalInvoiceAmount ?? options.invoice) * 0.72),
       paidAmount: options.supplierPaid ?? 0,
     },
     nextActionControl: {
       override: null,
-      snoozedUntil: null,
+      controlsByActionKey: {},
     },
     timeline:
       options.timeline ??
@@ -179,7 +194,6 @@ const approvedHet: HetReview = {
   status: 'APPROVED',
   detectedItemCount: 3,
   autoMatchedItemCount: 3,
-  hetTotalAmount: 0,
   approvedAt: '2026-01-14T04:00:00.000Z',
 }
 
@@ -223,9 +237,9 @@ function canonicalOrders(): Order[] {
         status: 'NEEDS_REVIEW',
         detectedItemCount: 28,
         autoMatchedItemCount: 26,
-        hetTotalAmount: 19_360_000,
         approvedAt: null,
       },
+      hetReviewedAmount: 19_360_000,
     }),
     makeOrder({
       id: 'ORD-2026-071',
@@ -332,7 +346,7 @@ function canonicalOrders(): Order[] {
         syncStatus: 'OK',
       },
       paymentStatus: 'LUNAS',
-      paymentAmount: 27_640_000,
+      schoolPaidAmount: 27_640_000,
       paymentDate: '2026-02-10T03:00:00.000Z',
       benefitStatus: 'PAID',
       benefitDate: '2026-02-12T03:00:00.000Z',
@@ -420,6 +434,7 @@ export function createCanonicalDemoData(): PrototypeData {
         createdAt: '2026-02-15T02:00:00.000Z',
         sentAt: '2026-02-15T08:00:00.000Z',
         arrivedAt: null,
+        followUpDueAt: null,
         orderIds: ['ORD-2026-049'],
       },
       'VB-2026-008': {
@@ -428,6 +443,7 @@ export function createCanonicalDemoData(): PrototypeData {
         createdAt: '2026-02-12T02:00:00.000Z',
         sentAt: '2026-02-12T08:00:00.000Z',
         arrivedAt: '2026-02-19T06:30:00.000Z',
+        followUpDueAt: null,
         orderIds: ['ORD-2026-239'],
       },
       'VB-2026-007': {
@@ -436,6 +452,7 @@ export function createCanonicalDemoData(): PrototypeData {
         createdAt: '2026-01-28T02:00:00.000Z',
         sentAt: '2026-01-28T08:00:00.000Z',
         arrivedAt: '2026-02-04T06:30:00.000Z',
+        followUpDueAt: null,
         orderIds: ['ORD-2026-065'],
       },
       'VB-2026-006': {
@@ -444,6 +461,7 @@ export function createCanonicalDemoData(): PrototypeData {
         createdAt: '2026-01-20T02:00:00.000Z',
         sentAt: '2026-01-20T08:00:00.000Z',
         arrivedAt: '2026-01-28T06:00:00.000Z',
+        followUpDueAt: null,
         orderIds: ['ORD-2026-068'],
       },
       'VB-2025-041': {
@@ -452,6 +470,7 @@ export function createCanonicalDemoData(): PrototypeData {
         createdAt: '2025-11-22T02:00:00.000Z',
         sentAt: '2025-11-22T08:00:00.000Z',
         arrivedAt: '2025-12-01T04:00:00.000Z',
+        followUpDueAt: null,
         orderIds: ['ORD-2025-999'],
       },
     },

@@ -1,7 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { deriveWorkQueue, getOrderBatch, getOrders } from '../domain/selectors'
-import { deriveNextAction } from '../domain/next-action'
+import {
+  deriveWorkQueue,
+  getOrderActionCandidates,
+  getOrderBatch,
+  getOrders,
+} from '../domain/selectors'
+import { derivePrimaryNextAction } from '../domain/next-action'
 import { usePrototypeStore } from '../store/use-prototype-store'
 import { futureIsoDate } from '../utils/format'
 import { OrderSummaryRow } from '../components/orders/order-summary-row'
@@ -24,17 +29,25 @@ export function HomePage() {
       getOrders({ orders })
         .filter((order) => order.stage !== 'CLOSED')
         .sort((a, b) => {
-          const aPriority = deriveNextAction(a, getOrderBatch(a, vendorBatches))?.priority ?? 999
-          const bPriority = deriveNextAction(b, getOrderBatch(b, vendorBatches))?.priority ?? 999
+          const aPriority = derivePrimaryNextAction(
+            getOrderActionCandidates(a, vendorBatches, renderedAt),
+          )?.priority ?? 999
+          const bPriority = derivePrimaryNextAction(
+            getOrderActionCandidates(b, vendorBatches, renderedAt),
+          )?.priority ?? 999
           return aPriority - bPriority
         })
         .slice(0, 5),
-    [orders, vendorBatches],
+    [orders, renderedAt, vendorBatches],
   )
-  const snoozedCount = Object.values(orders).filter((order) => {
-    const until = order.nextActionControl.snoozedUntil
-    return until !== null && new Date(until).getTime() > renderedAt.getTime()
-  }).length
+  const snoozedCount = Object.values(orders).reduce(
+    (count, order) => count + Object.values(order.nextActionControl.controlsByActionKey).filter(
+      (control) =>
+        control?.snoozedUntil &&
+        new Date(control.snoozedUntil).getTime() > renderedAt.getTime(),
+    ).length,
+    0,
+  )
 
   return (
     <div className="page-stack">
@@ -66,7 +79,7 @@ export function HomePage() {
                 action={item}
                 schoolName={item.context}
                 compact
-                onSnooze={() => snoozeNextAction(item.orderIds, futureIsoDate(3))}
+                onSnooze={() => snoozeNextAction(item.orderIds, item.kind, futureIsoDate(3))}
               />
             ))}
           </div>
@@ -93,6 +106,7 @@ export function HomePage() {
               key={order.id}
               order={order}
               batch={getOrderBatch(order, vendorBatches)}
+              now={renderedAt}
             />
           ))}
         </div>
