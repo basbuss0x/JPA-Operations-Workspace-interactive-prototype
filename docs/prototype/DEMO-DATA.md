@@ -48,7 +48,7 @@ SDN 71
 - HET: APPROVED
 - SIPLah access available: true
 - order placed: false
-- Surat Pesanan: unavailable
+- Required SIPLah documents: unavailable
 - Vendor: none
 - School payment: UNPAID
 - Benefit: NOT_ELIGIBLE
@@ -69,8 +69,8 @@ SDN 40 Ambon
 - SIPLah access available: true
 - order placed: true
 - SIPLah order number present
-- Surat Pesanan available: true
-- Surat Pesanan sent to school: true
+- Required SIPLah documents available, attached, verified, and sent where required
+- optional SIPLah PDF may remain absent
 - not currently in a vendor batch
 - School payment: UNPAID
 - Benefit: NOT_ELIGIBLE
@@ -124,7 +124,7 @@ SD Inpres 49 Ambon
 - Benefit: NOT_ELIGIBLE
 
 ### Expected next action
-`Tunggu / follow-up vendor bila perlu`
+None while `PROCESSING` is within normal timing. `Follow-up vendor` appears only when an explicit reminder is due; automatic stale thresholds remain deferred.
 
 ---
 

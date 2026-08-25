@@ -1,3 +1,4 @@
+import { createSiplahDocuments } from '../domain/siplah'
 import type {
   BenefitStatus,
   GoodsState,
@@ -13,7 +14,7 @@ import type {
   TimelineEvent,
 } from '../domain/types'
 
-export const DEMO_STATE_VERSION = 2
+export const DEMO_STATE_VERSION = 3
 
 const DATE = {
   created: '2026-01-12T08:00:00.000Z',
@@ -39,6 +40,12 @@ function item(
     arkasUnitPrice: price,
     hetUnitPrice: hetPrice,
     matchStatus: status,
+    matchConfidence: status === 'MATCHED' ? 0.99 : 0.7,
+    matchReason:
+      status === 'MATCHED'
+        ? 'Cocok otomatis dengan fixture Product Master.'
+        : 'Fixture canonical memerlukan keputusan operator.',
+    resolutionType: status === 'MATCHED' ? 'AUTO_MATCHED' : null,
   }
 }
 
@@ -53,18 +60,14 @@ const incompleteSiplah: SiplahProcess = {
   accessAvailable: false,
   orderPlaced: false,
   orderNumber: null,
-  suratPesananAvailable: false,
-  suratPesananAttached: false,
-  suratPesananSentToSchool: false,
+  documents: createSiplahDocuments(),
 }
 
 const completeSiplah: SiplahProcess = {
   accessAvailable: true,
   orderPlaced: true,
   orderNumber: 'SPL-DEMO-001',
-  suratPesananAvailable: true,
-  suratPesananAttached: true,
-  suratPesananSentToSchool: true,
+  documents: createSiplahDocuments(true),
 }
 
 const noGoods: GoodsState = {

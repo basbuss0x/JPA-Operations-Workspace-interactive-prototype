@@ -1,0 +1,219 @@
+import { useState, type FormEvent } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { deriveActionCandidates, derivePrimaryNextAction } from '../domain/next-action'
+import { isSiplahAdminComplete, isSiplahComplete } from '../domain/order-state'
+import type { SiplahDocument } from '../domain/types'
+import { usePrototypeStore } from '../store/use-prototype-store'
+import { formatDateTime } from '../utils/format'
+import { Button } from '../components/ui/button'
+import { EmptyState } from '../components/ui/empty-state'
+import { FormField } from '../components/ui/form-field'
+import { StatusChip } from '../components/ui/status-chip'
+
+function documentComplete(document: SiplahDocument): boolean {
+  return (
+    document.available &&
+    Boolean(document.fileName) &&
+    document.verified &&
+    (!document.sendToSchoolRequired || document.sentToSchool)
+  )
+}
+
+export function SiplahWorkflowPage() {
+  const { orderId } = useParams()
+  const order = usePrototypeStore((state) => orderId ? state.orders[orderId] : undefined)
+  const setAccess = usePrototypeStore((state) => state.setSiplahAccess)
+  const markOrderPlaced = usePrototypeStore((state) => state.markSiplahOrderPlaced)
+  const saveSiplahOrder = usePrototypeStore((state) => state.recordSiplahOrder)
+  const markDocumentAvailable = usePrototypeStore((state) => state.markSiplahDocumentAvailable)
+  const attachDocument = usePrototypeStore((state) => state.attachSiplahDocument)
+  const verifyDocument = usePrototypeStore((state) => state.verifySiplahDocument)
+  const sendDocument = usePrototypeStore((state) => state.sendSiplahDocument)
+  const [orderNumber, setOrderNumber] = useState('SPL-2026-DEMO-240')
+  const [errorMessage, setErrorMessage] = useState('')
+  const [renderedAt] = useState(() => new Date())
+
+  if (!order) {
+    return <EmptyState title="Order tidak ditemukan" description="Order SIPLah tidak tersedia pada demo state." action={<Link className="button button--secondary button--md" to="/orders">Kembali ke Pesanan</Link>} />
+  }
+
+  const submitOrder = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    try {
+      saveSiplahOrder(order.id, orderNumber)
+      setErrorMessage('')
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Pesanan SIPLah gagal dicatat.')
+    }
+  }
+
+  const attachRequiredDemoPackage = () => {
+    try {
+      for (const document of order.siplah.documents.filter((candidate) => candidate.required)) {
+        attachDocument(order.id, document.kind, `${document.kind}-${order.id}.pdf`)
+      }
+      setErrorMessage('')
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Paket dokumen gagal dilampirkan.')
+    }
+  }
+
+  const complete = isSiplahComplete(order)
+  const primaryAction = derivePrimaryNextAction(
+    deriveActionCandidates(order, { vendorBatch: null }, renderedAt),
+  )
+  const requiredDocuments = order.siplah.documents.filter((document) => document.required)
+  const completedRequiredDocuments = requiredDocuments.filter(documentComplete).length
+
+  return (
+    <div className="page-stack focused-route siplah-workflow-page">
+      <Link className="back-link" to={`/orders/${order.id}`}>← Order Workspace</Link>
+      <header className="focused-route__header">
+        <div>
+          <p className="eyebrow">TASK 08 · Operasional SIPLah</p>
+          <h1>Workflow SIPLah</h1>
+          <p>{order.schoolName} · {order.id}</p>
+        </div>
+        <StatusChip tone={complete ? 'success' : 'warning'}>
+          {complete ? 'SIPLah selesai' : 'Checkpoint belum lengkap'}
+        </StatusChip>
+      </header>
+
+      {order.het.status !== 'APPROVED' ? (
+        <section className="callout callout--danger">
+          <strong>HET belum disetujui.</strong> Selesaikan review dan konfirmasi HET sebelum menjalankan SIPLah.
+          <div><Link className="button button--secondary button--sm" to={`/orders/${order.id}/arkas`}>Buka Review HET</Link></div>
+        </section>
+      ) : null}
+
+      <ol className="workflow-steps" aria-label="Tahapan SIPLah">
+        <li className={order.siplah.accessAvailable ? 'is-active' : ''}><span>1</span>Akses</li>
+        <li className={order.siplah.orderPlaced && order.siplah.orderNumber ? 'is-active' : ''}><span>2</span>Order SIPLah</li>
+        <li className={isSiplahAdminComplete(order) ? 'is-active' : ''}><span>3</span>Dokumen wajib</li>
+        <li className={complete ? 'is-active' : ''}><span>4</span>Siap Vendor</li>
+      </ol>
+
+      <section className="workspace-panel siplah-checkpoint-card">
+        <div className="checkpoint-number">1</div>
+        <div className="checkpoint-content">
+          <div className="panel-heading">
+            <div><h2>Akses SIPLah tersedia</h2><p>Hanya status akses yang dicatat. Username/password asli tidak pernah diminta atau disimpan.</p></div>
+            <StatusChip tone={order.siplah.accessAvailable ? 'success' : 'warning'}>{order.siplah.accessAvailable ? 'Tersedia' : 'Belum tersedia'}</StatusChip>
+          </div>
+          <Button
+            variant={order.siplah.accessAvailable ? 'secondary' : 'primary'}
+            size="sm"
+            onClick={() => setAccess(order.id, !order.siplah.accessAvailable)}
+            disabled={order.het.status !== 'APPROVED'}
+          >
+            {order.siplah.accessAvailable ? 'Tandai belum tersedia' : 'Tandai akses tersedia'}
+          </Button>
+        </div>
+      </section>
+
+      <section className="workspace-panel siplah-checkpoint-card">
+        <div className="checkpoint-number">2</div>
+        <div className="checkpoint-content">
+          <div className="panel-heading">
+            <div><h2>Pesanan dibuat di JPA/TokoLadang</h2><p>Nomor order wajib dicatat; ini tidak mengubah pembayaran sekolah.</p></div>
+            <StatusChip tone={order.siplah.orderPlaced ? 'success' : 'neutral'}>{order.siplah.orderPlaced ? 'Sudah dibuat' : 'Belum dibuat'}</StatusChip>
+          </div>
+          {!order.siplah.orderPlaced ? (
+            <Button onClick={() => markOrderPlaced(order.id)} disabled={!order.siplah.accessAvailable}>
+              Tandai pesanan dibuat
+            </Button>
+          ) : order.siplah.orderNumber ? (
+            <div className="recorded-value"><span>Nomor order SIPLah</span><strong>{order.siplah.orderNumber}</strong></div>
+          ) : (
+            <form className="inline-action-form" onSubmit={submitOrder}>
+              <FormField label="Nomor order SIPLah" htmlFor="siplah-order-number">
+                <input id="siplah-order-number" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} placeholder="SPL-2026-…" required />
+              </FormField>
+              <Button type="submit">Simpan nomor order</Button>
+            </form>
+          )}
+        </div>
+      </section>
+
+      <section className="workspace-panel siplah-documents-section">
+        <div className="panel-heading">
+          <div>
+            <span className="checkpoint-kicker">CHECKPOINT 3</span>
+            <h2>Dokumen SIPLah</h2>
+            <p>{completedRequiredDocuments} dari {requiredDocuments.length} dokumen wajib lengkap. Status available, attachment, verification, dan pengiriman tetap terpisah.</p>
+          </div>
+          <Button variant="secondary" size="sm" onClick={attachRequiredDemoPackage} disabled={!order.siplah.orderPlaced}>
+            Lampirkan paket dokumen demo
+          </Button>
+        </div>
+
+        <div className="siplah-document-list">
+          {order.siplah.documents.map((document) => {
+            const completeDocument = documentComplete(document)
+            return (
+              <article className="siplah-document-row" key={document.kind}>
+                <div className="siplah-document-row__identity">
+                  <span className={completeDocument ? 'document-icon is-complete' : 'document-icon'}>{completeDocument ? '✓' : '▤'}</span>
+                  <div><strong>{document.label}</strong><small>{document.kind} · {document.required ? 'Wajib' : 'Opsional'}</small></div>
+                </div>
+                <div className="document-statuses">
+                  <StatusChip tone={document.available ? 'success' : 'neutral'}>{document.available ? 'Tersedia' : 'Missing'}</StatusChip>
+                  <StatusChip tone={document.fileName ? 'success' : 'neutral'}>{document.fileName ? 'Attached' : 'Belum attached'}</StatusChip>
+                  <StatusChip tone={document.verified ? 'success' : 'warning'}>{document.verified ? 'Verified' : 'Belum verified'}</StatusChip>
+                  {document.sendToSchoolRequired ? (
+                    <StatusChip tone={document.sentToSchool ? 'success' : 'warning'}>{document.sentToSchool ? 'Sudah dikirim' : 'Belum dikirim'}</StatusChip>
+                  ) : <StatusChip>Tak perlu dikirim</StatusChip>}
+                </div>
+                {document.fileName ? <span className="document-file-name">{document.fileName}</span> : null}
+                <div className="siplah-document-row__actions">
+                  {!document.available ? (
+                    <Button size="sm" variant="secondary" onClick={() => markDocumentAvailable(order.id, document.kind)} disabled={!order.siplah.orderPlaced}>Tandai tersedia</Button>
+                  ) : null}
+                  {!document.fileName ? (
+                    <Button size="sm" variant="secondary" onClick={() => attachDocument(order.id, document.kind, `${document.kind}-${order.id}.pdf`)} disabled={!order.siplah.orderPlaced}>Lampirkan demo</Button>
+                  ) : null}
+                  {document.fileName && !document.verified ? (
+                    <Button size="sm" onClick={() => verifyDocument(order.id, document.kind)}>Verifikasi</Button>
+                  ) : null}
+                  {document.sendToSchoolRequired && document.verified && !document.sentToSchool ? (
+                    <Button size="sm" onClick={() => sendDocument(order.id, document.kind)}>Tandai dikirim</Button>
+                  ) : null}
+                  {completeDocument ? <span className="document-done">Selesai</span> : null}
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      </section>
+
+      {errorMessage ? <div className="callout callout--danger">{errorMessage}</div> : null}
+
+      <section className={complete ? 'siplah-completion is-complete' : 'siplah-completion'}>
+        <div>
+          <span>{complete ? '✓' : '○'}</span>
+          <div>
+            <h2>{complete ? 'SIPLah selesai · siap Vendor Batch' : 'SIPLah belum lengkap'}</h2>
+            <p>{complete
+              ? 'Akses, order, dan seluruh dokumen wajib sudah lengkap. Pembayaran sekolah tetap independen.'
+              : 'Lengkapi checkpoint dan dokumen wajib tanpa melompati verifikasi.'}</p>
+          </div>
+        </div>
+        {complete ? (
+          <Link className="button button--primary button--md" to="/vendor-batches">
+            {primaryAction?.kind === 'ADD_TO_VENDOR_BATCH' ? primaryAction.title : 'Lihat area Vendor'}
+          </Link>
+        ) : null}
+      </section>
+
+      <section className="independence-strip">
+        <div><span>Pembayaran sekolah</span><StatusChip tone={order.schoolPayment.status === 'LUNAS' ? 'success' : 'neutral'}>{order.schoolPayment.status}</StatusChip></div>
+        <div><span>Benefit</span><StatusChip tone={order.benefit.status === 'ELIGIBLE' ? 'warning' : order.benefit.status === 'PAID' ? 'success' : 'neutral'}>{order.benefit.status.replaceAll('_', ' ')}</StatusChip></div>
+        <p>SIPLah completion tidak mengubah dua state finansial ini.</p>
+      </section>
+
+      <section className="workflow-context-strip">
+        <span>Event terakhir</span><strong>{order.timeline[0]?.title}</strong><small>{order.timeline[0] ? formatDateTime(order.timeline[0].occurredAt) : '—'}</small>
+      </section>
+    </div>
+  )
+}

@@ -167,8 +167,9 @@ function ArkasTab({ order }: { order: Order }) {
             </article>
           ))}
           <div className="deferred-action-note">
-            <strong>Review exception mendalam belum diaktifkan pada Pass 1.</strong>
-            <span>Tidak ada tombol generik yang akan melompati keputusan item dan approval HET.</span>
+            <strong>Exception membutuhkan keputusan per item.</strong>
+            <span>Tidak ada tombol generik yang akan melompati review dan approval eksplisit.</span>
+            <Link className="button button--primary button--sm" to={`/orders/${order.id}/arkas`}>Buka Review HET</Link>
           </div>
         </div>
       ) : (
@@ -203,19 +204,34 @@ function SiplahTab({ order }: { order: Order }) {
         <ChecklistItem done={process.accessAvailable} label="Akses sekolah tersedia" detail="Kredensial asli tidak disimpan di prototype." />
         <ChecklistItem done={process.orderPlaced} label="Pesanan dibuat di JPA/TokoLadang" />
         <ChecklistItem done={Boolean(process.orderNumber)} label="Nomor order SIPLah tercatat" detail={process.orderNumber ?? 'Belum ada nomor order'} />
-        <ChecklistItem done={process.suratPesananAvailable} label="Surat Pesanan tersedia" />
-        <ChecklistItem done={process.suratPesananAttached} label="Surat Pesanan terlampir" />
-        <ChecklistItem done={process.suratPesananSentToSchool} label="Surat Pesanan dikirim ke sekolah" />
+        {process.documents.map((document) => {
+          const complete =
+            document.available &&
+            Boolean(document.fileName) &&
+            document.verified &&
+            (!document.sendToSchoolRequired || document.sentToSchool)
+          const status = [
+            document.required ? 'Wajib' : 'Opsional',
+            document.available ? 'tersedia' : 'belum tersedia',
+            document.fileName ? 'terlampir' : 'belum terlampir',
+            document.verified ? 'terverifikasi' : 'belum diverifikasi',
+            document.sendToSchoolRequired
+              ? document.sentToSchool ? 'sudah dikirim' : 'belum dikirim'
+              : null,
+          ].filter(Boolean).join(' · ')
+          return <ChecklistItem key={document.kind} done={complete} label={document.label} detail={status} />
+        })}
         <ChecklistItem
           done={isSiplahAdminComplete(order)}
           label="Administrasi SIPLah terverifikasi"
-          detail="Derived dari order SIPLah dan dokumen wajib di atas; bukan checkbox manual."
+          detail="Derived dari order SIPLah dan seluruh dokumen wajib; bukan checkbox manual."
         />
       </ol>
       {!isSiplahComplete(order) ? (
         <div className="deferred-action-note">
-          <strong>Mutasi per-checkpoint disiapkan di state engine.</strong>
-          <span>UI eksekusi SIPLah akan diuji pada TASK 08 setelah Review Gate 1.</span>
+          <strong>Lanjutkan checkpoint secara eksplisit.</strong>
+          <span>Akses, order number, attachment, verifikasi, dan pengiriman dokumen tetap terpisah.</span>
+          <Link className="button button--primary button--sm" to={`/orders/${order.id}/siplah`}>Buka Workflow SIPLah</Link>
         </div>
       ) : null}
     </section>

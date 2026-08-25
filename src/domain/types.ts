@@ -36,16 +36,47 @@ export interface School {
   city: string
 }
 
+export type HetResolutionType =
+  | 'AUTO_MATCHED'
+  | 'ACCEPTED_SUGGESTION'
+  | 'CHOSEN_PRODUCT'
+  | 'MANUAL_OVERRIDE'
+
 export interface OrderItem {
   id: string
-  productCode: string
-  arkasTitle: string
+  productCode: string | null
+  readonly arkasTitle: string
   masterProductTitle: string | null
-  quantity: number
-  arkasUnitPrice: number
+  readonly quantity: number
+  readonly arkasUnitPrice: number
   hetUnitPrice: number | null
   matchStatus: HetItemStatus
+  matchConfidence: number | null
+  matchReason: string
+  resolutionType: HetResolutionType | null
   resolutionNote?: string
+}
+
+export interface ExtractedArkasLine {
+  readonly id: string
+  readonly arkasTitle: string
+  readonly quantity: number
+  readonly arkasUnitPrice: number
+  readonly productCodeCandidate: string | null
+}
+
+export interface ArkasExtractionResult {
+  fixtureId: string
+  activityReference: string
+  sourceLabel: string
+  lines: ExtractedArkasLine[]
+}
+
+export interface ProductMasterItem {
+  code: string
+  title: string
+  hetUnitPrice: number
+  aliases: string[]
 }
 
 export interface ArkasDocument {
@@ -63,13 +94,29 @@ export interface HetReview {
   approvedAt: string | null
 }
 
+export type SiplahDocumentKind =
+  | 'SURAT_PESANAN'
+  | 'INVOICE'
+  | 'KWITANSI'
+  | 'BAST'
+  | 'SIPLAH_PDF'
+
+export interface SiplahDocument {
+  kind: SiplahDocumentKind
+  label: string
+  required: boolean
+  sendToSchoolRequired: boolean
+  available: boolean
+  fileName: string | null
+  verified: boolean
+  sentToSchool: boolean
+}
+
 export interface SiplahProcess {
   accessAvailable: boolean
   orderPlaced: boolean
   orderNumber: string | null
-  suratPesananAvailable: boolean
-  suratPesananAttached: boolean
-  suratPesananSentToSchool: boolean
+  documents: SiplahDocument[]
 }
 
 export interface GoodsState {

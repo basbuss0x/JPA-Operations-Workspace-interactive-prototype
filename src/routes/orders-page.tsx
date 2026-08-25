@@ -66,6 +66,7 @@ export function OrdersPage() {
         eyebrow="Semua konteks sekolah"
         title="Pesanan"
         description="Cari sekolah atau referensi, lalu lihat masalah penting dan next action tanpa membuka satu per satu."
+        actions={<Link className="button button--primary button--sm" to="/orders/new">+ Pesanan Baru</Link>}
       />
 
       <section className="orders-toolbar" aria-label="Cari dan filter pesanan">

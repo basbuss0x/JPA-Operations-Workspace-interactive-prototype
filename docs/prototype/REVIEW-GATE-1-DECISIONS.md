@@ -1,8 +1,8 @@
 # Review Gate 1 — Product Decisions for the Next Pass
 
-Status: Review Gate 1.1 foundation corrections implemented; Pass 2 remains unauthorized.
+Status: Review Gate 1.1 approved; Pass 2 authorized and implemented through TASK 06–08 pending Review Gate 2.
 
-These decisions are binding for future implementation passes. Gate 1.1 updates the shared domain foundation only and does not begin TASK 06+.
+These decisions remain binding for future implementation passes.
 
 ## Work Queue — vendor follow-up
 
@@ -56,6 +56,5 @@ Still deferred:
 - automatic vendor stale thresholds, pending real operational evidence
 - detailed goods-arrival allocation UI (TASK 11)
 - full payment and benefit UI (TASK 12)
-- full SIPLah execution UI and required-document configuration (TASK 08)
 
-Do not begin TASK 06+ until separately authorized.
+Pass 2 keeps Product Master, extraction, and document files as deterministic local fixtures. Do not begin TASK 09+ until Review Gate 2 is approved.

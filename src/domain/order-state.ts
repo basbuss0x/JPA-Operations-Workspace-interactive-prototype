@@ -8,13 +8,16 @@ export function getHetExceptionCount(order: Order): number {
 
 export function isSiplahAdminComplete(order: Order): boolean {
   const process = order.siplah
-  return (
-    process.orderPlaced &&
-    Boolean(process.orderNumber) &&
-    process.suratPesananAvailable &&
-    process.suratPesananAttached &&
-    process.suratPesananSentToSchool
-  )
+  const requiredDocumentsComplete = process.documents
+    .filter((document) => document.required)
+    .every(
+      (document) =>
+        document.available &&
+        Boolean(document.fileName) &&
+        document.verified &&
+        (!document.sendToSchoolRequired || document.sentToSchool),
+    )
+  return process.orderPlaced && Boolean(process.orderNumber) && requiredDocumentsComplete
 }
 
 export function isSiplahComplete(order: Order): boolean {

@@ -52,7 +52,14 @@ describe('derived domain selectors', () => {
 
     const missingAttachment: Order = {
       ...complete,
-      siplah: { ...complete.siplah, suratPesananAttached: false },
+      siplah: {
+        ...complete.siplah,
+        documents: complete.siplah.documents.map((document) =>
+          document.kind === 'SURAT_PESANAN'
+            ? { ...document, available: false, fileName: null }
+            : document,
+        ),
+      },
     }
     expect(isSiplahAdminComplete(missingAttachment)).toBe(false)
     expect(isSiplahComplete(missingAttachment)).toBe(false)

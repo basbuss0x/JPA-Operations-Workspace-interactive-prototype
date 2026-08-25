@@ -144,6 +144,10 @@ CLOSED
 
 This is broad positioning only.
 
+### Intake and extraction simulation
+
+ARKAS extraction is deterministic in the prototype. The source line values (`arkasTitle`, quantity, and `arkasUnitPrice`) are copied once into immutable order-source concepts. Product Master matching may add suggestions and reviewed prices but must never overwrite source values.
+
 ### HET review
 
 ```text
@@ -171,12 +175,19 @@ Track checkpoints rather than one boolean:
 accessAvailable
 orderPlaced
 orderNumber?
-suratPesananAvailable
-suratPesananAttached?
-suratPesananSentToSchool
+documents[]
+  kind
+  required
+  sendToSchoolRequired
+  available
+  fileName?
+  verified
+  sentToSchool
 ```
 
-`adminCompleted` is derived from completion of the SIPLah order and verification of the required order documents. It is not an independently mutable checkbox and is independent from school payment.
+Prototype document kinds are `SURAT_PESANAN`, `INVOICE`, `KWITANSI`, `BAST`, and `SIPLAH_PDF`. The first four are required in Pass 2; `SIPLAH_PDF` is an optional archive fixture.
+
+`adminCompleted` is derived from completion of the SIPLah order and verification/delivery of every required order document. It is not an independently mutable checkbox and is independent from school payment.
 
 Do not store a school SIPLah password.
 
@@ -240,7 +251,12 @@ ARKAS uploaded
 → extraction simulation completed
 → HET review may become NEEDS_REVIEW
 
-all HET exceptions resolved + owner confirms
+all HET exceptions resolved
+→ review remains unapproved until explicit confirmation
+→ owner confirms HET review
+→ `hetReviewedAmount` is frozen
+→ Pass 2 prototype explicitly sets `finalInvoiceAmount = hetReviewedAmount`
+→ immutable `arkasBudgetAmount` remains unchanged
 → HET APPROVED
 → order can progress to SIPLAH
 

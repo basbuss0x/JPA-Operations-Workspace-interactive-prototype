@@ -73,8 +73,20 @@ export function deriveActionCandidates(
         kind: 'REVIEW_HET',
         title: `Review ${exceptions} selisih HET`,
         reason: 'Selisih harus diputuskan sebelum pesanan dapat diproses di SIPLah.',
-        href: `/orders/${order.id}?tab=arkas`,
+        href: `/orders/${order.id}/arkas`,
         ctaLabel: 'Review HET',
+        priority: 10,
+        dueAt: null,
+      }),
+    )
+  } else if (order.stage === 'HET_REVIEW' && order.het.status !== 'APPROVED') {
+    candidates.push(
+      action(order, now, {
+        kind: 'REVIEW_HET',
+        title: 'Konfirmasi Review HET',
+        reason: 'Semua exception selesai; total review masih menunggu konfirmasi eksplisit.',
+        href: `/orders/${order.id}/arkas`,
+        ctaLabel: 'Konfirmasi HET',
         priority: 10,
         dueAt: null,
       }),
@@ -90,7 +102,7 @@ export function deriveActionCandidates(
           ? 'Lengkapi dokumen SIPLah'
           : 'Belanjakan pesanan di TokoLadang/SIPLah',
         reason: 'HET sudah disetujui; lanjutkan checkpoint SIPLah yang belum selesai.',
-        href: `/orders/${order.id}?tab=siplah`,
+        href: `/orders/${order.id}/siplah`,
         ctaLabel: 'Buka SIPLah',
         priority: 20,
         dueAt: null,

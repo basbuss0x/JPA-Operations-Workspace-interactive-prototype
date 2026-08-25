@@ -1,12 +1,16 @@
+import { calculateArkasBudgetAmount } from './intake'
 import { getHetExceptionCount, isCompletionReady } from './order-state'
 import { calculateBenefitAmount, isVendorBatchEligible } from './selectors'
+import { createSiplahDocuments, getSiplahDocument } from './siplah'
 import type {
+  ArkasExtractionResult,
   GoodsArrivalAllocation,
   NextActionKind,
   NextActionOverride,
   Order,
+  ProductMasterItem,
   PrototypeData,
-  SiplahProcess,
+  SiplahDocumentKind,
   TimelineEvent,
   VendorBatchStatus,
 } from './types'
@@ -35,51 +39,437 @@ function withEvent(order: Order, title: string, detail: string, now?: Date): Ord
   }
 }
 
+export interface CreateOrderFromExtractionInput {
+  id: string
+  schoolId: string
+  schoolName: string
+  sourceType: Order['arkas']['sourceType']
+  fileName: string
+  extraction: ArkasExtractionResult
+  matchedItems: Order['items']
+}
+
+export function createOrderFromExtraction(
+  input: CreateOrderFromExtractionInput,
+  now?: Date,
+): Order {
+  const createdAt = timestamp(now)
+  const arkasBudgetAmount = calculateArkasBudgetAmount(input.extraction.lines)
+  const orderedQty = input.matchedItems.reduce((total, item) => total + item.quantity, 0)
+  const exceptionCount = input.matchedItems.filter((item) =>
+    ['PRICE_MISMATCH', 'AMBIGUOUS_MATCH', 'NO_MATCH'].includes(item.matchStatus),
+  ).length
+  return {
+    id: input.id,
+    schoolId: input.schoolId,
+    schoolName: input.schoolName,
+    stage: 'HET_REVIEW',
+    createdAt,
+    updatedAt: createdAt,
+    arkasBudgetAmount,
+    hetReviewedAmount: null,
+    finalInvoiceAmount: null,
+    arkas: {
+      reference: input.extraction.activityReference,
+      sourceType: input.sourceType,
+      fileName: input.fileName,
+      uploadedAt: createdAt,
+      extractedAt: createdAt,
+    },
+    items: input.matchedItems.map((item) => ({ ...item })),
+    het: {
+      status: exceptionCount > 0 ? 'NEEDS_REVIEW' : 'EXTRACTED',
+      detectedItemCount: input.matchedItems.length,
+      autoMatchedItemCount: input.matchedItems.length - exceptionCount,
+      approvedAt: null,
+    },
+    siplah: {
+      accessAvailable: false,
+      orderPlaced: false,
+      orderNumber: null,
+      documents: createSiplahDocuments(),
+    },
+    vendorBatchId: null,
+    goods: {
+      arrivedAt: null,
+      arrivalType: 'NONE',
+      preDeliveryCheckCompleted: false,
+      checkedAt: null,
+      acceptedBySchoolAt: null,
+    },
+    fulfillment: {
+      orderedQty,
+      deliveredQty: 0,
+      remainingQty: orderedQty,
+      problemCount: 0,
+      progressPercent: 0,
+      lastUpdated: null,
+      syncStatus: 'OK',
+    },
+    schoolPayment: {
+      status: 'UNPAID',
+      schoolPaidAmount: 0,
+      paidAt: null,
+      method: null,
+      evidenceName: null,
+      followUpDueAt: null,
+    },
+    benefit: {
+      status: 'NOT_ELIGIBLE',
+      baseAmount: null,
+      obligationAmount: null,
+      eligibleAt: null,
+      paidAt: null,
+      method: null,
+      recipient: null,
+      proofName: null,
+    },
+    supplierPayment: {
+      status: 'UNPAID',
+      obligationAmount: Math.round(arkasBudgetAmount * 0.72),
+      paidAmount: 0,
+    },
+    nextActionControl: {
+      override: null,
+      controlsByActionKey: {},
+    },
+    timeline: [
+      {
+        id: `${input.id}-matched-${createdAt}`,
+        occurredAt: createdAt,
+        type: 'SYSTEM',
+        title: 'HET matching selesai',
+        detail: `${input.matchedItems.length - exceptionCount} item cocok otomatis; ${exceptionCount} memerlukan review.`,
+      },
+      {
+        id: `${input.id}-extracted-${createdAt}`,
+        occurredAt: createdAt,
+        type: 'SYSTEM',
+        title: 'ARKAS diekstrak',
+        detail: `${input.matchedItems.length} item terstruktur dari ${input.fileName}.`,
+      },
+      {
+        id: `${input.id}-uploaded-${createdAt}`,
+        occurredAt: createdAt,
+        type: 'SYSTEM',
+        title: 'ARKAS diterima',
+        detail: `Sumber ${input.sourceType} dicatat tanpa mengubah nilai aslinya.`,
+      },
+    ],
+  }
+}
+
+function getResolvableHetItem(order: Order, itemId: string) {
+  const target = order.items.find((item) => item.id === itemId)
+  if (!target || !['PRICE_MISMATCH', 'AMBIGUOUS_MATCH', 'NO_MATCH'].includes(target.matchStatus)) {
+    throw new Error('Item bukan HET exception yang dapat diselesaikan.')
+  }
+  return target
+}
+
+export function acceptSuggestedHetMatch(order: Order, itemId: string, now?: Date): Order {
+  const target = getResolvableHetItem(order, itemId)
+  if (!target.productCode || !target.masterProductTitle || target.hetUnitPrice === null) {
+    throw new Error('Item tidak memiliki suggested match yang dapat diterima.')
+  }
+  return withEvent(
+    {
+      ...order,
+      items: order.items.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              matchStatus: 'MATCHED' as const,
+              resolutionType: 'ACCEPTED_SUGGESTION' as const,
+              resolutionNote: 'Suggested Product Master diterima operator.',
+            }
+          : item,
+      ),
+    },
+    'HET exception diselesaikan',
+    `${target.arkasTitle}: suggested match diterima.`,
+    now,
+  )
+}
+
+export function chooseHetProduct(
+  order: Order,
+  itemId: string,
+  product: ProductMasterItem,
+  now?: Date,
+): Order {
+  const target = getResolvableHetItem(order, itemId)
+  return withEvent(
+    {
+      ...order,
+      items: order.items.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              productCode: product.code,
+              masterProductTitle: product.title,
+              hetUnitPrice: product.hetUnitPrice,
+              matchStatus: 'MATCHED' as const,
+              matchConfidence: 1,
+              matchReason: 'Product Master dipilih langsung oleh operator.',
+              resolutionType: 'CHOSEN_PRODUCT' as const,
+              resolutionNote: `Dipilih: ${product.code}.`,
+            }
+          : item,
+      ),
+    },
+    'Product Master dipilih',
+    `${target.arkasTitle} dipetakan ke ${product.code}.`,
+    now,
+  )
+}
+
+export function manualOverrideHetItem(
+  order: Order,
+  itemId: string,
+  input: { reviewedUnitPrice: number; reason: string },
+  now?: Date,
+): Order {
+  const target = getResolvableHetItem(order, itemId)
+  if (!input.reason.trim()) throw new Error('Manual override membutuhkan alasan.')
+  if (!Number.isFinite(input.reviewedUnitPrice) || input.reviewedUnitPrice <= 0) {
+    throw new Error('Harga review manual harus lebih dari nol.')
+  }
+  return withEvent(
+    {
+      ...order,
+      items: order.items.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              productCode: `MANUAL-${item.id.toUpperCase()}`,
+              masterProductTitle: item.arkasTitle,
+              hetUnitPrice: input.reviewedUnitPrice,
+              matchStatus: 'MANUAL_OVERRIDE' as const,
+              matchConfidence: null,
+              matchReason: 'Nilai ditetapkan manual oleh operator.',
+              resolutionType: 'MANUAL_OVERRIDE' as const,
+              resolutionNote: input.reason.trim(),
+            }
+          : item,
+      ),
+    },
+    'HET manual override',
+    `${target.arkasTitle}: ${input.reason.trim()}`,
+    now,
+  )
+}
+
+export function calculateReviewedHetAmount(items: Order['items']): number {
+  const unresolved = items.some((item) =>
+    ['PRICE_MISMATCH', 'AMBIGUOUS_MATCH', 'NO_MATCH'].includes(item.matchStatus),
+  )
+  if (unresolved || items.some((item) => item.hetUnitPrice === null)) {
+    throw new Error('Reviewed HET amount belum dapat dihitung karena masih ada exception.')
+  }
+  return items.reduce(
+    (total, item) => total + item.quantity * (item.hetUnitPrice ?? 0),
+    0,
+  )
+}
+
 export function resolveHetException(
   order: Order,
   itemId: string,
   note: string,
   now?: Date,
 ): Order {
-  const target = order.items.find((item) => item.id === itemId)
-  if (!target || !['PRICE_MISMATCH', 'AMBIGUOUS_MATCH', 'NO_MATCH'].includes(target.matchStatus)) {
-    throw new Error('Item bukan HET exception yang dapat diselesaikan.')
-  }
-  const next = {
-    ...order,
-    items: order.items.map((current) =>
-      current.id === itemId
-        ? { ...current, matchStatus: 'MANUAL_OVERRIDE' as const, resolutionNote: note }
-        : current,
-    ),
-  }
-  return withEvent(next, 'HET exception diselesaikan', `${target.arkasTitle}: ${note}`, now)
+  const target = getResolvableHetItem(order, itemId)
+  return manualOverrideHetItem(
+    order,
+    itemId,
+    { reviewedUnitPrice: target.hetUnitPrice ?? target.arkasUnitPrice, reason: note },
+    now,
+  )
 }
 
 export function confirmHetReview(order: Order, now?: Date): Order {
   if (getHetExceptionCount(order) > 0) {
     throw new Error('Semua HET exception harus diselesaikan sebelum approval.')
   }
+  if (order.het.status === 'APPROVED') throw new Error('HET review sudah disetujui.')
+  const reviewedAmount = calculateReviewedHetAmount(order.items)
   const approvedAt = timestamp(now)
   const next: Order = {
     ...order,
     stage: 'SIPLAH',
+    hetReviewedAmount: reviewedAmount,
+    // Prototype decision: explicit HET confirmation finalizes the invoice before SIPLah ordering.
+    finalInvoiceAmount: reviewedAmount,
     het: { ...order.het, status: 'APPROVED', approvedAt },
   }
-  return withEvent(next, 'HET disetujui', 'Review HET dikonfirmasi oleh operator.', now)
+  return withEvent(
+    next,
+    'HET disetujui',
+    `Review dikonfirmasi. HET dan invoice final ditetapkan Rp${reviewedAmount.toLocaleString('id-ID')}; ARKAS sumber tetap Rp${order.arkasBudgetAmount.toLocaleString('id-ID')}.`,
+    now,
+  )
 }
 
-export function updateSiplahCheckpoint<K extends keyof SiplahProcess>(
+export function setSiplahAccessAvailable(
   order: Order,
-  checkpoint: K,
-  value: SiplahProcess[K],
+  available: boolean,
   now?: Date,
 ): Order {
-  const next = {
-    ...order,
-    siplah: { ...order.siplah, [checkpoint]: value },
+  return withEvent(
+    { ...order, siplah: { ...order.siplah, accessAvailable: available } },
+    'Akses SIPLah diperbarui',
+    available
+      ? 'Akses sekolah tersedia. Username/password tidak disimpan.'
+      : 'Akses sekolah ditandai belum tersedia.',
+    now,
+  )
+}
+
+export function setSiplahOrderPlaced(order: Order, now?: Date): Order {
+  if (!order.siplah.accessAvailable) {
+    throw new Error('Akses SIPLah harus tersedia sebelum mencatat pesanan.')
   }
-  return withEvent(next, 'Checkpoint SIPLah diperbarui', `${checkpoint} diperbarui secara eksplisit.`, now)
+  return withEvent(
+    {
+      ...order,
+      siplah: { ...order.siplah, orderPlaced: true },
+    },
+    'Pesanan SIPLah dibuat',
+    'Pesanan ditandai sudah dibuat di JPA/TokoLadang; nomor order belum otomatis dianggap tercatat.',
+    now,
+  )
+}
+
+export function recordSiplahOrder(
+  order: Order,
+  orderNumber: string,
+  now?: Date,
+): Order {
+  if (!order.siplah.orderPlaced) {
+    throw new Error('Pesanan harus ditandai dibuat sebelum mencatat nomor order.')
+  }
+  if (!orderNumber.trim()) throw new Error('Nomor order SIPLah wajib diisi.')
+  return withEvent(
+    {
+      ...order,
+      siplah: { ...order.siplah, orderNumber: orderNumber.trim() },
+    },
+    'Nomor order SIPLah dicatat',
+    `Nomor order ${orderNumber.trim()} dicatat.`,
+    now,
+  )
+}
+
+export function markSiplahDocumentAvailable(
+  order: Order,
+  kind: SiplahDocumentKind,
+  now?: Date,
+): Order {
+  if (!order.siplah.orderPlaced) {
+    throw new Error('Pesanan SIPLah harus dibuat sebelum dokumen tersedia.')
+  }
+  const target = getSiplahDocument(order.siplah.documents, kind)
+  return withEvent(
+    {
+      ...order,
+      siplah: {
+        ...order.siplah,
+        documents: order.siplah.documents.map((document) =>
+          document.kind === kind ? { ...document, available: true } : document,
+        ),
+      },
+    },
+    'Dokumen SIPLah tersedia',
+    `${target.label} tersedia dan menunggu lampiran/verifikasi.`,
+    now,
+  )
+}
+
+export function attachSiplahDocument(
+  order: Order,
+  kind: SiplahDocumentKind,
+  fileName: string,
+  now?: Date,
+): Order {
+  if (!order.siplah.orderPlaced) {
+    throw new Error('Pesanan SIPLah harus dibuat sebelum dokumen dilampirkan.')
+  }
+  if (!fileName.trim()) throw new Error('Nama file dokumen wajib diisi.')
+  const target = getSiplahDocument(order.siplah.documents, kind)
+  return withEvent(
+    {
+      ...order,
+      siplah: {
+        ...order.siplah,
+        documents: order.siplah.documents.map((document) =>
+          document.kind === kind
+            ? {
+                ...document,
+                available: true,
+                fileName: fileName.trim(),
+                verified: false,
+                sentToSchool: false,
+              }
+            : document,
+        ),
+      },
+    },
+    'Dokumen SIPLah dilampirkan',
+    `${target.label}: ${fileName.trim()}.`,
+    now,
+  )
+}
+
+export function verifySiplahDocument(
+  order: Order,
+  kind: SiplahDocumentKind,
+  now?: Date,
+): Order {
+  const target = getSiplahDocument(order.siplah.documents, kind)
+  if (!target.available || !target.fileName) {
+    throw new Error(`${target.label} belum tersedia atau terlampir.`)
+  }
+  return withEvent(
+    {
+      ...order,
+      siplah: {
+        ...order.siplah,
+        documents: order.siplah.documents.map((document) =>
+          document.kind === kind ? { ...document, verified: true } : document,
+        ),
+      },
+    },
+    'Dokumen SIPLah diverifikasi',
+    `${target.label} diverifikasi operator.`,
+    now,
+  )
+}
+
+export function sendSiplahDocumentToSchool(
+  order: Order,
+  kind: SiplahDocumentKind,
+  now?: Date,
+): Order {
+  const target = getSiplahDocument(order.siplah.documents, kind)
+  if (!target.sendToSchoolRequired) {
+    throw new Error(`${target.label} tidak memerlukan pengiriman ke sekolah.`)
+  }
+  if (!target.verified) throw new Error(`${target.label} harus diverifikasi sebelum dikirim.`)
+  return withEvent(
+    {
+      ...order,
+      siplah: {
+        ...order.siplah,
+        documents: order.siplah.documents.map((document) =>
+          document.kind === kind ? { ...document, sentToSchool: true } : document,
+        ),
+      },
+    },
+    'Dokumen SIPLah dikirim',
+    `${target.label} dikirim ke sekolah.`,
+    now,
+  )
 }
 
 export function createVendorBatch(

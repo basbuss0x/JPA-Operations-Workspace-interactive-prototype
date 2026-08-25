@@ -49,6 +49,9 @@ export function aggregateVendorItems(orders: Order[]): AggregatedVendorItem[] {
 
   for (const order of orders) {
     for (const orderItem of order.items) {
+      if (!orderItem.productCode) {
+        throw new Error(`${order.id} memiliki item HET yang belum dipetakan ke produk.`)
+      }
       const title = orderItem.masterProductTitle ?? orderItem.arkasTitle
       const key = `${orderItem.productCode}:${title}`
       const existing = items.get(key)

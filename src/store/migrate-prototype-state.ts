@@ -1,8 +1,10 @@
 import { createCanonicalDemoData, DEMO_STATE_VERSION } from '../data/demo-data'
+import { createSiplahDocuments } from '../domain/siplah'
 import type {
   HetReview,
   NextActionOverride,
   Order,
+  OrderItem,
   PrototypeData,
   SchoolBenefit,
   SchoolPayment,
@@ -10,12 +12,28 @@ import type {
   VendorBatch,
 } from '../domain/types'
 
-interface LegacyHetReviewV1 extends HetReview {
-  hetTotalAmount: number
+interface LegacySiplahProcess {
+  accessAvailable: boolean
+  orderPlaced: boolean
+  orderNumber: string | null
+  suratPesananAvailable: boolean
+  suratPesananAttached: boolean
+  suratPesananSentToSchool: boolean
+  adminCompleted?: boolean
 }
 
-interface LegacySiplahProcessV1 extends SiplahProcess {
-  adminCompleted: boolean
+type LegacyOrderItem = Omit<
+  OrderItem,
+  'matchConfidence' | 'matchReason' | 'resolutionType'
+>
+
+interface LegacyOrderV2 extends Omit<Order, 'items' | 'siplah'> {
+  items: LegacyOrderItem[]
+  siplah: LegacySiplahProcess
+}
+
+interface LegacyHetReviewV1 extends HetReview {
+  hetTotalAmount: number
 }
 
 interface LegacySchoolPaymentV1 extends Omit<SchoolPayment, 'schoolPaidAmount'> {
@@ -30,19 +48,17 @@ interface LegacyNextActionControlV1 {
 }
 
 interface LegacyOrderV1 extends Omit<
-  Order,
+  LegacyOrderV2,
   | 'arkasBudgetAmount'
   | 'hetReviewedAmount'
   | 'finalInvoiceAmount'
   | 'het'
-  | 'siplah'
   | 'schoolPayment'
   | 'benefit'
   | 'nextActionControl'
 > {
   finalInvoiceAmount: number
   het: LegacyHetReviewV1
-  siplah: LegacySiplahProcessV1
   schoolPayment: LegacySchoolPaymentV1
   benefit: LegacySchoolBenefitV1
   nextActionControl: LegacyNextActionControlV1
@@ -50,14 +66,56 @@ interface LegacyOrderV1 extends Omit<
 
 type LegacyVendorBatchV1 = Omit<VendorBatch, 'followUpDueAt'>
 
-interface LegacyPrototypeDataV1 {
-  version: 1
-  orders: Record<string, LegacyOrderV1>
-  vendorBatches: Record<string, LegacyVendorBatchV1>
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function migrateItem(item: LegacyOrderItem): OrderItem {
+  const resolved = item.matchStatus === 'MATCHED' || item.matchStatus === 'MANUAL_OVERRIDE'
+  return {
+    ...item,
+    matchConfidence: item.matchStatus === 'MATCHED' ? 0.99 : null,
+    matchReason: resolved
+      ? 'Dimigrasikan dari state prototype sebelumnya.'
+      : 'Exception canonical dari state prototype sebelumnya.',
+    resolutionType:
+      item.matchStatus === 'MATCHED'
+        ? 'AUTO_MATCHED'
+        : item.matchStatus === 'MANUAL_OVERRIDE' ? 'MANUAL_OVERRIDE' : null,
+  }
+}
+
+function migrateSiplah(process: LegacySiplahProcess): SiplahProcess {
+  const previouslyComplete =
+    process.orderPlaced &&
+    Boolean(process.orderNumber) &&
+    process.suratPesananAvailable &&
+    process.suratPesananAttached &&
+    process.suratPesananSentToSchool
+  const documents = createSiplahDocuments(previouslyComplete)
+  if (!previouslyComplete) {
+    const suratPesanan = documents.find((document) => document.kind === 'SURAT_PESANAN')
+    if (suratPesanan) {
+      suratPesanan.available = process.suratPesananAvailable
+      suratPesanan.fileName = process.suratPesananAttached ? 'SURAT_PESANAN-migrated.pdf' : null
+      suratPesanan.verified = process.suratPesananAttached
+      suratPesanan.sentToSchool = process.suratPesananSentToSchool
+    }
+  }
+  return {
+    accessAvailable: process.accessAvailable,
+    orderPlaced: process.orderPlaced,
+    orderNumber: process.orderNumber,
+    documents,
+  }
+}
+
+function migrateOrderV2(order: LegacyOrderV2): Order {
+  return {
+    ...order,
+    items: order.items.map(migrateItem),
+    siplah: migrateSiplah(order.siplah),
+  }
 }
 
 function migrateOrderV1(order: LegacyOrderV1): Order {
@@ -67,8 +125,7 @@ function migrateOrderV1(order: LegacyOrderV1): Order {
     order.benefit.status === 'ELIGIBLE' ||
     order.benefit.status === 'PAID'
   const benefitBase = benefitFrozen ? finalInvoiceAmount : null
-
-  return {
+  const v2Order: LegacyOrderV2 = {
     ...order,
     arkasBudgetAmount: order.finalInvoiceAmount,
     hetReviewedAmount: order.het.hetTotalAmount,
@@ -78,14 +135,6 @@ function migrateOrderV1(order: LegacyOrderV1): Order {
       detectedItemCount: order.het.detectedItemCount,
       autoMatchedItemCount: order.het.autoMatchedItemCount,
       approvedAt: order.het.approvedAt,
-    },
-    siplah: {
-      accessAvailable: order.siplah.accessAvailable,
-      orderPlaced: order.siplah.orderPlaced,
-      orderNumber: order.siplah.orderNumber,
-      suratPesananAvailable: order.siplah.suratPesananAvailable,
-      suratPesananAttached: order.siplah.suratPesananAttached,
-      suratPesananSentToSchool: order.siplah.suratPesananSentToSchool,
     },
     schoolPayment: {
       status: order.schoolPayment.status,
@@ -98,30 +147,40 @@ function migrateOrderV1(order: LegacyOrderV1): Order {
     benefit: {
       ...order.benefit,
       baseAmount: benefitBase,
-      obligationAmount:
-        benefitBase === null ? null : Math.round(benefitBase * 0.1),
+      obligationAmount: benefitBase === null ? null : Math.round(benefitBase * 0.1),
     },
     nextActionControl: {
       override: order.nextActionControl.override,
-      // A v1 snooze applied to an entire order and cannot be mapped safely to one obligation.
+      // An order-level v1 snooze cannot be mapped safely to one action obligation.
       controlsByActionKey: {},
     },
   }
+  return migrateOrderV2(v2Order)
 }
 
-function migrateV1(state: LegacyPrototypeDataV1): PrototypeData {
-  return {
-    version: DEMO_STATE_VERSION,
-    orders: Object.fromEntries(
-      Object.entries(state.orders).map(([orderId, order]) => [orderId, migrateOrderV1(order)]),
-    ),
-    vendorBatches: Object.fromEntries(
-      Object.entries(state.vendorBatches).map(([batchId, batch]) => [
-        batchId,
-        { ...batch, followUpDueAt: null },
-      ]),
-    ),
-  }
+function migrateVendorBatches(
+  batches: Record<string, LegacyVendorBatchV1 | VendorBatch>,
+): Record<string, VendorBatch> {
+  return Object.fromEntries(
+    Object.entries(batches).map(([batchId, batch]) => [
+      batchId,
+      { ...batch, followUpDueAt: 'followUpDueAt' in batch ? batch.followUpDueAt : null },
+    ]),
+  )
+}
+
+function migrateOrders(
+  orders: Record<string, LegacyOrderV1 | LegacyOrderV2>,
+  version: 1 | 2,
+): Record<string, Order> {
+  return Object.fromEntries(
+    Object.entries(orders).map(([orderId, order]) => [
+      orderId,
+      version === 1
+        ? migrateOrderV1(order as LegacyOrderV1)
+        : migrateOrderV2(order as LegacyOrderV2),
+    ]),
+  )
 }
 
 export function migratePrototypeState(
@@ -133,9 +192,18 @@ export function migratePrototypeState(
     return createCanonicalDemoData()
   }
 
-  if (persistedVersion === 1) {
+  if (persistedVersion === 1 || persistedVersion === 2) {
     try {
-      return migrateV1(persistedState as unknown as LegacyPrototypeDataV1)
+      return {
+        version: DEMO_STATE_VERSION,
+        orders: migrateOrders(
+          persistedState.orders as Record<string, LegacyOrderV1 | LegacyOrderV2>,
+          persistedVersion,
+        ),
+        vendorBatches: migrateVendorBatches(
+          persistedState.vendorBatches as Record<string, LegacyVendorBatchV1 | VendorBatch>,
+        ),
+      }
     } catch {
       return createCanonicalDemoData()
     }

@@ -80,28 +80,28 @@ test('snooze, override, persistence, and reset mutate real local state', async (
       state?: { orders?: Record<string, Record<string, unknown>> }
     }
     const source = structuredClone(persisted.state?.orders?.['ORD-2026-068'])
-    if (!source) throw new Error('Missing source order for v1 migration')
+    if (!source) throw new Error('Missing source order for v2 migration')
     source.schoolName = 'Migrated SDN 68'
-    source.finalInvoiceAmount = source.arkasBudgetAmount
-    delete source.arkasBudgetAmount
-    const reviewedAmount = source.hetReviewedAmount
-    delete source.hetReviewedAmount
-    const het = source.het as Record<string, unknown>
-    het.hetTotalAmount = reviewedAmount
-    const siplah = source.siplah as Record<string, unknown>
-    siplah.adminCompleted = true
-    const payment = source.schoolPayment as Record<string, unknown>
-    payment.amount = payment.schoolPaidAmount
-    delete payment.schoolPaidAmount
-    const benefit = source.benefit as Record<string, unknown>
-    delete benefit.baseAmount
-    delete benefit.obligationAmount
-    source.nextActionControl = { override: null, snoozedUntil: null }
+    source.siplah = {
+      accessAvailable: true,
+      orderPlaced: true,
+      orderNumber: 'SPL-2026-1522',
+      suratPesananAvailable: true,
+      suratPesananAttached: true,
+      suratPesananSentToSchool: true,
+    }
+    source.items = (source.items as Array<Record<string, unknown>>).map((item) => {
+      const legacyItem = { ...item }
+      delete legacyItem.matchConfidence
+      delete legacyItem.matchReason
+      delete legacyItem.resolutionType
+      return legacyItem
+    })
     window.localStorage.setItem(
       key,
       JSON.stringify({
-        state: { version: 1, orders: { 'ORD-2026-068': source }, vendorBatches: {} },
-        version: 1,
+        state: { version: 2, orders: { 'ORD-2026-068': source }, vendorBatches: {} },
+        version: 2,
       }),
     )
   })
@@ -110,7 +110,7 @@ test('snooze, override, persistence, and reset mutate real local state', async (
   await expect.poll(async () => page.evaluate(() => {
     const stored = JSON.parse(window.localStorage.getItem('jpa-operations-prototype') ?? '{}') as { version?: number }
     return stored.version
-  })).toBe(2)
+  })).toBe(3)
 
   await page.evaluate(() => {
     window.localStorage.setItem(
@@ -121,6 +121,79 @@ test('snooze, override, persistence, and reset mutate real local state', async (
   await page.goto('/orders/ORD-2026-030')
   await expect(page.getByRole('heading', { name: 'SDN 30 Ambon' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Review 2 selisih HET' })).toBeVisible()
+})
+
+test('Pass 2 journey creates order, reviews HET, and completes SIPLah', async ({ page }, testInfo) => {
+  await page.goto('/orders/new')
+  await expect(page.getByRole('heading', { name: 'Pesanan Baru' })).toBeVisible()
+  await page.getByRole('button', { name: 'Sekolah demo baru' }).click()
+  await page.getByLabel('Nama sekolah demo').fill('SD E2E Pass 2')
+  await page.getByRole('button', { name: 'Upload PDF' }).click()
+  await page.getByRole('button', { name: 'Simulasikan ekstraksi ARKAS' }).click()
+  await expect(page.getByText('Pilih file sebelum menjalankan simulasi ekstraksi.')).toBeVisible()
+  await page.getByRole('button', { name: 'Demo ARKAS' }).click()
+  await page.getByRole('button', { name: 'Simulasikan ekstraksi ARKAS' }).click()
+  await expect(page.getByRole('button', { name: 'Mengekstrak & mencocokkan HET…' })).toBeVisible()
+  await expect(page.getByText('5 item tidak perlu dicek ulang.')).toBeVisible()
+  await expect(page.getByText('3 exception akan dibuka langsung pada workflow HET.')).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('desktop-new-order.png'), fullPage: true })
+
+  await page.getByRole('button', { name: 'Buat order & review HET' }).click()
+  await expect(page).toHaveURL(/\/orders\/ORD-2026-240\/arkas$/)
+  await expect(page.getByRole('heading', { name: 'Review Selisih HET' })).toBeVisible()
+  await expect(page.getByText('3 blocker sebelum SIPLah')).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('desktop-het-review.png'), fullPage: true })
+
+  const mathException = page.locator('.het-exception-card').filter({ hasText: 'Buku Matematika Kelas V' })
+  await mathException.getByRole('button', { name: 'Terima suggested match' }).click()
+
+  const religionException = page.locator('.het-exception-card').filter({ hasText: 'Pendidikan Agama Kelas V' })
+  await religionException.getByRole('button', { name: 'Pilih produk lain' }).click()
+  await religionException.getByLabel('Cari Product Master').fill('BK-PAI-5')
+  await religionException.getByText('Pilih BK-PAI-5').click()
+
+  const localException = page.locator('.het-exception-card').filter({ hasText: 'Muatan Lokal Khas Ambon' })
+  await localException.getByRole('button', { name: 'Manual override' }).click()
+  await localException.getByLabel('Harga review per item').fill('55000')
+  await localException.getByLabel('Alasan wajib').fill('Gunakan harga sumber untuk produk lokal non-master.')
+  await localException.getByRole('button', { name: 'Simpan manual override' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Semua exception sudah diputuskan' })).toBeVisible()
+  await expect(page.getByText(/8\.072\.000/)).toBeVisible()
+  await expect(page.getByText(/8\.188\.000/)).toBeVisible()
+  await page.getByRole('button', { name: 'Confirm HET Review' }).click()
+  await expect(page.getByRole('heading', { name: 'Review HET dikonfirmasi' })).toBeVisible()
+  await expect(page.getByText(/8\.072\.000/)).toBeVisible()
+  await expect(page.getByText(/8\.188\.000/)).toHaveCount(2)
+
+  await page.getByRole('link', { name: 'Lanjut ke SIPLah' }).click()
+  await expect(page.getByRole('heading', { name: 'Workflow SIPLah' })).toBeVisible()
+  await page.getByRole('button', { name: 'Tandai akses tersedia' }).click()
+  await page.getByRole('button', { name: 'Tandai pesanan dibuat' }).click()
+  await page.getByLabel('Nomor order SIPLah').fill('SPL-E2E-2026-240')
+  await page.getByRole('button', { name: 'Simpan nomor order' }).click()
+  await page.getByRole('button', { name: 'Lampirkan paket dokumen demo' }).click()
+
+  while (await page.getByRole('button', { name: 'Verifikasi' }).count()) {
+    await page.getByRole('button', { name: 'Verifikasi' }).first().click()
+  }
+  while (await page.getByRole('button', { name: 'Tandai dikirim' }).count()) {
+    await page.getByRole('button', { name: 'Tandai dikirim' }).first().click()
+  }
+
+  await expect(page.getByRole('heading', { name: 'SIPLah selesai · siap Vendor Batch' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Masukkan ke Vendor Batch' })).toBeVisible()
+  await expect(page.getByText('UNPAID')).toBeVisible()
+  await expect(page.getByText('NOT ELIGIBLE')).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('desktop-siplah.png'), fullPage: true })
+
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'SIPLah selesai · siap Vendor Batch' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Masukkan ke Vendor Batch' })).toBeVisible()
+
+  await page.goto('/orders/ORD-2026-240?tab=timeline')
+  await expect(page.getByText('HET disetujui')).toBeVisible()
+  await expect(page.getByText('Dokumen SIPLah dikirim').first()).toBeVisible()
 })
 
 test.describe('mobile operations layout', () => {
@@ -139,5 +212,22 @@ test.describe('mobile operations layout', () => {
     await expect(page.getByRole('heading', { name: 'Barang & Distribusi' })).toBeVisible()
     await expect(page.getByText('Sisa 67 buku')).toBeVisible()
     await page.screenshot({ path: testInfo.outputPath('mobile-order-workspace.png'), fullPage: true })
+  })
+
+  test('renders Pass 2 workflows as stacked mobile operations', async ({ page }, testInfo) => {
+    await page.goto('/orders/new')
+    await expect(page.getByRole('heading', { name: 'Pesanan Baru' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Simulasikan ekstraksi ARKAS' })).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath('mobile-new-order.png'), fullPage: true })
+
+    await page.goto('/orders/ORD-2026-030/arkas')
+    await expect(page.getByRole('heading', { name: 'Review Selisih HET' })).toBeVisible()
+    await expect(page.locator('.het-comparison').first()).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath('mobile-het-review.png'), fullPage: true })
+
+    await page.goto('/orders/ORD-2026-071/siplah')
+    await expect(page.getByRole('heading', { name: 'Workflow SIPLah' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Dokumen SIPLah' })).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath('mobile-siplah.png'), fullPage: true })
   })
 })
