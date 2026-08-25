@@ -159,9 +159,22 @@ export function createOrderFromExtraction(
   }
 }
 
-function getResolvableHetItem(order: Order, itemId: string) {
+function assertHetReviewOpen(order: Order): void {
+  if (order.stage !== 'HET_REVIEW' || order.het.status === 'APPROVED') {
+    throw new Error('Item HET hanya dapat diedit saat review HET terbuka.')
+  }
+}
+
+function getHetItem(order: Order, itemId: string) {
+  assertHetReviewOpen(order)
   const target = order.items.find((item) => item.id === itemId)
-  if (!target || !['PRICE_MISMATCH', 'AMBIGUOUS_MATCH', 'NO_MATCH'].includes(target.matchStatus)) {
+  if (!target) throw new Error('Item HET tidak ditemukan.')
+  return target
+}
+
+function getResolvableHetItem(order: Order, itemId: string) {
+  const target = getHetItem(order, itemId)
+  if (!['PRICE_MISMATCH', 'AMBIGUOUS_MATCH', 'NO_MATCH'].includes(target.matchStatus)) {
     throw new Error('Item bukan HET exception yang dapat diselesaikan.')
   }
   return target
@@ -198,7 +211,8 @@ export function chooseHetProduct(
   product: ProductMasterItem,
   now?: Date,
 ): Order {
-  const target = getResolvableHetItem(order, itemId)
+  const target = getHetItem(order, itemId)
+  const isCorrection = target.matchStatus === 'MATCHED' || target.matchStatus === 'MANUAL_OVERRIDE'
   return withEvent(
     {
       ...order,
@@ -218,8 +232,10 @@ export function chooseHetProduct(
           : item,
       ),
     },
-    'Product Master dipilih',
-    `${target.arkasTitle} dipetakan ke ${product.code}.`,
+    isCorrection ? 'Pemetaan HET dikoreksi' : 'Product Master dipilih',
+    isCorrection
+      ? `${target.arkasTitle}: ${target.productCode ?? 'tanpa produk'} diganti ke ${product.code}.`
+      : `${target.arkasTitle} dipetakan ke ${product.code}.`,
     now,
   )
 }
@@ -230,7 +246,8 @@ export function manualOverrideHetItem(
   input: { reviewedUnitPrice: number; reason: string },
   now?: Date,
 ): Order {
-  const target = getResolvableHetItem(order, itemId)
+  const target = getHetItem(order, itemId)
+  const isCorrection = target.matchStatus === 'MATCHED' || target.matchStatus === 'MANUAL_OVERRIDE'
   if (!input.reason.trim()) throw new Error('Manual override membutuhkan alasan.')
   if (!Number.isFinite(input.reviewedUnitPrice) || input.reviewedUnitPrice <= 0) {
     throw new Error('Harga review manual harus lebih dari nol.')
@@ -254,8 +271,10 @@ export function manualOverrideHetItem(
           : item,
       ),
     },
-    'HET manual override',
-    `${target.arkasTitle}: ${input.reason.trim()}`,
+    isCorrection ? 'Harga HET dikoreksi' : 'HET manual override',
+    isCorrection
+      ? `${target.arkasTitle}: ${target.hetUnitPrice === null ? 'harga belum ada' : `Rp${target.hetUnitPrice.toLocaleString('id-ID')}`} menjadi Rp${input.reviewedUnitPrice.toLocaleString('id-ID')}. Alasan: ${input.reason.trim()}`
+      : `${target.arkasTitle}: ${input.reason.trim()}`,
     now,
   )
 }

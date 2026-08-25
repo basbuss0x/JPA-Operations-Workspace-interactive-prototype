@@ -14,7 +14,7 @@ import { ExceptionIndicator } from '../components/ui/exception-indicator'
 import { FormField } from '../components/ui/form-field'
 import { StatusChip } from '../components/ui/status-chip'
 
-type EditorMode = 'PRODUCT' | 'MANUAL'
+type EditorMode = 'ACTIONS' | 'PRODUCT' | 'MANUAL'
 
 function exceptionLabel(status: OrderItem['matchStatus']): string {
   switch (status) {
@@ -273,14 +273,67 @@ export function HetReviewPage() {
       )}
 
       <details className="matched-items-disclosure">
-        <summary>{resolvedItems.length} item berhasil dicocokkan · buka bila perlu inspeksi</summary>
+        <summary>{resolvedItems.length} item berhasil dicocokkan · buka bila perlu inspeksi atau koreksi</summary>
         <div>
-          {resolvedItems.map((item) => (
-            <article key={item.id}>
-              <span><strong>{item.arkasTitle}</strong><small>{item.quantity} × {formatCurrency(item.arkasUnitPrice)}</small></span>
-              <span><StatusChip tone="success">{item.resolutionType?.replaceAll('_', ' ') ?? 'MATCHED'}</StatusChip><small>{item.masterProductTitle}</small></span>
-            </article>
-          ))}
+          {resolvedItems.map((item) => {
+            const editorOpen = editor?.itemId === item.id
+            return (
+              <article key={item.id}>
+                <div className="matched-item-summary">
+                  <span><strong>{item.arkasTitle}</strong><small>ARKAS immutable · {item.quantity} × {formatCurrency(item.arkasUnitPrice)}</small></span>
+                  <span><StatusChip tone="success">{item.resolutionType?.replaceAll('_', ' ') ?? 'MATCHED'}</StatusChip><small>{item.masterProductTitle} · {item.hetUnitPrice === null ? 'Harga belum ada' : formatCurrency(item.hetUnitPrice)}</small></span>
+                  <Button variant="ghost" size="sm" onClick={() => openEditor(item, 'ACTIONS')}>Edit</Button>
+                </div>
+
+                {editorOpen && editor.mode === 'ACTIONS' ? (
+                  <div className="matched-item-edit-actions">
+                    <div><strong>Koreksi hasil review</strong><small>Nilai ARKAS di atas tetap tidak berubah.</small></div>
+                    <Button variant="secondary" size="sm" onClick={() => openEditor(item, 'PRODUCT')}>Pilih produk lain</Button>
+                    <Button variant="ghost" size="sm" onClick={() => openEditor(item, 'MANUAL')}>Manual override</Button>
+                  </div>
+                ) : null}
+
+                {editorOpen && editor.mode === 'PRODUCT' ? (
+                  <div className="inline-editor">
+                    <FormField label="Cari Product Master" htmlFor={`resolved-product-search-${item.id}`} hint="Pilih produk pengganti; ARKAS tidak akan diubah.">
+                      <input id={`resolved-product-search-${item.id}`} value={productQuery} onChange={(event) => setProductQuery(event.target.value)} autoFocus />
+                    </FormField>
+                    <div className="product-search-results">
+                      {productResults.length > 0 ? productResults.map((product) => (
+                        <button
+                          type="button"
+                          key={product.code}
+                          onClick={() => {
+                            chooseProduct(order.id, item.id, product)
+                            setEditor(null)
+                          }}
+                        >
+                          <span><strong>{product.title}</strong><small>{product.code}</small></span>
+                          <span>{formatCurrency(product.hetUnitPrice)}</span>
+                          <b>Pilih {product.code}</b>
+                        </button>
+                      )) : <p>Tidak ada produk yang cocok dengan pencarian.</p>}
+                    </div>
+                  </div>
+                ) : null}
+
+                {editorOpen && editor.mode === 'MANUAL' ? (
+                  <form className="inline-editor form-stack" onSubmit={(event) => submitManualOverride(event, item)}>
+                    <div className="form-grid">
+                      <FormField label="Harga review per item" htmlFor={`resolved-manual-price-${item.id}`}>
+                        <input id={`resolved-manual-price-${item.id}`} type="number" min="1" value={manualPrice} onChange={(event) => setManualPrice(event.target.value)} required />
+                      </FormField>
+                      <FormField label="Alasan wajib" htmlFor={`resolved-manual-reason-${item.id}`}>
+                        <input id={`resolved-manual-reason-${item.id}`} value={manualReason} onChange={(event) => setManualReason(event.target.value)} placeholder="Mengapa hasil review sebelumnya dikoreksi?" required />
+                      </FormField>
+                    </div>
+                    {formError ? <p className="form-error">{formError}</p> : null}
+                    <div><Button size="sm" type="submit">Simpan manual override</Button></div>
+                  </form>
+                ) : null}
+              </article>
+            )
+          })}
         </div>
       </details>
 

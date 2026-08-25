@@ -56,6 +56,15 @@ describe('SIPLah lifecycle-aware document requirements', () => {
     expect(isSiplahAdminComplete(adminComplete)).toBe(true)
   })
 
+  it('requires a final transaction amount for Vendor readiness and admin completion', () => {
+    const completeSuratPesanan = canonicalOrder('ORD-2026-040')
+    const missingFinalAmount: Order = { ...completeSuratPesanan, finalInvoiceAmount: null }
+
+    expect(isSiplahReadyForVendor(missingFinalAmount)).toBe(false)
+    expect(isSiplahAdminComplete(missingFinalAmount)).toBe(false)
+    expect(isSiplahReadyForVendor(completeSuratPesanan)).toBe(true)
+  })
+
   it.each(['INVOICE', 'KWITANSI', 'BAST'] as const)('does not block Vendor readiness when %s is missing', (kind) => {
     const complete = canonicalOrder('ORD-2026-068')
     const missingLaterDocument: Order = {

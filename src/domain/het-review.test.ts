@@ -100,26 +100,69 @@ describe('HET exception review and approval', () => {
     ).toThrow(/alasan/)
   })
 
-  it('reopens approved HET before SIPLah ordering and preserves approval history', () => {
+  it('reopens approved HET, corrects a resolved item, and preserves the complete approval history', () => {
     const original = createCanonicalDemoData().orders['ORD-2026-071']
-    if (!original) throw new Error('Missing canonical order')
-    const reopened = reopenHetReview(original, 'Sekolah mengirim koreksi harga ARKAS.', now)
+    const replacement = PRODUCT_MASTER.find((product) => product.code === 'BK-MTK-5')
+    if (!original || !replacement) throw new Error('Missing canonical fixture')
+    const sourceItem = original.items.find((item) => item.id === 'mtk-4')
+    if (!sourceItem) throw new Error('Missing canonical item')
+
+    const reopened = reopenHetReview(original, 'Product Master perlu dikoreksi.', now)
+    const corrected = chooseHetProduct(
+      reopened,
+      sourceItem.id,
+      replacement,
+      new Date('2026-03-01T09:00:00.000Z'),
+    )
+    const reapproved = confirmHetReview(corrected, new Date('2026-03-02T08:00:00.000Z'))
+    const correctedItem = reapproved.items.find((item) => item.id === sourceItem.id)
 
     expect(reopened.stage).toBe('HET_REVIEW')
     expect(reopened.het.status).toBe('NEEDS_REVIEW')
-    expect(reopened.het.approvedAt).toBeNull()
-    expect(reopened.hetReviewedAmount).toBeNull()
-    expect(reopened.finalInvoiceAmount).toBeNull()
-    expect(reopened.arkasBudgetAmount).toBe(original.arkasBudgetAmount)
-    expect(reopened.timeline[0]?.title).toBe('Review HET dibuka kembali')
-    expect(reopened.timeline[0]?.detail).toContain('Sekolah mengirim koreksi harga ARKAS.')
-
-    const reapproved = confirmHetReview(reopened, new Date('2026-03-02T08:00:00.000Z'))
-    expect(reapproved.het.status).toBe('APPROVED')
-    expect(reapproved.hetReviewedAmount).toBe(calculateReviewedHetAmount(original.items))
+    expect(correctedItem?.productCode).toBe('BK-MTK-5')
+    expect(correctedItem?.arkasTitle).toBe(sourceItem.arkasTitle)
+    expect(correctedItem?.quantity).toBe(sourceItem.quantity)
+    expect(correctedItem?.arkasUnitPrice).toBe(sourceItem.arkasUnitPrice)
+    expect(reapproved.arkasBudgetAmount).toBe(original.arkasBudgetAmount)
+    expect(reapproved.hetReviewedAmount).toBe(calculateReviewedHetAmount(corrected.items))
+    expect(reapproved.hetReviewedAmount).not.toBe(original.hetReviewedAmount)
     expect(reapproved.finalInvoiceAmount).toBeNull()
+    expect(reapproved.timeline.map((event) => event.title)).toEqual(expect.arrayContaining([
+      'HET disetujui',
+      'Review HET dibuka kembali',
+      'Pemetaan HET dikoreksi',
+    ]))
     expect(reapproved.timeline.filter((event) => event.title === 'HET disetujui')).toHaveLength(2)
-    expect(reapproved.timeline.some((event) => event.title === 'Review HET dibuka kembali')).toBe(true)
+    expect(reapproved.timeline[0]?.title).toBe('HET disetujui')
+  })
+
+  it('allows a reasoned manual correction of a resolved item only after reopen', () => {
+    const approved = createCanonicalDemoData().orders['ORD-2026-071']
+    if (!approved) throw new Error('Missing canonical order')
+
+    expect(() => manualOverrideHetItem(
+      approved,
+      'mtk-4',
+      { reviewedUnitPrice: 80_000, reason: 'Koreksi harga.' },
+      now,
+    )).toThrow(/review HET terbuka/)
+
+    const reopened = reopenHetReview(approved, 'Harga hasil review perlu dikoreksi.', now)
+    expect(() => manualOverrideHetItem(
+      reopened,
+      'mtk-4',
+      { reviewedUnitPrice: 80_000, reason: '  ' },
+      now,
+    )).toThrow(/alasan/)
+
+    const corrected = manualOverrideHetItem(
+      reopened,
+      'mtk-4',
+      { reviewedUnitPrice: 80_000, reason: 'Konfirmasi harga Product Master terbaru.' },
+      now,
+    )
+    expect(corrected.items.find((item) => item.id === 'mtk-4')?.matchStatus).toBe('MANUAL_OVERRIDE')
+    expect(corrected.timeline[0]?.title).toBe('Harga HET dikoreksi')
   })
 
   it('requires a reason and blocks direct reopen after SIPLah order placement', () => {

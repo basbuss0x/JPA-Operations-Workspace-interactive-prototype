@@ -25,6 +25,7 @@ export function isSiplahReadyForVendor(order: Order): boolean {
     process.accessAvailable &&
     process.orderPlaced &&
     Boolean(process.orderNumber) &&
+    order.finalInvoiceAmount !== null &&
     vendorDocumentsComplete
   )
 }
@@ -34,7 +35,12 @@ export function isSiplahAdminComplete(order: Order): boolean {
   const adminDocumentsComplete = process.documents
     .filter((document) => document.requiredForAdminCompletion)
     .every(isDocumentComplete)
-  return process.orderPlaced && Boolean(process.orderNumber) && adminDocumentsComplete
+  return (
+    process.orderPlaced &&
+    Boolean(process.orderNumber) &&
+    order.finalInvoiceAmount !== null &&
+    adminDocumentsComplete
+  )
 }
 
 export function isCompletionReady(order: Order): boolean {
