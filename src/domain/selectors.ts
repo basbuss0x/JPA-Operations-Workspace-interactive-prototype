@@ -6,13 +6,13 @@ import type {
   WorkQueueItem,
 } from './types'
 import { deriveActionCandidates, getActiveActionCandidates } from './next-action'
-import { getHetExceptionCount, isSiplahComplete } from './order-state'
+import { getHetExceptionCount, isSiplahReadyForVendor } from './order-state'
 
 export {
   getHetExceptionCount,
   isCompletionReady,
   isSiplahAdminComplete,
-  isSiplahComplete,
+  isSiplahReadyForVendor,
 } from './order-state'
 
 export function isVendorBatchEligible(order: Order): boolean {
@@ -20,7 +20,7 @@ export function isVendorBatchEligible(order: Order): boolean {
     order.stage !== 'CLOSED' &&
     order.het.status === 'APPROVED' &&
     getHetExceptionCount(order) === 0 &&
-    isSiplahComplete(order) &&
+    isSiplahReadyForVendor(order) &&
     order.vendorBatchId === null
   )
 }
@@ -156,7 +156,7 @@ export function matchesOrderFilter(
     case 'het-problem':
       return getHetExceptionCount(order) > 0
     case 'ready-siplah':
-      return order.het.status === 'APPROVED' && !isSiplahComplete(order)
+      return order.het.status === 'APPROVED' && !isSiplahReadyForVendor(order)
     case 'ready-vendor':
       return isVendorBatchEligible(order)
     case 'goods-arrived':

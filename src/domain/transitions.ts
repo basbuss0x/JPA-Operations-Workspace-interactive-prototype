@@ -125,8 +125,8 @@ export function createOrderFromExtraction(
       proofName: null,
     },
     supplierPayment: {
-      status: 'UNPAID',
-      obligationAmount: Math.round(arkasBudgetAmount * 0.72),
+      status: 'NOT_SET',
+      obligationAmount: null,
       paidAmount: 0,
     },
     nextActionControl: {
@@ -299,14 +299,13 @@ export function confirmHetReview(order: Order, now?: Date): Order {
     ...order,
     stage: 'SIPLAH',
     hetReviewedAmount: reviewedAmount,
-    // Prototype decision: explicit HET confirmation finalizes the invoice before SIPLah ordering.
-    finalInvoiceAmount: reviewedAmount,
+    finalInvoiceAmount: null,
     het: { ...order.het, status: 'APPROVED', approvedAt },
   }
   return withEvent(
     next,
     'HET disetujui',
-    `Review dikonfirmasi. HET dan invoice final ditetapkan Rp${reviewedAmount.toLocaleString('id-ID')}; ARKAS sumber tetap Rp${order.arkasBudgetAmount.toLocaleString('id-ID')}.`,
+    `Review HET dikonfirmasi sebesar Rp${reviewedAmount.toLocaleString('id-ID')}; nilai transaksi final akan dicatat saat order SIPLah dikonfirmasi. ARKAS sumber tetap Rp${order.arkasBudgetAmount.toLocaleString('id-ID')}.`,
     now,
   )
 }
@@ -327,6 +326,9 @@ export function setSiplahAccessAvailable(
 }
 
 export function setSiplahOrderPlaced(order: Order, now?: Date): Order {
+  if (order.het.status !== 'APPROVED') {
+    throw new Error('HET harus disetujui sebelum mencatat pesanan SIPLah.')
+  }
   if (!order.siplah.accessAvailable) {
     throw new Error('Akses SIPLah harus tersedia sebelum mencatat pesanan.')
   }
@@ -336,27 +338,64 @@ export function setSiplahOrderPlaced(order: Order, now?: Date): Order {
       siplah: { ...order.siplah, orderPlaced: true },
     },
     'Pesanan SIPLah dibuat',
-    'Pesanan ditandai sudah dibuat di JPA/TokoLadang; nomor order belum otomatis dianggap tercatat.',
+    'Pesanan ditandai sudah dibuat di JPA/TokoLadang; nominal transaksi dan nomor order masih menunggu konfirmasi operator.',
     now,
   )
 }
 
+export interface SiplahOrderRecordInput {
+  orderNumber: string
+  finalInvoiceAmount: number
+}
+
 export function recordSiplahOrder(
   order: Order,
-  orderNumber: string,
+  input: SiplahOrderRecordInput,
   now?: Date,
 ): Order {
   if (!order.siplah.orderPlaced) {
     throw new Error('Pesanan harus ditandai dibuat sebelum mencatat nomor order.')
   }
-  if (!orderNumber.trim()) throw new Error('Nomor order SIPLah wajib diisi.')
+  if (order.hetReviewedAmount === null) {
+    throw new Error('Hasil review HET harus tersedia sebelum mencatat transaksi SIPLah.')
+  }
+  if (!input.orderNumber.trim()) throw new Error('Nomor order SIPLah wajib diisi.')
+  if (!Number.isFinite(input.finalInvoiceAmount) || input.finalInvoiceAmount <= 0) {
+    throw new Error('Nominal final SIPLah harus lebih dari nol.')
+  }
+  const orderNumber = input.orderNumber.trim()
+  const finalInvoiceAmount = input.finalInvoiceAmount
+  const differenceFromHet = finalInvoiceAmount - order.hetReviewedAmount
   return withEvent(
     {
       ...order,
-      siplah: { ...order.siplah, orderNumber: orderNumber.trim() },
+      finalInvoiceAmount,
+      siplah: { ...order.siplah, orderNumber },
     },
-    'Nomor order SIPLah dicatat',
-    `Nomor order ${orderNumber.trim()} dicatat.`,
+    'Transaksi SIPLah dikonfirmasi',
+    `Nomor order ${orderNumber} dicatat dengan nominal final Rp${finalInvoiceAmount.toLocaleString('id-ID')}; reviewed HET Rp${order.hetReviewedAmount.toLocaleString('id-ID')}; selisih ${differenceFromHet >= 0 ? '+' : ''}Rp${differenceFromHet.toLocaleString('id-ID')}. ARKAS sumber Rp${order.arkasBudgetAmount.toLocaleString('id-ID')} tidak berubah.`,
+    now,
+  )
+}
+
+export function reopenHetReview(order: Order, reason: string, now?: Date): Order {
+  if (order.het.status !== 'APPROVED') {
+    throw new Error('HET review hanya dapat dibuka kembali dari status APPROVED.')
+  }
+  if (order.siplah.orderPlaced) {
+    throw new Error('HET tidak dapat dibuka kembali setelah order SIPLah dibuat; gunakan alur koreksi/pembatalan berikutnya.')
+  }
+  if (!reason.trim()) throw new Error('Alasan membuka kembali HET wajib diisi.')
+  return withEvent(
+    {
+      ...order,
+      stage: 'HET_REVIEW',
+      hetReviewedAmount: null,
+      finalInvoiceAmount: null,
+      het: { ...order.het, status: 'NEEDS_REVIEW', approvedAt: null },
+    },
+    'Review HET dibuka kembali',
+    `Alasan operator: ${reason.trim()}. Nilai ARKAS sumber tetap Rp${order.arkasBudgetAmount.toLocaleString('id-ID')}; hasil review harus dikonfirmasi ulang.`,
     now,
   )
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { extractArkasFixture, DEMO_ARKAS_FIXTURE } from '../data/arkas-fixtures'
+import { createCanonicalDemoData } from '../data/demo-data'
 import { PRODUCT_MASTER } from '../data/product-master'
 import { deriveActionCandidates, derivePrimaryNextAction } from './next-action'
 import { calculateArkasBudgetAmount, matchExtractedItems } from './intake'
@@ -10,6 +11,7 @@ import {
   confirmHetReview,
   createOrderFromExtraction,
   manualOverrideHetItem,
+  reopenHetReview,
 } from './transitions'
 
 const now = new Date('2026-03-01T08:00:00.000Z')
@@ -43,6 +45,9 @@ describe('HET exception review and approval', () => {
     expect(order.arkasBudgetAmount).toBe(calculateArkasBudgetAmount(extraction.lines))
     expect(order.hetReviewedAmount).toBeNull()
     expect(order.finalInvoiceAmount).toBeNull()
+    expect(order.supplierPayment.status).toBe('NOT_SET')
+    expect(order.supplierPayment.obligationAmount).toBeNull()
+    expect(order.supplierPayment.paidAmount).toBe(0)
     expect(orderMath?.arkasTitle).toBe(sourceMath?.arkasTitle)
     expect(orderMath?.arkasUnitPrice).toBe(sourceMath?.arkasUnitPrice)
     expect(orderMath?.quantity).toBe(sourceMath?.quantity)
@@ -72,8 +77,10 @@ describe('HET exception review and approval', () => {
     expect(approved.stage).toBe('SIPLAH')
     expect(approved.arkasBudgetAmount).toBe(8_072_000)
     expect(approved.hetReviewedAmount).toBe(8_188_000)
-    expect(approved.finalInvoiceAmount).toBe(8_188_000)
+    expect(approved.finalInvoiceAmount).toBeNull()
     expect(approved.timeline[0]?.title).toBe('HET disetujui')
+    expect(approved.timeline[0]?.detail).toContain('Review HET dikonfirmasi')
+    expect(approved.timeline[0]?.detail).not.toContain('invoice final ditetapkan')
     expect(
       derivePrimaryNextAction(
         deriveActionCandidates(approved, { vendorBatch: null }, now),
@@ -91,5 +98,36 @@ describe('HET exception review and approval', () => {
         now,
       ),
     ).toThrow(/alasan/)
+  })
+
+  it('reopens approved HET before SIPLah ordering and preserves approval history', () => {
+    const original = createCanonicalDemoData().orders['ORD-2026-071']
+    if (!original) throw new Error('Missing canonical order')
+    const reopened = reopenHetReview(original, 'Sekolah mengirim koreksi harga ARKAS.', now)
+
+    expect(reopened.stage).toBe('HET_REVIEW')
+    expect(reopened.het.status).toBe('NEEDS_REVIEW')
+    expect(reopened.het.approvedAt).toBeNull()
+    expect(reopened.hetReviewedAmount).toBeNull()
+    expect(reopened.finalInvoiceAmount).toBeNull()
+    expect(reopened.arkasBudgetAmount).toBe(original.arkasBudgetAmount)
+    expect(reopened.timeline[0]?.title).toBe('Review HET dibuka kembali')
+    expect(reopened.timeline[0]?.detail).toContain('Sekolah mengirim koreksi harga ARKAS.')
+
+    const reapproved = confirmHetReview(reopened, new Date('2026-03-02T08:00:00.000Z'))
+    expect(reapproved.het.status).toBe('APPROVED')
+    expect(reapproved.hetReviewedAmount).toBe(calculateReviewedHetAmount(original.items))
+    expect(reapproved.finalInvoiceAmount).toBeNull()
+    expect(reapproved.timeline.filter((event) => event.title === 'HET disetujui')).toHaveLength(2)
+    expect(reapproved.timeline.some((event) => event.title === 'Review HET dibuka kembali')).toBe(true)
+  })
+
+  it('requires a reason and blocks direct reopen after SIPLah order placement', () => {
+    const notPlaced = createCanonicalDemoData().orders['ORD-2026-071']
+    const placed = createCanonicalDemoData().orders['ORD-2026-040']
+    if (!notPlaced || !placed) throw new Error('Missing canonical order')
+
+    expect(() => reopenHetReview(notPlaced, '  ', now)).toThrow(/Alasan/)
+    expect(() => reopenHetReview(placed, 'Harga berubah.', now)).toThrow(/koreksi|pembatalan/)
   })
 })

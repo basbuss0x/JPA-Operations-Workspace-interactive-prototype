@@ -252,7 +252,7 @@ Overview should emphasize exceptions/readiness rather than dumping every field.
 
 Example summary:
 - HET matched
-- SIPLah complete
+- SIPLah procurement-ready / admin state visible
 - Vendor goods arrived
 - Fulfillment 79% — remaining 67
 - School payment LUNAS
@@ -359,17 +359,20 @@ Represent the real SIPLah workflow as checkpoints instead of a single boolean.
 ## Checkpoints
 1. access available
 2. order placed in JPA/TokoLadang
-3. SIPLah order number recorded
+3. explicit final SIPLah transaction amount confirmed and order number recorded
 4. Surat Pesanan available/attached
-5. Surat Pesanan sent to school
-6. admin complete where appropriate
+5. Surat Pesanan verified and sent to school
+6. Invoice, Kwitansi, and BAST admin completion later where appropriate
 
 Never request/store a real school password.
 
 ## Acceptance criteria
 - each checkpoint can be independently incomplete
 - UI clearly shows where process stopped
-- completing required checkpoints makes order vendor-batch eligible
+- HET approval sets reviewed HET only; final SIPLah amount is recorded during ordering
+- completing Surat Pesanan procurement checkpoints makes the order Vendor Batch eligible
+- Invoice/Kwitansi/BAST do not block Vendor readiness
+- admin completion remains separately derived
 
 ---
 
@@ -565,8 +568,8 @@ Make every active order answer `what should happen next?`
 
 ## Suggested rule order
 - unresolved HET exception
-- HET approved but SIPLah incomplete
-- SIPLah complete but not vendor batched
+- HET approved but SIPLah procurement incomplete
+- SIPLah procurement-ready but not vendor batched
 - vendor arrival requires goods check
 - distribution/fulfillment requires action
 - scheduled school payment follow-up
@@ -647,7 +650,7 @@ Prioritize:
 ## End-to-end scenarios
 
 ### A — New school
-`New Order → ARKAS → 2 HET exceptions → resolve → HET approve → SIPLah complete → vendor eligible`
+`New Order → ARKAS → HET exceptions → resolve → confirm reviewed HET → SIPLah access → place order → confirm final SIPLah amount → record order number → complete Surat Pesanan → Vendor eligible; Invoice/Kwitansi/BAST remain later`
 
 ### B — Vendor productivity
 `select multiple eligible schools → aggregate → preview → generate Excel → mark sent → vendor processing`

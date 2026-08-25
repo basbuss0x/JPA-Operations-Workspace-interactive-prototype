@@ -8,7 +8,7 @@ import {
   isBenefitEligible,
   isCompletionReady,
   isSiplahAdminComplete,
-  isSiplahComplete,
+  isSiplahReadyForVendor,
   isVendorBatchEligible,
 } from './selectors'
 import type { Order } from './types'
@@ -32,7 +32,7 @@ describe('derived domain selectors', () => {
     const paidOrder = canonicalOrder('ORD-2026-068')
 
     expect(reviewOrder.arkasBudgetAmount).toBe(18_940_000)
-    expect(reviewOrder.hetReviewedAmount).toBe(19_360_000)
+    expect(reviewOrder.hetReviewedAmount).toBeNull()
     expect(reviewOrder.finalInvoiceAmount).toBeNull()
     expect(paidOrder.finalInvoiceAmount).toBe(24_350_000)
     expect(paidOrder.schoolPayment.schoolPaidAmount).toBe(24_350_000)
@@ -45,29 +45,34 @@ describe('derived domain selectors', () => {
     expect(isBenefitEligible(order)).toBe(true)
   })
 
-  it('derives SIPLah admin completion from order and required document checkpoints', () => {
-    const complete = canonicalOrder('ORD-2026-040')
-    expect(isSiplahAdminComplete(complete)).toBe(true)
-    expect(isSiplahComplete(complete)).toBe(true)
+  it('derives Vendor readiness separately from SIPLah admin completion', () => {
+    const vendorReady = canonicalOrder('ORD-2026-040')
+    expect(isSiplahReadyForVendor(vendorReady)).toBe(true)
+    expect(isSiplahAdminComplete(vendorReady)).toBe(false)
 
-    const missingAttachment: Order = {
-      ...complete,
+    const complete = canonicalOrder('ORD-2026-068')
+    expect(isSiplahReadyForVendor(complete)).toBe(true)
+    expect(isSiplahAdminComplete(complete)).toBe(true)
+
+    const missingSuratPesanan: Order = {
+      ...vendorReady,
       siplah: {
-        ...complete.siplah,
-        documents: complete.siplah.documents.map((document) =>
+        ...vendorReady.siplah,
+        documents: vendorReady.siplah.documents.map((document) =>
           document.kind === 'SURAT_PESANAN'
             ? { ...document, available: false, fileName: null }
             : document,
         ),
       },
     }
-    expect(isSiplahAdminComplete(missingAttachment)).toBe(false)
-    expect(isSiplahComplete(missingAttachment)).toBe(false)
+    expect(isSiplahReadyForVendor(missingSuratPesanan)).toBe(false)
+    expect(isSiplahAdminComplete(missingSuratPesanan)).toBe(false)
   })
 
   it('keeps supplier liability outside completion readiness', () => {
     const order = canonicalOrder('ORD-2025-999')
     expect(order.supplierPayment.status).toBe('PARTIAL')
+    expect(order.supplierPayment.obligationAmount).toBeNull()
     expect(isCompletionReady(order)).toBe(true)
   })
 

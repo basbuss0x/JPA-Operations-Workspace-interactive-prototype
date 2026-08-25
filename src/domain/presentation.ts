@@ -1,4 +1,4 @@
-import { getHetExceptionCount, isSiplahComplete, isVendorBatchEligible } from './selectors'
+import { getHetExceptionCount, isSiplahAdminComplete, isSiplahReadyForVendor, isVendorBatchEligible } from './selectors'
 import type { Order, VendorBatch } from './types'
 
 export interface OrderStateItem {
@@ -24,8 +24,14 @@ export function getOrderStateItems(
     },
     {
       label: 'SIPLah',
-      value: isSiplahComplete(order) ? 'Selesai' : order.siplah.accessAvailable ? 'Dalam proses' : 'Belum mulai',
-      tone: isSiplahComplete(order) ? 'success' : order.siplah.accessAvailable ? 'warning' : 'neutral',
+      value: isSiplahAdminComplete(order)
+        ? 'Administrasi lengkap'
+        : isSiplahReadyForVendor(order)
+          ? 'Siap masuk Vendor Batch'
+          : order.siplah.accessAvailable ? 'Dalam proses' : 'Belum mulai',
+      tone: isSiplahAdminComplete(order) || isSiplahReadyForVendor(order)
+        ? 'success'
+        : order.siplah.accessAvailable ? 'warning' : 'neutral',
     },
     {
       label: 'Vendor',

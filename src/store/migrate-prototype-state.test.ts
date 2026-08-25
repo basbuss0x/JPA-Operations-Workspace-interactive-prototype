@@ -14,11 +14,8 @@ function toLegacyItems(order: Order): Array<Record<string, unknown>> {
 }
 
 function legacySiplah(order: Order): Record<string, unknown> {
-  const complete = order.siplah.documents.every(
-    (document) => !document.required || (
-      document.available && document.fileName && document.verified && document.sentToSchool
-    ),
-  )
+  const suratPesanan = order.siplah.documents.find((document) => document.kind === 'SURAT_PESANAN')
+  const complete = Boolean(suratPesanan?.available && suratPesanan.fileName && suratPesanan.verified && suratPesanan.sentToSchool)
   return {
     accessAvailable: order.siplah.accessAvailable,
     orderPlaced: order.siplah.orderPlaced,
@@ -88,7 +85,7 @@ describe('prototype local state migration', () => {
     expect(order?.siplah.documents).toHaveLength(5)
   })
 
-  it('migrates Gate 1.1 v2 SIPLah booleans and items into document-based schema v3', () => {
+  it('migrates Gate 1.1 v2 SIPLah booleans and items into lifecycle-aware document schema v4', () => {
     const canonical = createCanonicalDemoData()
     const source = canonical.orders['ORD-2026-040']
     if (!source) throw new Error('Missing source order')
@@ -104,9 +101,38 @@ describe('prototype local state migration', () => {
     const order = migrated.orders[source.id]
 
     expect(order?.schoolName).toBe('Migrated Gate 1.1 School')
-    expect(order?.siplah.documents.filter((document) => document.required)).toHaveLength(4)
-    expect(order?.siplah.documents.every((document) => !document.required || document.verified)).toBe(true)
+    expect(order?.siplah.documents.filter((document) => document.requiredForAdminCompletion)).toHaveLength(4)
+    expect(order?.siplah.documents.filter((document) => document.requiredForVendorReady).map((document) => document.kind)).toEqual(['SURAT_PESANAN'])
+    expect(order?.siplah.documents.every((document) => !document.requiredForAdminCompletion || document.verified)).toBe(true)
     expect(order?.items.every((item) => item.matchReason.length > 0)).toBe(true)
+  })
+
+  it('migrates Gate 2 legacy document flags into separate Vendor/admin requirements', () => {
+    const canonical = createCanonicalDemoData()
+    const source = canonical.orders['ORD-2026-040']
+    if (!source) throw new Error('Missing source order')
+    const legacy = structuredClone(source) as unknown as Record<string, unknown>
+    legacy.siplah = {
+      ...source.siplah,
+      documents: source.siplah.documents.map((document) => {
+        const legacyDocument = { ...document, required: document.requiredForAdminCompletion } as Record<string, unknown>
+        delete legacyDocument.requiredForVendorReady
+        delete legacyDocument.requiredForAdminCompletion
+        return legacyDocument
+      }),
+    }
+
+    const migrated = migratePrototypeState(
+      { version: 3, orders: { [source.id]: legacy }, vendorBatches: {} },
+      3,
+    )
+    const order = migrated.orders[source.id]
+    if (!order) throw new Error('Missing migrated order')
+
+    expect(order.siplah.documents.find((document) => document.kind === 'SURAT_PESANAN')?.requiredForVendorReady).toBe(true)
+    expect(order.siplah.documents.find((document) => document.kind === 'INVOICE')?.requiredForVendorReady).toBe(false)
+    expect(order.siplah.documents.find((document) => document.kind === 'INVOICE')?.requiredForAdminCompletion).toBe(true)
+    expect(order.supplierPayment.obligationAmount).toBeNull()
   })
 
   it('resets unknown or malformed schema versions to canonical demo data', () => {

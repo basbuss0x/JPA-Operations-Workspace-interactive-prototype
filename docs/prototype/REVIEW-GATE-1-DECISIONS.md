@@ -23,12 +23,12 @@ Never assume that recording arrival for a Vendor Batch means every member order 
 
 ## SIPLah admin completion
 
-`adminCompleted` is derived from:
+SIPLah has two derived checkpoints:
 
-- completion of the SIPLah order process, and
-- verification of the documents required for that specific order.
+- `isSiplahReadyForVendor(order)` — HET approved, access available, order placed and numbered, and Surat Pesanan available/attached/verified/sent to school.
+- `isSiplahAdminComplete(order)` — completion of the SIPLah order and verification of documents marked for administrative completion.
 
-It is independent from school payment and must not be inferred from payment status.
+Invoice, Kwitansi, and BAST are later administrative documents and do not block Vendor Batch readiness. These derived states are independent from school payment and must not be inferred from payment status.
 
 ## Financial amount concepts
 
@@ -36,7 +36,7 @@ Keep these values separately representable:
 
 - `arkasBudgetAmount` — immutable amount from the ARKAS source document
 - `hetReviewedAmount` — amount produced by the completed HET review
-- `finalInvoiceAmount` — financial truth after the transaction is finalized
+- `finalInvoiceAmount` — financial truth after the SIPLah transaction is explicitly confirmed; HET approval alone does not establish it
 - `schoolPaidAmount` — amount actually confirmed as received from the school
 
 ARKAS is immutable source data. Do not overwrite `arkasBudgetAmount` as review and transaction values change.

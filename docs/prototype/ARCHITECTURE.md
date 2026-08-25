@@ -177,7 +177,8 @@ orderPlaced
 orderNumber?
 documents[]
   kind
-  required
+  requiredForVendorReady
+  requiredForAdminCompletion
   sendToSchoolRequired
   available
   fileName?
@@ -185,9 +186,9 @@ documents[]
   sentToSchool
 ```
 
-Prototype document kinds are `SURAT_PESANAN`, `INVOICE`, `KWITANSI`, `BAST`, and `SIPLAH_PDF`. The first four are required in Pass 2; `SIPLAH_PDF` is an optional archive fixture.
+Prototype document kinds are `SURAT_PESANAN`, `INVOICE`, `KWITANSI`, `BAST`, and `SIPLAH_PDF`. Vendor readiness is the procurement checkpoint: HET is approved, SIPLah access is available, the order is placed and numbered, and Surat Pesanan is available, attached, verified, and sent to school. Invoice, Kwitansi, and BAST remain later administrative documents and must not block Vendor Batch eligibility. `SIPLAH_PDF` is an optional archive fixture.
 
-`adminCompleted` is derived from completion of the SIPLah order and verification/delivery of every required order document. It is not an independently mutable checkbox and is independent from school payment.
+`isSiplahReadyForVendor(order)` and `isSiplahAdminComplete(order)` are separate derived concepts. Admin completion is derived from completion of the SIPLah order and every document marked `requiredForAdminCompletion`; it is not an independently mutable checkbox and is independent from school payment. Only Surat Pesanan has `sendToSchoolRequired` in this prototype.
 
 Do not store a school SIPLah password.
 
@@ -214,7 +215,7 @@ UNPAID
 LUNAS
 ```
 
-Store date/method/evidence metadata in the model even if evidence is simulated. Keep `arkasBudgetAmount`, `hetReviewedAmount`, `finalInvoiceAmount`, and `schoolPaidAmount` separately representable. ARKAS source amount is immutable.
+Store date/method/evidence metadata in the model even if evidence is simulated. Keep `arkasBudgetAmount`, `hetReviewedAmount`, `finalInvoiceAmount`, and `schoolPaidAmount` separately representable. ARKAS source amount is immutable. Supplier payment starts as `NOT_SET` with `obligationAmount = null`; never derive supplier cost as a percentage of ARKAS.
 
 ### School benefit
 
@@ -255,13 +256,22 @@ all HET exceptions resolved
 → review remains unapproved until explicit confirmation
 → owner confirms HET review
 → `hetReviewedAmount` is frozen
-→ Pass 2 prototype explicitly sets `finalInvoiceAmount = hetReviewedAmount`
+→ `finalInvoiceAmount` remains null
 → immutable `arkasBudgetAmount` remains unchanged
 → HET APPROVED
 → order can progress to SIPLAH
 
-SIPLah checklist complete
-→ order becomes eligible for vendor batching
+operator records the SIPLah transaction
+→ explicit final transaction/invoice amount is confirmed (prefilled from reviewed HET)
+→ `finalInvoiceAmount` is established without mutating ARKAS or reviewed HET
+→ order number is recorded
+
+Surat Pesanan is available, attached, verified, and sent to school
+→ `isSiplahReadyForVendor(order)` becomes true
+→ order becomes eligible for Vendor Batch
+
+Invoice/Kwitansi/BAST completion
+→ `isSiplahAdminComplete(order)` becomes true later; it is not a Vendor readiness prerequisite
 
 Vendor batch created
 → batch is DRAFT
@@ -319,8 +329,8 @@ derivePrimaryNextAction(candidates)
 Suggested priority rules:
 
 1. unresolved HET exception
-2. SIPLah workflow incomplete after HET approval
-3. SIPLah complete but not in an active/sent vendor batch
+2. SIPLah procurement workflow incomplete after HET approval
+3. SIPLah procurement-ready but not in an active/sent vendor batch
 4. vendor goods arrived and need checking
 5. fulfillment incomplete and actionable
 6. school payment follow-up only when its due date is reached

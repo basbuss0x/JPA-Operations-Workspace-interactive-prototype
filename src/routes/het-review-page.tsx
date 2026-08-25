@@ -32,10 +32,13 @@ export function HetReviewPage() {
   const chooseProduct = usePrototypeStore((state) => state.chooseHetProduct)
   const manualOverride = usePrototypeStore((state) => state.manualOverrideHet)
   const confirmHet = usePrototypeStore((state) => state.confirmHet)
+  const reopenHet = usePrototypeStore((state) => state.reopenHet)
   const [editor, setEditor] = useState<{ itemId: string; mode: EditorMode } | null>(null)
   const [productQuery, setProductQuery] = useState('')
   const [manualReason, setManualReason] = useState('')
   const [manualPrice, setManualPrice] = useState('')
+  const [reopenReason, setReopenReason] = useState('')
+  const [reopenError, setReopenError] = useState('')
   const [formError, setFormError] = useState('')
   const [renderedAt] = useState(() => new Date())
 
@@ -83,6 +86,17 @@ export function HetReviewPage() {
     }
   }
 
+  const reopenReview = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    try {
+      reopenHet(order.id, reopenReason)
+      setReopenError('')
+      setReopenReason('')
+    } catch (error) {
+      setReopenError(error instanceof Error ? error.message : 'HET review belum dapat dibuka kembali.')
+    }
+  }
+
   if (order.het.status === 'APPROVED') {
     const primary = derivePrimaryNextAction(
       deriveActionCandidates(order, { vendorBatch: null }, renderedAt),
@@ -106,13 +120,32 @@ export function HetReviewPage() {
             <div><span>Selisih</span><strong>{order.hetReviewedAmount === null ? '—' : formatCurrency(Math.abs(order.hetReviewedAmount - order.arkasBudgetAmount))}</strong></div>
           </div>
           <div className="callout callout--success">
-            `finalInvoiceAmount` ditetapkan secara eksplisit saat konfirmasi HET pada prototype ini. Nilai ARKAS sumber tidak berubah.
+            Konfirmasi HET menetapkan <strong>reviewed HET</strong>. Nominal final SIPLah / invoice masih menunggu konfirmasi transaksi; nilai ARKAS sumber tidak berubah.
           </div>
           <div className="workflow-next-step">
             <div><span>Next Action</span><strong>{primary?.title ?? 'Lanjutkan SIPLah'}</strong></div>
             <Link className="button button--primary button--md" to={`/orders/${order.id}/siplah`}>Lanjut ke SIPLah</Link>
           </div>
         </section>
+        {order.siplah.orderPlaced ? (
+          <section className="callout callout--info">
+            <strong>Review HET tidak dapat dibuka kembali langsung.</strong> Order SIPLah sudah dibuat; koreksi setelah titik ini membutuhkan alur koreksi atau pembatalan berikutnya yang belum menjadi bagian prototype.
+          </section>
+        ) : (
+          <section className="workspace-panel het-reopen-panel">
+            <div className="panel-heading">
+              <div><h2>Buka kembali review HET</h2><p>Dapat dilakukan sebelum order SIPLah dibuat. Alasan operator wajib dicatat dan approval sebelumnya akan dihapus.</p></div>
+              <StatusChip tone="warning">Koreksi sebelum SIPLah</StatusChip>
+            </div>
+            <form className="inline-action-form" onSubmit={reopenReview}>
+              <FormField label="Alasan wajib" htmlFor="het-reopen-reason">
+                <textarea id="het-reopen-reason" value={reopenReason} onChange={(event) => setReopenReason(event.target.value)} placeholder="Contoh: sekolah mengirim harga ARKAS terbaru." rows={3} required />
+              </FormField>
+              <Button variant="secondary" type="submit">Buka kembali review HET</Button>
+            </form>
+            {reopenError ? <div className="callout callout--danger">{reopenError}</div> : null}
+          </section>
+        )}
       </div>
     )
   }
@@ -182,7 +215,9 @@ export function HetReviewPage() {
 
                 <div className="het-exception-card__actions">
                   {item.productCode && item.hetUnitPrice !== null ? (
-                    <Button size="sm" onClick={() => acceptSuggestion(order.id, item.id)}>Terima suggested match</Button>
+                    <Button size="sm" onClick={() => acceptSuggestion(order.id, item.id)}>
+                      {item.matchStatus === 'PRICE_MISMATCH' ? `Gunakan HET ${formatCurrency(item.hetUnitPrice)}` : 'Terima suggested match'}
+                    </Button>
                   ) : null}
                   <Button variant="secondary" size="sm" onClick={() => openEditor(item, 'PRODUCT')}>Pilih produk lain</Button>
                   <Button variant="ghost" size="sm" onClick={() => openEditor(item, 'MANUAL')}>Manual override</Button>
@@ -260,7 +295,7 @@ export function HetReviewPage() {
         <div className="het-review-footer__confirm">
           <div>
             <strong>Konfirmasi tidak otomatis.</strong>
-            <span>Approval membekukan hasil review dan menetapkan invoice final untuk prototype ini.</span>
+            <span>Approval membekukan hasil reviewed HET. Nominal final SIPLah / invoice baru ditetapkan setelah transaksi SIPLah dikonfirmasi.</span>
           </div>
           <Button onClick={confirmReview} disabled={getHetExceptionCount(order) > 0}>Confirm HET Review</Button>
         </div>

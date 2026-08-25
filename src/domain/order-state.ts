@@ -6,22 +6,35 @@ export function getHetExceptionCount(order: Order): number {
   return order.items.filter((item) => unresolvedHetStatuses.has(item.matchStatus)).length
 }
 
-export function isSiplahAdminComplete(order: Order): boolean {
-  const process = order.siplah
-  const requiredDocumentsComplete = process.documents
-    .filter((document) => document.required)
-    .every(
-      (document) =>
-        document.available &&
-        Boolean(document.fileName) &&
-        document.verified &&
-        (!document.sendToSchoolRequired || document.sentToSchool),
-    )
-  return process.orderPlaced && Boolean(process.orderNumber) && requiredDocumentsComplete
+function isDocumentComplete(document: Order['siplah']['documents'][number]): boolean {
+  return (
+    document.available &&
+    Boolean(document.fileName) &&
+    document.verified &&
+    (!document.sendToSchoolRequired || document.sentToSchool)
+  )
 }
 
-export function isSiplahComplete(order: Order): boolean {
-  return order.siplah.accessAvailable && isSiplahAdminComplete(order)
+export function isSiplahReadyForVendor(order: Order): boolean {
+  const process = order.siplah
+  const vendorDocumentsComplete = process.documents
+    .filter((document) => document.requiredForVendorReady)
+    .every(isDocumentComplete)
+
+  return (
+    process.accessAvailable &&
+    process.orderPlaced &&
+    Boolean(process.orderNumber) &&
+    vendorDocumentsComplete
+  )
+}
+
+export function isSiplahAdminComplete(order: Order): boolean {
+  const process = order.siplah
+  const adminDocumentsComplete = process.documents
+    .filter((document) => document.requiredForAdminCompletion)
+    .every(isDocumentComplete)
+  return process.orderPlaced && Boolean(process.orderNumber) && adminDocumentsComplete
 }
 
 export function isCompletionReady(order: Order): boolean {
@@ -29,7 +42,7 @@ export function isCompletionReady(order: Order): boolean {
     order.fulfillment.progressPercent === 100 &&
     order.fulfillment.remainingQty === 0 &&
     order.goods.acceptedBySchoolAt !== null &&
-    isSiplahComplete(order) &&
+    isSiplahAdminComplete(order) &&
     order.schoolPayment.status === 'LUNAS' &&
     order.benefit.status === 'PAID'
   )

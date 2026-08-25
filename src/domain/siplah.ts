@@ -2,36 +2,41 @@ import type { SiplahDocument, SiplahDocumentKind } from './types'
 
 const definitions: Array<Pick<
   SiplahDocument,
-  'kind' | 'label' | 'required' | 'sendToSchoolRequired'
+  'kind' | 'label' | 'requiredForVendorReady' | 'requiredForAdminCompletion' | 'sendToSchoolRequired'
 >> = [
   {
     kind: 'SURAT_PESANAN',
     label: 'Surat Pesanan',
-    required: true,
+    requiredForVendorReady: true,
+    requiredForAdminCompletion: true,
     sendToSchoolRequired: true,
   },
   {
     kind: 'INVOICE',
     label: 'Invoice SIPLah',
-    required: true,
-    sendToSchoolRequired: true,
+    requiredForVendorReady: false,
+    requiredForAdminCompletion: true,
+    sendToSchoolRequired: false,
   },
   {
     kind: 'KWITANSI',
     label: 'Kwitansi',
-    required: true,
-    sendToSchoolRequired: true,
+    requiredForVendorReady: false,
+    requiredForAdminCompletion: true,
+    sendToSchoolRequired: false,
   },
   {
     kind: 'BAST',
     label: 'BAST',
-    required: true,
-    sendToSchoolRequired: true,
+    requiredForVendorReady: false,
+    requiredForAdminCompletion: true,
+    sendToSchoolRequired: false,
   },
   {
     kind: 'SIPLAH_PDF',
     label: 'Arsip PDF SIPLah',
-    required: false,
+    requiredForVendorReady: false,
+    requiredForAdminCompletion: false,
     sendToSchoolRequired: false,
   },
 ]

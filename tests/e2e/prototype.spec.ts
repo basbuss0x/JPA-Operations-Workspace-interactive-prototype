@@ -110,7 +110,7 @@ test('snooze, override, persistence, and reset mutate real local state', async (
   await expect.poll(async () => page.evaluate(() => {
     const stored = JSON.parse(window.localStorage.getItem('jpa-operations-prototype') ?? '{}') as { version?: number }
     return stored.version
-  })).toBe(3)
+  })).toBe(4)
 
   await page.evaluate(() => {
     window.localStorage.setItem(
@@ -123,7 +123,7 @@ test('snooze, override, persistence, and reset mutate real local state', async (
   await expect(page.getByRole('heading', { name: 'Review 2 selisih HET' })).toBeVisible()
 })
 
-test('Pass 2 journey creates order, reviews HET, and completes SIPLah', async ({ page }, testInfo) => {
+test('Pass 2 journey reaches Vendor readiness while admin documents remain later', async ({ page }, testInfo) => {
   await page.goto('/orders/new')
   await expect(page.getByRole('heading', { name: 'Pesanan Baru' })).toBeVisible()
   await page.getByRole('button', { name: 'Sekolah demo baru' }).click()
@@ -145,7 +145,7 @@ test('Pass 2 journey creates order, reviews HET, and completes SIPLah', async ({
   await page.screenshot({ path: testInfo.outputPath('desktop-het-review.png'), fullPage: true })
 
   const mathException = page.locator('.het-exception-card').filter({ hasText: 'Buku Matematika Kelas V' })
-  await mathException.getByRole('button', { name: 'Terima suggested match' }).click()
+  await mathException.getByRole('button', { name: /Gunakan HET Rp ?82\.000/ }).click()
 
   const religionException = page.locator('.het-exception-card').filter({ hasText: 'Pendidikan Agama Kelas V' })
   await religionException.getByRole('button', { name: 'Pilih produk lain' }).click()
@@ -164,35 +164,41 @@ test('Pass 2 journey creates order, reviews HET, and completes SIPLah', async ({
   await page.getByRole('button', { name: 'Confirm HET Review' }).click()
   await expect(page.getByRole('heading', { name: 'Review HET dikonfirmasi' })).toBeVisible()
   await expect(page.getByText(/8\.072\.000/)).toBeVisible()
-  await expect(page.getByText(/8\.188\.000/)).toHaveCount(2)
+  await expect(page.getByText(/8\.188\.000/)).toHaveCount(1)
+  await expect(page.getByText('Invoice final').last()).toBeVisible()
+  await expect(page.getByText('—').last()).toBeVisible()
 
   await page.getByRole('link', { name: 'Lanjut ke SIPLah' }).click()
   await expect(page.getByRole('heading', { name: 'Workflow SIPLah' })).toBeVisible()
   await page.getByRole('button', { name: 'Tandai akses tersedia' }).click()
   await page.getByRole('button', { name: 'Tandai pesanan dibuat' }).click()
+  await page.getByLabel('Nominal final transaksi SIPLah').fill('8188000')
   await page.getByLabel('Nomor order SIPLah').fill('SPL-E2E-2026-240')
-  await page.getByRole('button', { name: 'Simpan nomor order' }).click()
-  await page.getByRole('button', { name: 'Lampirkan paket dokumen demo' }).click()
+  await page.getByLabel('Saya mengonfirmasi nominal final sesuai transaksi SIPLah aktual.').check()
+  await page.getByRole('button', { name: 'Konfirmasi nominal & catat order' }).click()
 
-  while (await page.getByRole('button', { name: 'Verifikasi' }).count()) {
-    await page.getByRole('button', { name: 'Verifikasi' }).first().click()
-  }
-  while (await page.getByRole('button', { name: 'Tandai dikirim' }).count()) {
-    await page.getByRole('button', { name: 'Tandai dikirim' }).first().click()
-  }
+  const suratPesanan = page.locator('.siplah-document-row').filter({ hasText: 'Surat Pesanan' })
+  await suratPesanan.getByRole('button', { name: 'Lampirkan demo' }).click()
+  await suratPesanan.getByRole('button', { name: 'Verifikasi' }).click()
+  await suratPesanan.getByRole('button', { name: 'Tandai dikirim' }).click()
 
-  await expect(page.getByRole('heading', { name: 'SIPLah selesai · siap Vendor Batch' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Siap masuk Vendor Batch' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Masukkan ke Vendor Batch' })).toBeVisible()
+  await expect(page.getByText('Administrasi SIPLah belum lengkap')).toBeVisible()
+  await expect(page.getByText('Invoice SIPLah')).toBeVisible()
+  await expect(page.locator('.siplah-document-row').filter({ hasText: 'Invoice SIPLah' }).getByText('Missing')).toBeVisible()
   await expect(page.getByText('UNPAID')).toBeVisible()
   await expect(page.getByText('NOT ELIGIBLE')).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('desktop-siplah.png'), fullPage: true })
 
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'SIPLah selesai · siap Vendor Batch' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Siap masuk Vendor Batch' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Masukkan ke Vendor Batch' })).toBeVisible()
+  await expect(page.getByText('Administrasi SIPLah belum lengkap')).toBeVisible()
 
   await page.goto('/orders/ORD-2026-240?tab=timeline')
   await expect(page.getByText('HET disetujui')).toBeVisible()
+  await expect(page.getByText('Transaksi SIPLah dikonfirmasi')).toBeVisible()
   await expect(page.getByText('Dokumen SIPLah dikirim').first()).toBeVisible()
 })
 

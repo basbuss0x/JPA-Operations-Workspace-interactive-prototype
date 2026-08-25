@@ -3,7 +3,7 @@ import {
   calculateBenefitAmount,
   getHetExceptionCount,
   isSiplahAdminComplete,
-  isSiplahComplete,
+  isSiplahReadyForVendor,
   isVendorBatchEligible,
 } from '../../domain/selectors'
 import type { Order, VendorBatch } from '../../domain/types'
@@ -70,8 +70,11 @@ function OverviewTab({ order, batch }: { order: Order; batch: VendorBatch | null
           {exceptions > 0 ? (
             <DetailRow label="HET" detail="Memblokir proses SIPLah" value={<StatusChip tone="danger">{exceptions} selisih</StatusChip>} />
           ) : null}
-          {!isSiplahComplete(order) && order.het.status === 'APPROVED' ? (
-            <DetailRow label="SIPLah" detail="Checklist belum lengkap" value={<StatusChip tone="warning">Dalam proses</StatusChip>} />
+          {!isSiplahReadyForVendor(order) && order.het.status === 'APPROVED' ? (
+            <DetailRow label="SIPLah procurement" detail="Checkpoint Vendor belum lengkap" value={<StatusChip tone="warning">Dalam proses</StatusChip>} />
+          ) : null}
+          {isSiplahReadyForVendor(order) && !isSiplahAdminComplete(order) ? (
+            <DetailRow label="Administrasi SIPLah" detail="Invoice, Kwitansi, atau BAST masih menyusul" value={<StatusChip tone="warning">Belum lengkap</StatusChip>} />
           ) : null}
           {order.goods.arrivedAt && !order.goods.preDeliveryCheckCompleted ? (
             <DetailRow label="Pemeriksaan barang" detail="Barang sudah di JPA" value={<StatusChip tone="warning">Belum dicek</StatusChip>} />
@@ -87,7 +90,7 @@ function OverviewTab({ order, batch }: { order: Order; batch: VendorBatch | null
             <DetailRow label="Benefit" detail="10% dari invoice final" value={<StatusChip tone="warning">Siap dibayar</StatusChip>} />
           ) : null}
           {exceptions === 0 &&
-          isSiplahComplete(order) &&
+          isSiplahAdminComplete(order) &&
           (!order.goods.arrivedAt || order.goods.preDeliveryCheckCompleted) &&
           order.fulfillment.remainingQty === 0 &&
           order.benefit.status !== 'ELIGIBLE' ? (
@@ -196,8 +199,8 @@ function SiplahTab({ order }: { order: Order }) {
           <h2>Checklist SIPLah</h2>
           <p>Setiap checkpoint merepresentasikan pekerjaan nyata; tidak ada penyimpanan password sekolah.</p>
         </div>
-        <StatusChip tone={isSiplahComplete(order) ? 'success' : 'warning'}>
-          {isSiplahComplete(order) ? 'Selesai' : 'Belum lengkap'}
+        <StatusChip tone={isSiplahReadyForVendor(order) ? 'success' : 'warning'}>
+          {isSiplahReadyForVendor(order) ? 'Siap masuk Vendor Batch' : 'Belum siap Vendor'}
         </StatusChip>
       </div>
       <ol className="checklist">
@@ -210,8 +213,11 @@ function SiplahTab({ order }: { order: Order }) {
             Boolean(document.fileName) &&
             document.verified &&
             (!document.sendToSchoolRequired || document.sentToSchool)
+          const requirement = document.requiredForVendorReady
+            ? 'wajib untuk Vendor'
+            : document.requiredForAdminCompletion ? 'administrasi lanjutan' : 'opsional arsip'
           const status = [
-            document.required ? 'Wajib' : 'Opsional',
+            requirement,
             document.available ? 'tersedia' : 'belum tersedia',
             document.fileName ? 'terlampir' : 'belum terlampir',
             document.verified ? 'terverifikasi' : 'belum diverifikasi',
@@ -222,16 +228,26 @@ function SiplahTab({ order }: { order: Order }) {
           return <ChecklistItem key={document.kind} done={complete} label={document.label} detail={status} />
         })}
         <ChecklistItem
+          done={isSiplahReadyForVendor(order)}
+          label="Siap masuk Vendor Batch"
+          detail="Derived dari HET APPROVED, akses, transaksi, nomor order, dan Surat Pesanan."
+        />
+        <ChecklistItem
           done={isSiplahAdminComplete(order)}
-          label="Administrasi SIPLah terverifikasi"
-          detail="Derived dari order SIPLah dan seluruh dokumen wajib; bukan checkbox manual."
+          label="Administrasi SIPLah lengkap"
+          detail="Derived dari dokumen administrasi lanjutan; tidak diperlukan untuk Vendor readiness."
         />
       </ol>
-      {!isSiplahComplete(order) ? (
+      {!isSiplahReadyForVendor(order) ? (
         <div className="deferred-action-note">
-          <strong>Lanjutkan checkpoint secara eksplisit.</strong>
-          <span>Akses, order number, attachment, verifikasi, dan pengiriman dokumen tetap terpisah.</span>
+          <strong>Lanjutkan checkpoint procurement secara eksplisit.</strong>
+          <span>Akses, nominal transaksi, order number, Surat Pesanan, attachment, verifikasi, dan pengiriman tetap terpisah.</span>
           <Link className="button button--primary button--sm" to={`/orders/${order.id}/siplah`}>Buka Workflow SIPLah</Link>
+        </div>
+      ) : !isSiplahAdminComplete(order) ? (
+        <div className="deferred-action-note">
+          <strong>Vendor-ready; administrasi SIPLah menyusul.</strong>
+          <span>Invoice, Kwitansi, dan BAST tidak memblokir masuk Vendor Batch.</span>
         </div>
       ) : null}
     </section>
@@ -342,10 +358,10 @@ function FinanceTab({ order }: { order: Order }) {
         ) : null}
       </section>
       <section className="workspace-panel workspace-panel--wide supplier-summary">
-        <div><span>Tagihan supplier</span><strong>{formatCurrency(order.supplierPayment.obligationAmount)}</strong></div>
+        <div><span>Kewajiban supplier</span><strong>{order.supplierPayment.obligationAmount === null ? 'Belum ditetapkan' : formatCurrency(order.supplierPayment.obligationAmount)}</strong></div>
         <div><span>Sudah dibayar</span><strong>{formatCurrency(order.supplierPayment.paidAmount)}</strong></div>
         <div><span>Status</span><StatusChip tone={order.supplierPayment.status === 'PAID' ? 'success' : 'neutral'}>{order.supplierPayment.status}</StatusChip></div>
-        <p>Supplier outstanding tidak memblokir penutupan order sisi JPA.</p>
+        <p>Kewajiban supplier tidak boleh diasumsikan dari ARKAS; outstanding juga tidak memblokir penutupan order sisi JPA.</p>
       </section>
     </div>
   )

@@ -27,7 +27,7 @@ export type VendorBatchStatus =
 
 export type SchoolPaymentStatus = 'UNPAID' | 'LUNAS'
 export type BenefitStatus = 'NOT_ELIGIBLE' | 'ELIGIBLE' | 'PAID'
-export type SupplierPaymentStatus = 'UNPAID' | 'PARTIAL' | 'PAID'
+export type SupplierPaymentStatus = 'NOT_SET' | 'UNPAID' | 'PARTIAL' | 'PAID'
 export type SyncStatus = 'OK' | 'STALE' | 'ERROR'
 
 export interface School {
@@ -104,7 +104,8 @@ export type SiplahDocumentKind =
 export interface SiplahDocument {
   kind: SiplahDocumentKind
   label: string
-  required: boolean
+  requiredForVendorReady: boolean
+  requiredForAdminCompletion: boolean
   sendToSchoolRequired: boolean
   available: boolean
   fileName: string | null
@@ -159,7 +160,7 @@ export interface SchoolBenefit {
 
 export interface SupplierPaymentSummary {
   status: SupplierPaymentStatus
-  obligationAmount: number
+  obligationAmount: number | null
   paidAmount: number
 }
 

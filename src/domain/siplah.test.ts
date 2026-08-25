@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createCanonicalDemoData } from '../data/demo-data'
 import { deriveActionCandidates, derivePrimaryNextAction } from './next-action'
-import { isSiplahAdminComplete, isSiplahComplete } from './order-state'
+import { isSiplahAdminComplete, isSiplahReadyForVendor } from './order-state'
 import { createSiplahDocuments } from './siplah'
 import {
   attachSiplahDocument,
@@ -19,8 +19,15 @@ function canonicalOrder(id: string): Order {
   return order
 }
 
-describe('SIPLah document completion', () => {
-  it('creates all prototype document kinds with explicit requirements', () => {
+function completeSuratPesanan(order: Order): Order {
+  let next = order
+  next = attachSiplahDocument(next, 'SURAT_PESANAN', 'SURAT_PESANAN-test.pdf')
+  next = verifySiplahDocument(next, 'SURAT_PESANAN')
+  return sendSiplahDocumentToSchool(next, 'SURAT_PESANAN')
+}
+
+describe('SIPLah lifecycle-aware document requirements', () => {
+  it('separates Vendor and admin requirements and only requires Surat Pesanan to be sent', () => {
     const documents = createSiplahDocuments()
 
     expect(documents.map((document) => document.kind)).toEqual([
@@ -30,68 +37,94 @@ describe('SIPLah document completion', () => {
       'BAST',
       'SIPLAH_PDF',
     ])
-    expect(documents.filter((document) => document.required)).toHaveLength(4)
-    expect(documents.find((document) => document.kind === 'SIPLAH_PDF')?.required).toBe(false)
+    expect(documents.filter((document) => document.requiredForVendorReady).map((document) => document.kind)).toEqual([
+      'SURAT_PESANAN',
+    ])
+    expect(documents.filter((document) => document.requiredForAdminCompletion)).toHaveLength(4)
+    expect(documents.filter((document) => document.sendToSchoolRequired).map((document) => document.kind)).toEqual([
+      'SURAT_PESANAN',
+    ])
   })
 
-  it('derives admin completion only from order number and required document state', () => {
-    const complete = canonicalOrder('ORD-2026-040')
-    expect(isSiplahAdminComplete(complete)).toBe(true)
+  it('keeps Vendor readiness separate from SIPLah admin completion', () => {
+    const vendorReady = canonicalOrder('ORD-2026-040')
+    expect(isSiplahReadyForVendor(vendorReady)).toBe(true)
+    expect(isSiplahAdminComplete(vendorReady)).toBe(false)
 
-    const missingVerification: Order = {
+    const adminComplete = canonicalOrder('ORD-2026-068')
+    expect(isSiplahReadyForVendor(adminComplete)).toBe(true)
+    expect(isSiplahAdminComplete(adminComplete)).toBe(true)
+  })
+
+  it.each(['INVOICE', 'KWITANSI', 'BAST'] as const)('does not block Vendor readiness when %s is missing', (kind) => {
+    const complete = canonicalOrder('ORD-2026-068')
+    const missingLaterDocument: Order = {
       ...complete,
       siplah: {
         ...complete.siplah,
         documents: complete.siplah.documents.map((document) =>
-          document.kind === 'INVOICE' ? { ...document, verified: false } : document,
+          document.kind === kind
+            ? { ...document, available: false, fileName: null, verified: false, sentToSchool: false }
+            : document,
         ),
       },
     }
-    expect(isSiplahAdminComplete(missingVerification)).toBe(false)
+
+    expect(isSiplahReadyForVendor(missingLaterDocument)).toBe(true)
+    expect(isSiplahAdminComplete(missingLaterDocument)).toBe(false)
   })
 
-  it('completes checkpoints through explicit transitions and recomputes vendor eligibility action', () => {
+  it('blocks Vendor readiness when Surat Pesanan is incomplete', () => {
+    const complete = canonicalOrder('ORD-2026-068')
+    const missingSuratPesanan: Order = {
+      ...complete,
+      siplah: {
+        ...complete.siplah,
+        documents: complete.siplah.documents.map((document) =>
+          document.kind === 'SURAT_PESANAN'
+            ? { ...document, available: false, fileName: null, verified: false, sentToSchool: false }
+            : document,
+        ),
+      },
+    }
+
+    expect(isSiplahReadyForVendor(missingSuratPesanan)).toBe(false)
+    expect(isSiplahAdminComplete(missingSuratPesanan)).toBe(false)
+  })
+
+  it('records the final SIPLah amount explicitly while leaving ARKAS and reviewed HET unchanged', () => {
     const original = canonicalOrder('ORD-2026-071')
     let order = setSiplahAccessAvailable(original, true)
     order = setSiplahOrderPlaced(order)
-    expect(order.siplah.orderPlaced).toBe(true)
-    expect(order.siplah.orderNumber).toBeNull()
-    order = recordSiplahOrder(order, 'SPL-2026-DEMO-240')
+    const recorded = recordSiplahOrder(order, {
+      orderNumber: 'SPL-2026-DEMO-240',
+      finalInvoiceAmount: 17_125_000,
+    })
 
-    for (const document of order.siplah.documents.filter((candidate) => candidate.required)) {
-      order = attachSiplahDocument(order, document.kind, `${document.kind}-240.pdf`)
-      order = verifySiplahDocument(order, document.kind)
-      if (document.sendToSchoolRequired) {
-        order = sendSiplahDocumentToSchool(order, document.kind)
-      }
-    }
+    expect(recorded.arkasBudgetAmount).toBe(original.arkasBudgetAmount)
+    expect(recorded.hetReviewedAmount).toBe(original.hetReviewedAmount)
+    expect(recorded.finalInvoiceAmount).toBe(17_125_000)
+    expect(recorded.finalInvoiceAmount).not.toBe(recorded.hetReviewedAmount)
+    expect(recorded.timeline[0]?.title).toBe('Transaksi SIPLah dikonfirmasi')
+  })
 
-    expect(isSiplahComplete(order)).toBe(true)
-    expect(order.schoolPayment.status).toBe('UNPAID')
-    expect(order.benefit.status).toBe('NOT_ELIGIBLE')
+  it('completing only Surat Pesanan unlocks the ADD_TO_VENDOR_BATCH action', () => {
+    const original = canonicalOrder('ORD-2026-071')
+    let order = setSiplahAccessAvailable(original, true)
+    order = setSiplahOrderPlaced(order)
+    order = recordSiplahOrder(order, {
+      orderNumber: 'SPL-2026-DEMO-240',
+      finalInvoiceAmount: 16_500_000,
+    })
+    order = completeSuratPesanan(order)
+
+    expect(isSiplahReadyForVendor(order)).toBe(true)
+    expect(isSiplahAdminComplete(order)).toBe(false)
+    expect(order.siplah.documents.find((document) => document.kind === 'INVOICE')?.available).toBe(false)
     expect(
       derivePrimaryNextAction(
         deriveActionCandidates(order, { vendorBatch: null }, new Date('2026-03-01T08:00:00.000Z')),
       )?.kind,
     ).toBe('ADD_TO_VENDOR_BATCH')
-    expect(order.timeline.some((event) => event.title === 'Dokumen SIPLah dikirim')).toBe(true)
-  })
-
-  it('keeps SIPLah completion independent from school payment', () => {
-    const complete = canonicalOrder('ORD-2026-040')
-    const unpaid: Order = {
-      ...complete,
-      schoolPayment: { ...complete.schoolPayment, status: 'UNPAID', schoolPaidAmount: 0 },
-      benefit: {
-        ...complete.benefit,
-        status: 'NOT_ELIGIBLE',
-        baseAmount: null,
-        obligationAmount: null,
-      },
-    }
-
-    expect(isSiplahComplete(unpaid)).toBe(true)
-    expect(unpaid.schoolPayment.status).toBe('UNPAID')
-    expect(unpaid.benefit.status).toBe('NOT_ELIGIBLE')
   })
 })

@@ -8,11 +8,13 @@ import type {
   PrototypeData,
   SchoolBenefit,
   SchoolPayment,
+  SiplahDocumentKind,
   SiplahProcess,
+  SupplierPaymentSummary,
   VendorBatch,
 } from '../domain/types'
 
-interface LegacySiplahProcess {
+interface LegacySiplahProcessV1 {
   accessAvailable: boolean
   orderPlaced: boolean
   orderNumber: string | null
@@ -22,14 +24,47 @@ interface LegacySiplahProcess {
   adminCompleted?: boolean
 }
 
+interface LegacySiplahDocument {
+  kind: SiplahDocumentKind
+  label: string
+  required?: boolean
+  requiredForVendorReady?: boolean
+  requiredForAdminCompletion?: boolean
+  sendToSchoolRequired: boolean
+  available: boolean
+  fileName: string | null
+  verified: boolean
+  sentToSchool: boolean
+}
+
+interface LegacySiplahProcessV3 {
+  accessAvailable: boolean
+  orderPlaced: boolean
+  orderNumber: string | null
+  documents: LegacySiplahDocument[]
+}
+
 type LegacyOrderItem = Omit<
   OrderItem,
   'matchConfidence' | 'matchReason' | 'resolutionType'
 >
 
-interface LegacyOrderV2 extends Omit<Order, 'items' | 'siplah'> {
+interface LegacySupplierPayment {
+  status?: 'UNPAID' | 'PARTIAL' | 'PAID'
+  obligationAmount?: number | null
+  paidAmount?: number
+}
+
+interface LegacyOrderV2 extends Omit<Order, 'items' | 'siplah' | 'supplierPayment'> {
   items: LegacyOrderItem[]
-  siplah: LegacySiplahProcess
+  siplah: LegacySiplahProcessV1
+  supplierPayment?: LegacySupplierPayment
+}
+
+interface LegacyOrderV3 extends Omit<Order, 'items' | 'siplah' | 'supplierPayment'> {
+  items: LegacyOrderItem[]
+  siplah: LegacySiplahProcessV3
+  supplierPayment?: LegacySupplierPayment
 }
 
 interface LegacyHetReviewV1 extends HetReview {
@@ -85,7 +120,23 @@ function migrateItem(item: LegacyOrderItem): OrderItem {
   }
 }
 
-function migrateSiplah(process: LegacySiplahProcess): SiplahProcess {
+function migrateSupplierPayment(payment?: LegacySupplierPayment): SupplierPaymentSummary {
+  const status = payment?.status === 'PARTIAL'
+    ? 'PARTIAL'
+    : payment?.status === 'PAID'
+      ? 'PAID'
+      : payment?.status === 'UNPAID'
+        ? 'UNPAID'
+        : 'NOT_SET'
+  return {
+    status,
+    // Legacy versions derived this number from ARKAS/HET. Do not carry that assumption forward.
+    obligationAmount: null,
+    paidAmount: payment?.paidAmount ?? 0,
+  }
+}
+
+function migrateSiplah(process: LegacySiplahProcessV1): SiplahProcess {
   const previouslyComplete =
     process.orderPlaced &&
     Boolean(process.orderNumber) &&
@@ -110,16 +161,70 @@ function migrateSiplah(process: LegacySiplahProcess): SiplahProcess {
   }
 }
 
-function migrateOrderV2(order: LegacyOrderV2): Order {
+function migrateSiplahV3(process: LegacySiplahProcessV3): SiplahProcess {
+  const definitions = createSiplahDocuments()
+  const documents = definitions.map((definition) => {
+    const source = process.documents.find((document) => document.kind === definition.kind)
+    return source
+      ? {
+          ...definition,
+          available: source.available,
+          fileName: source.fileName,
+          verified: source.verified,
+          sentToSchool: source.sentToSchool,
+        }
+      : definition
+  })
   return {
-    ...order,
-    items: order.items.map(migrateItem),
-    siplah: migrateSiplah(order.siplah),
+    accessAvailable: process.accessAvailable,
+    orderPlaced: process.orderPlaced,
+    orderNumber: process.orderNumber,
+    documents,
   }
 }
 
+function normalizeCurrentOrder(order: Order): Order {
+  const finalInvoiceAmount = order.siplah.orderPlaced ? order.finalInvoiceAmount : null
+  const benefitFrozen =
+    order.schoolPayment.status === 'LUNAS' ||
+    order.benefit.status === 'ELIGIBLE' ||
+    order.benefit.status === 'PAID'
+  const benefitBase = benefitFrozen ? order.benefit.baseAmount ?? finalInvoiceAmount : null
+  return {
+    ...order,
+    hetReviewedAmount: order.het.status === 'APPROVED' ? order.hetReviewedAmount : null,
+    finalInvoiceAmount,
+    benefit: {
+      ...order.benefit,
+      baseAmount: benefitBase,
+      obligationAmount:
+        benefitBase === null ? null : order.benefit.obligationAmount ?? Math.round(benefitBase * 0.1),
+    },
+  }
+}
+
+function migrateOrderV2(order: LegacyOrderV2): Order {
+  return normalizeCurrentOrder({
+    ...order,
+    items: order.items.map(migrateItem),
+    siplah: migrateSiplah(order.siplah),
+    supplierPayment: migrateSupplierPayment(order.supplierPayment),
+  })
+}
+
+function migrateOrderV3(order: LegacyOrderV3): Order {
+  return normalizeCurrentOrder({
+    ...order,
+    items: order.items.map(migrateItem),
+    siplah: migrateSiplahV3(order.siplah),
+    supplierPayment: migrateSupplierPayment(order.supplierPayment),
+  })
+}
+
 function migrateOrderV1(order: LegacyOrderV1): Order {
-  const finalInvoiceAmount = order.het.status === 'APPROVED' ? order.finalInvoiceAmount : null
+  const finalInvoiceAmount = order.siplah.orderPlaced && order.het.status === 'APPROVED'
+    ? order.finalInvoiceAmount
+    : null
   const benefitFrozen =
     order.schoolPayment.status === 'LUNAS' ||
     order.benefit.status === 'ELIGIBLE' ||
@@ -128,7 +233,7 @@ function migrateOrderV1(order: LegacyOrderV1): Order {
   const v2Order: LegacyOrderV2 = {
     ...order,
     arkasBudgetAmount: order.finalInvoiceAmount,
-    hetReviewedAmount: order.het.hetTotalAmount,
+    hetReviewedAmount: order.het.status === 'APPROVED' ? order.het.hetTotalAmount : null,
     finalInvoiceAmount,
     het: {
       status: order.het.status,
@@ -154,6 +259,7 @@ function migrateOrderV1(order: LegacyOrderV1): Order {
       // An order-level v1 snooze cannot be mapped safely to one action obligation.
       controlsByActionKey: {},
     },
+    ...(order.supplierPayment ? { supplierPayment: order.supplierPayment } : {}),
   }
   return migrateOrderV2(v2Order)
 }
@@ -170,15 +276,17 @@ function migrateVendorBatches(
 }
 
 function migrateOrders(
-  orders: Record<string, LegacyOrderV1 | LegacyOrderV2>,
-  version: 1 | 2,
+  orders: Record<string, LegacyOrderV1 | LegacyOrderV2 | LegacyOrderV3>,
+  version: 1 | 2 | 3,
 ): Record<string, Order> {
   return Object.fromEntries(
     Object.entries(orders).map(([orderId, order]) => [
       orderId,
       version === 1
         ? migrateOrderV1(order as LegacyOrderV1)
-        : migrateOrderV2(order as LegacyOrderV2),
+        : version === 2
+          ? migrateOrderV2(order as LegacyOrderV2)
+          : migrateOrderV3(order as LegacyOrderV3),
     ]),
   )
 }
@@ -192,12 +300,12 @@ export function migratePrototypeState(
     return createCanonicalDemoData()
   }
 
-  if (persistedVersion === 1 || persistedVersion === 2) {
+  if (persistedVersion === 1 || persistedVersion === 2 || persistedVersion === 3) {
     try {
       return {
         version: DEMO_STATE_VERSION,
         orders: migrateOrders(
-          persistedState.orders as Record<string, LegacyOrderV1 | LegacyOrderV2>,
+          persistedState.orders as Record<string, LegacyOrderV1 | LegacyOrderV2 | LegacyOrderV3>,
           persistedVersion,
         ),
         vendorBatches: migrateVendorBatches(

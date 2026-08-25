@@ -1,4 +1,4 @@
-import { getHetExceptionCount, isCompletionReady, isSiplahComplete } from './order-state'
+import { getHetExceptionCount, isCompletionReady, isSiplahReadyForVendor } from './order-state'
 import type {
   ActionDerivationContext,
   NextAction,
@@ -93,15 +93,17 @@ export function deriveActionCandidates(
     )
   }
 
-  const siplahComplete = isSiplahComplete(order)
-  if (order.het.status === 'APPROVED' && !siplahComplete) {
+  const siplahReadyForVendor = isSiplahReadyForVendor(order)
+  if (order.het.status === 'APPROVED' && !siplahReadyForVendor) {
     candidates.push(
       action(order, now, {
         kind: 'COMPLETE_SIPLAH',
         title: order.siplah.orderPlaced
-          ? 'Lengkapi dokumen SIPLah'
+          ? 'Lengkapi Surat Pesanan untuk Vendor'
           : 'Belanjakan pesanan di TokoLadang/SIPLah',
-        reason: 'HET sudah disetujui; lanjutkan checkpoint SIPLah yang belum selesai.',
+        reason: order.siplah.orderPlaced
+          ? 'Selesaikan Surat Pesanan: tersedia, terlampir, terverifikasi, dan sudah dikirim ke sekolah. Invoice, Kwitansi, dan BAST menyusul sebagai administrasi.'
+          : 'HET sudah disetujui; lanjutkan checkpoint SIPLah yang belum selesai.',
         href: `/orders/${order.id}/siplah`,
         ctaLabel: 'Buka SIPLah',
         priority: 20,
@@ -110,12 +112,12 @@ export function deriveActionCandidates(
     )
   }
 
-  if (siplahComplete && order.vendorBatchId === null) {
+  if (siplahReadyForVendor && order.vendorBatchId === null) {
     candidates.push(
       action(order, now, {
         kind: 'ADD_TO_VENDOR_BATCH',
         title: 'Masukkan ke Vendor Batch',
-        reason: 'SIPLah selesai dan item siap digabung dengan pesanan sekolah lain.',
+        reason: 'Surat Pesanan sudah lengkap untuk checkpoint procurement; Invoice, Kwitansi, dan BAST tidak memblokir kesiapan Vendor Batch.',
         href: `/orders/${order.id}?tab=vendor`,
         ctaLabel: 'Buka vendor',
         priority: 30,

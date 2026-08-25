@@ -58,7 +58,7 @@ SDN 71
 
 ---
 
-## Scenario C — SIPLah complete, ready for vendor batch
+## Scenario C — SIPLah procurement-ready, admin documents later
 
 ### School
 SDN 40 Ambon
@@ -69,8 +69,11 @@ SDN 40 Ambon
 - SIPLah access available: true
 - order placed: true
 - SIPLah order number present
-- Required SIPLah documents available, attached, verified, and sent where required
+- Surat Pesanan available, attached, verified, and sent to school
+- Invoice, Kwitansi, and BAST remain unavailable as later administrative documents
 - optional SIPLah PDF may remain absent
+- `isSiplahReadyForVendor(order)`: true
+- `isSiplahAdminComplete(order)`: false
 - not currently in a vendor batch
 - School payment: UNPAID
 - Benefit: NOT_ELIGIBLE
@@ -93,7 +96,8 @@ SLB Batu Merah
 ### State
 - Stage: SIPLAH
 - HET: APPROVED
-- SIPLah checklist complete
+- Surat Pesanan checkpoint complete; Invoice/Kwitansi/BAST remain later
+- `isSiplahReadyForVendor(order)`: true
 - not in vendor batch
 - School payment: UNPAID
 

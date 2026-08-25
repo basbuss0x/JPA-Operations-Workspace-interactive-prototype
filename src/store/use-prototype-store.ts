@@ -11,6 +11,7 @@ import {
   manualOverrideHetItem,
   markSiplahDocumentAvailable,
   recordSiplahOrder,
+  reopenHetReview,
   sendSiplahDocumentToSchool,
   setNextActionOverride,
   setSiplahAccessAvailable,
@@ -42,9 +43,13 @@ interface PrototypeStore extends PrototypeData {
     input: { reviewedUnitPrice: number; reason: string },
   ) => void
   confirmHet: (orderId: string) => void
+  reopenHet: (orderId: string, reason: string) => void
   setSiplahAccess: (orderId: string, available: boolean) => void
   markSiplahOrderPlaced: (orderId: string) => void
-  recordSiplahOrder: (orderId: string, orderNumber: string) => void
+  recordSiplahOrder: (
+    orderId: string,
+    input: { orderNumber: string; finalInvoiceAmount: number },
+  ) => void
   markSiplahDocumentAvailable: (orderId: string, kind: SiplahDocumentKind) => void
   attachSiplahDocument: (orderId: string, kind: SiplahDocumentKind, fileName: string) => void
   verifySiplahDocument: (orderId: string, kind: SiplahDocumentKind) => void
@@ -128,6 +133,10 @@ export const usePrototypeStore = create<PrototypeStore>()(
         set((state) => ({
           orders: updateOrders(state.orders, [orderId], (order) => confirmHetReview(order)),
         })),
+      reopenHet: (orderId, reason) =>
+        set((state) => ({
+          orders: updateOrders(state.orders, [orderId], (order) => reopenHetReview(order, reason)),
+        })),
       setSiplahAccess: (orderId, available) =>
         set((state) => ({
           orders: updateOrders(state.orders, [orderId], (order) =>
@@ -140,10 +149,10 @@ export const usePrototypeStore = create<PrototypeStore>()(
             setSiplahOrderPlaced(order),
           ),
         })),
-      recordSiplahOrder: (orderId, orderNumber) =>
+      recordSiplahOrder: (orderId, input) =>
         set((state) => ({
           orders: updateOrders(state.orders, [orderId], (order) =>
-            recordSiplahOrder(order, orderNumber),
+            recordSiplahOrder(order, input),
           ),
         })),
       markSiplahDocumentAvailable: (orderId, kind) =>

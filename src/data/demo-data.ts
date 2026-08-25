@@ -14,7 +14,7 @@ import type {
   TimelineEvent,
 } from '../domain/types'
 
-export const DEMO_STATE_VERSION = 3
+export const DEMO_STATE_VERSION = 4
 
 const DATE = {
   created: '2026-01-12T08:00:00.000Z',
@@ -70,6 +70,21 @@ const completeSiplah: SiplahProcess = {
   documents: createSiplahDocuments(true),
 }
 
+const vendorReadySiplah: SiplahProcess = {
+  ...completeSiplah,
+  documents: completeSiplah.documents.map((document) =>
+    document.requiredForVendorReady
+      ? { ...document }
+      : {
+          ...document,
+          available: false,
+          fileName: null,
+          verified: false,
+          sentToSchool: false,
+        },
+  ),
+}
+
 const noGoods: GoodsState = {
   arrivedAt: null,
   arrivalType: 'NONE',
@@ -102,6 +117,7 @@ interface MakeOrderOptions {
   benefitStatus?: BenefitStatus
   benefitDate?: string | null
   supplierStatus?: SupplierPaymentStatus
+  supplierObligationAmount?: number | null
   supplierPaid?: number
   timeline?: TimelineEvent[]
 }
@@ -110,6 +126,9 @@ function makeOrder(options: MakeOrderOptions): Order {
   const orderedQty = options.items.reduce((total, current) => total + current.quantity, 0)
   const finalInvoiceAmount = options.finalInvoiceAmount !== undefined
     ? options.finalInvoiceAmount
+    : null
+  const hetReviewedAmount = options.hetReviewedAmount !== undefined
+    ? options.hetReviewedAmount
     : options.het.status === 'APPROVED' ? options.invoice : null
   const schoolPaidAmount = options.schoolPaidAmount ?? (
     options.paymentStatus === 'LUNAS' ? (finalInvoiceAmount ?? 0) : 0
@@ -126,9 +145,7 @@ function makeOrder(options: MakeOrderOptions): Order {
     createdAt: DATE.created,
     updatedAt: DATE.today,
     arkasBudgetAmount: options.arkasBudgetAmount ?? options.invoice,
-    hetReviewedAmount: options.hetReviewedAmount ?? (
-      options.het.status === 'APPROVED' ? options.invoice : null
-    ),
+    hetReviewedAmount,
     finalInvoiceAmount,
     arkas: {
       reference: `ARKAS-${options.id.slice(-3)}-2026`,
@@ -176,8 +193,8 @@ function makeOrder(options: MakeOrderOptions): Order {
       proofName: benefitStatus === 'PAID' ? `Benefit-${options.id}.pdf` : null,
     },
     supplierPayment: {
-      status: options.supplierStatus ?? 'UNPAID',
-      obligationAmount: Math.round((finalInvoiceAmount ?? options.invoice) * 0.72),
+      status: options.supplierStatus ?? 'NOT_SET',
+      obligationAmount: options.supplierObligationAmount ?? null,
       paidAmount: options.supplierPaid ?? 0,
     },
     nextActionControl: {
@@ -242,7 +259,7 @@ function canonicalOrders(): Order[] {
         autoMatchedItemCount: 26,
         approvedAt: null,
       },
-      hetReviewedAmount: 19_360_000,
+      hetReviewedAmount: null,
     }),
     makeOrder({
       id: 'ORD-2026-071',
@@ -255,6 +272,8 @@ function canonicalOrders(): Order[] {
         item('ipas-4', 'IPAS Kelas IV', 18, 75_000),
       ],
       het: approvedHet,
+      hetReviewedAmount: 16_780_000,
+      finalInvoiceAmount: null,
       siplah: { ...incompleteSiplah, accessAvailable: true },
       timeline: [
         event('071-1', 'HET disetujui', 'Seluruh item cocok dengan master HET.'),
@@ -268,10 +287,12 @@ function canonicalOrders(): Order[] {
       invoice: 18_210_000,
       items: readyVendorItems,
       het: approvedHet,
-      siplah: { ...completeSiplah, orderNumber: 'SPL-2026-1840' },
+      hetReviewedAmount: 18_210_000,
+      finalInvoiceAmount: 18_210_000,
+      siplah: { ...vendorReadySiplah, orderNumber: 'SPL-2026-1840' },
       timeline: [
         event('040-1', 'HET disetujui', 'Tidak ada selisih yang belum terselesaikan.'),
-        event('040-2', 'Surat Pesanan dikirim', 'SIPLah selesai; order siap direkap vendor.', DATE.today),
+        event('040-2', 'Surat Pesanan dikirim', 'Surat Pesanan lengkap; order siap direkap vendor. Administrasi SIPLah lanjutan menyusul.', DATE.today),
       ],
     }),
     makeOrder({
@@ -284,7 +305,9 @@ function canonicalOrders(): Order[] {
         item('bindo-5', 'Bahasa Indonesia Kelas V', 6, 76_000),
       ],
       het: { ...approvedHet, detectedItemCount: 2, autoMatchedItemCount: 2 },
-      siplah: { ...completeSiplah, orderNumber: 'SPL-2026-1851' },
+      hetReviewedAmount: 9_460_000,
+      finalInvoiceAmount: 9_460_000,
+      siplah: { ...vendorReadySiplah, orderNumber: 'SPL-2026-1851' },
     }),
     makeOrder({
       id: 'ORD-2026-049',
@@ -296,6 +319,8 @@ function canonicalOrders(): Order[] {
         item('bindo-6', 'Bahasa Indonesia Kelas VI', 24, 78_000),
       ],
       het: { ...approvedHet, detectedItemCount: 2, autoMatchedItemCount: 2 },
+      hetReviewedAmount: 21_720_000,
+      finalInvoiceAmount: 21_720_000,
       siplah: { ...completeSiplah, orderNumber: 'SPL-2026-1772' },
       vendorBatchId: 'VB-2026-009',
       timeline: [
@@ -310,6 +335,8 @@ function canonicalOrders(): Order[] {
       invoice: 19_850_000,
       items: [item('bundle-239', 'Paket Buku SD Kelas V', 186, 106_720)],
       het: { ...approvedHet, detectedItemCount: 1, autoMatchedItemCount: 1 },
+      hetReviewedAmount: 19_850_000,
+      finalInvoiceAmount: 19_850_000,
       siplah: { ...completeSiplah, orderNumber: 'SPL-2026-1698' },
       vendorBatchId: 'VB-2026-008',
       goods: {
@@ -330,6 +357,8 @@ function canonicalOrders(): Order[] {
       invoice: 27_640_000,
       items: [item('bundle-065', 'Paket Buku SDN 65', 314, 88_025)],
       het: { ...approvedHet, detectedItemCount: 1, autoMatchedItemCount: 1 },
+      hetReviewedAmount: 27_640_000,
+      finalInvoiceAmount: 27_640_000,
       siplah: { ...completeSiplah, orderNumber: 'SPL-2026-1604' },
       vendorBatchId: 'VB-2026-007',
       goods: {
@@ -363,6 +392,8 @@ function canonicalOrders(): Order[] {
       invoice: 24_350_000,
       items: [item('bundle-068', 'Paket Buku SDN 68', 275, 88_545)],
       het: { ...approvedHet, detectedItemCount: 1, autoMatchedItemCount: 1 },
+      hetReviewedAmount: 24_350_000,
+      finalInvoiceAmount: 24_350_000,
       siplah: { ...completeSiplah, orderNumber: 'SPL-2026-1522' },
       vendorBatchId: 'VB-2026-006',
       goods: {
@@ -396,6 +427,8 @@ function canonicalOrders(): Order[] {
       invoice: 20_000_000,
       items: [item('bundle-closed', 'Paket Buku Referensi', 200, 100_000)],
       het: { ...approvedHet, detectedItemCount: 1, autoMatchedItemCount: 1 },
+      hetReviewedAmount: 20_000_000,
+      finalInvoiceAmount: 20_000_000,
       siplah: { ...completeSiplah, orderNumber: 'SPL-2025-9999' },
       vendorBatchId: 'VB-2025-041',
       goods: {
