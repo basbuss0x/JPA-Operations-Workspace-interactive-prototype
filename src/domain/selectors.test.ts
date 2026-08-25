@@ -88,8 +88,8 @@ describe('derived domain selectors', () => {
       canonicalOrder('ORD-2026-040'),
       canonicalOrder('ORD-2026-SLB'),
     ])
-    const math = result.find((item) => item.title === 'Matematika Kelas V')
-    const bahasa = result.find((item) => item.title === 'Bahasa Indonesia Kelas V')
+    const math = result.find((item) => item.productCode === 'BK-MTK-5')
+    const bahasa = result.find((item) => item.productCode === 'BK-BINDO-5')
 
     expect(math?.totalQuantity).toBe(28)
     expect(math?.schools).toEqual([

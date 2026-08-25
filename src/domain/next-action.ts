@@ -208,7 +208,7 @@ export function deriveActionCandidates(
   const batch = context.vendorBatch
   if (
     batch &&
-    ['SENT_TO_VENDOR', 'VENDOR_CONFIRMED', 'PROCESSING'].includes(batch.status) &&
+    ['SENT_TO_VENDOR', 'VENDOR_CONFIRMED', 'PROCESSING', 'PARTIALLY_ARRIVED'].includes(batch.status) &&
     reached(batch.followUpDueAt, now)
   ) {
     candidates.push(
@@ -216,8 +216,8 @@ export function deriveActionCandidates(
         kind: 'FOLLOW_UP_VENDOR',
         title: 'Follow-up vendor',
         reason: `Reminder ${batch.id} sudah tercapai; status saat ini ${batch.status.replaceAll('_', ' ')}.`,
-        href: `/orders/${order.id}?tab=vendor`,
-        ctaLabel: 'Lihat vendor',
+        href: `/vendor-batches/${batch.id}`,
+        ctaLabel: 'Buka batch',
         priority: 90,
         dueAt: batch.followUpDueAt,
       }),

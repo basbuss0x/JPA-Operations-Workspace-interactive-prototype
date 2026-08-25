@@ -8,19 +8,25 @@ import {
   chooseHetProduct,
   confirmHetReview,
   createOrderFromExtraction,
+  createVendorBatch as createVendorBatchTransition,
+  generateVendorRecap as generateVendorRecapTransition,
   manualOverrideHetItem,
   markSiplahDocumentAvailable,
+  recordGoodsArrival,
   recordSiplahOrder,
   reopenHetReview,
   sendSiplahDocumentToSchool,
   setNextActionOverride,
   setSiplahAccessAvailable,
+  setVendorFollowUpReminder,
   setSiplahOrderPlaced,
   snoozeOrderAction,
+  transitionVendorBatch,
   verifySiplahDocument,
   type CreateOrderFromExtractionInput,
 } from '../domain/transitions'
 import type {
+  GoodsArrivalAllocation,
   NextActionKind,
   NextActionOverride,
   Order,
@@ -54,6 +60,13 @@ interface PrototypeStore extends PrototypeData {
   attachSiplahDocument: (orderId: string, kind: SiplahDocumentKind, fileName: string) => void
   verifySiplahDocument: (orderId: string, kind: SiplahDocumentKind) => void
   sendSiplahDocument: (orderId: string, kind: SiplahDocumentKind) => void
+  createVendorBatch: (orderIds: string[], batchId: string) => void
+  generateVendorRecap: (batchId: string) => void
+  markVendorBatchSent: (batchId: string) => void
+  markVendorConfirmed: (batchId: string) => void
+  startVendorProcessing: (batchId: string) => void
+  setVendorFollowUp: (batchId: string, dueAt: string | null) => void
+  recordVendorGoodsArrival: (batchId: string, allocations: GoodsArrivalAllocation[]) => void
   snoozeNextAction: (
     orderIds: string[],
     actionKind: NextActionKind,
@@ -179,6 +192,20 @@ export const usePrototypeStore = create<PrototypeStore>()(
             sendSiplahDocumentToSchool(order, kind),
           ),
         })),
+      createVendorBatch: (orderIds, batchId) =>
+        set((state) => createVendorBatchTransition(state, orderIds, batchId)),
+      generateVendorRecap: (batchId) =>
+        set((state) => generateVendorRecapTransition(state, batchId)),
+      markVendorBatchSent: (batchId) =>
+        set((state) => transitionVendorBatch(state, batchId, 'SENT_TO_VENDOR')),
+      markVendorConfirmed: (batchId) =>
+        set((state) => transitionVendorBatch(state, batchId, 'VENDOR_CONFIRMED')),
+      startVendorProcessing: (batchId) =>
+        set((state) => transitionVendorBatch(state, batchId, 'PROCESSING')),
+      setVendorFollowUp: (batchId, dueAt) =>
+        set((state) => setVendorFollowUpReminder(state, batchId, dueAt)),
+      recordVendorGoodsArrival: (batchId, allocations) =>
+        set((state) => recordGoodsArrival(state, batchId, allocations)),
       snoozeNextAction: (orderIds, actionKind, until) =>
         set((state) => ({
           orders: updateOrders(state.orders, orderIds, (order) =>

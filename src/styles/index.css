@@ -3049,3 +3049,568 @@ p {
     grid-column: 2;
   }
 }
+
+/* Pass 3 · Vendor Batch execution */
+.callout--info {
+  color: var(--info);
+  background: var(--info-bg);
+  border-color: #bfdaea;
+}
+
+.batch-id-proposal {
+  display: grid;
+  gap: 3px;
+  min-width: 172px;
+  padding: 11px 14px;
+  background: var(--forest-50);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.batch-id-proposal span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.batch-id-proposal strong {
+  color: var(--forest-900);
+  font-size: 1.05rem;
+  letter-spacing: 0.03em;
+}
+
+.selection-actions,
+.batch-lifecycle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.eligible-order-list {
+  display: grid;
+  gap: 8px;
+}
+
+.eligible-order {
+  display: grid;
+  grid-template-columns: 24px minmax(270px, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 78px;
+  padding: 13px 15px;
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.eligible-order:hover,
+.eligible-order.is-selected {
+  border-color: var(--forest-700);
+}
+
+.eligible-order.is-selected {
+  background: var(--forest-50);
+  box-shadow: inset 3px 0 var(--forest-700);
+}
+
+.eligible-order > input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--forest-700);
+}
+
+.eligible-order__main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.eligible-order__main div,
+.batch-member-row > div,
+.vendor-next-step div {
+  display: grid;
+  gap: 3px;
+}
+
+.eligible-order__main span,
+.batch-member-row span,
+.vendor-next-step span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.eligible-order__facts {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.vendor-recap-view {
+  display: grid;
+  gap: 20px;
+}
+
+.vendor-aggregate-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.vendor-aggregate-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.vendor-aggregate-table th,
+.vendor-aggregate-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.vendor-aggregate-table th {
+  color: var(--muted);
+  background: var(--surface-muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.vendor-aggregate-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.allocation-details summary {
+  cursor: pointer;
+  color: var(--forest-700);
+  font-weight: 700;
+}
+
+.allocation-details ul,
+.vendor-product-card ul,
+.school-allocation ul {
+  padding: 0;
+  margin: 9px 0 0;
+  list-style: none;
+}
+
+.allocation-details li,
+.vendor-product-card li,
+.school-allocation li {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.vendor-aggregate-cards {
+  display: none;
+}
+
+.school-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.school-allocation {
+  padding: 16px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.school-allocation header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.school-allocation h3,
+.school-allocation p {
+  margin-bottom: 2px;
+}
+
+.school-allocation p,
+.school-allocation small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.school-allocation li > span {
+  display: grid;
+  gap: 2px;
+}
+
+.batch-create-bar {
+  position: sticky;
+  bottom: 18px;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 15px 17px;
+  color: #fff;
+  background: var(--forest-950);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+
+.batch-create-bar > div {
+  display: grid;
+  gap: 3px;
+}
+
+.batch-create-bar span,
+.batch-create-bar small {
+  color: #bfd0c9;
+}
+
+.vendor-batch-list {
+  display: grid;
+  gap: 9px;
+}
+
+.vendor-batch-row {
+  display: grid;
+  grid-template-columns: minmax(145px, 0.7fr) minmax(180px, 0.8fr) minmax(260px, 1.1fr) minmax(260px, 1.2fr);
+  align-items: center;
+  gap: 18px;
+  padding: 15px 17px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.vendor-batch-row__identity,
+.vendor-batch-row__status {
+  display: grid;
+  gap: 5px;
+}
+
+.vendor-batch-row__identity a {
+  color: var(--forest-800);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.vendor-batch-row__identity a:hover {
+  text-decoration: underline;
+}
+
+.vendor-batch-row__identity span,
+.vendor-batch-row__status small {
+  color: var(--muted);
+  font-size: 0.73rem;
+}
+
+.vendor-batch-row__counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.vendor-next-step {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-left: 14px;
+  border-left: 3px solid var(--line-strong);
+}
+
+.vendor-next-step.is-actionable {
+  border-left-color: var(--warning);
+}
+
+.batch-actions-panel,
+.vendor-reminder-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+}
+
+.batch-actions-panel .panel-heading {
+  margin-bottom: 0;
+}
+
+.vendor-reminder-panel > div p {
+  margin-bottom: 0;
+}
+
+.vendor-reminder-panel .inline-action-form {
+  align-items: end;
+  margin: 0;
+}
+
+.batch-member-list {
+  display: grid;
+  gap: 7px;
+}
+
+.batch-member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.batch-member-row:last-child {
+  border-bottom: 0;
+}
+
+.batch-member-row a {
+  color: var(--forest-800);
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.batch-member-row > div:last-child {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.batch-timestamps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  margin-bottom: 24px;
+  overflow: hidden;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.batch-timestamps span {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  background: var(--surface-muted);
+}
+
+.batch-timestamps small {
+  color: var(--muted);
+}
+
+.arrival-allocation-list {
+  display: grid;
+  gap: 12px;
+}
+
+.arrival-allocation-list fieldset {
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.arrival-allocation-list legend {
+  padding: 0 6px;
+  font-weight: 750;
+}
+
+.arrival-allocation-list legend small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.arrival-allocation-list fieldset > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin-top: 7px;
+}
+
+.arrival-allocation-list label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+@media (max-width: 1100px) {
+  .eligible-order {
+    grid-template-columns: 24px 1fr;
+  }
+
+  .eligible-order__facts {
+    grid-column: 2;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .vendor-batch-row {
+    grid-template-columns: minmax(140px, 0.7fr) minmax(170px, 0.8fr) 1fr;
+  }
+
+  .vendor-next-step {
+    grid-column: 1 / -1;
+  }
+
+  .batch-timestamps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .vendor-builder-page .page-header,
+  .vendor-batches-page .page-header,
+  .vendor-batch-detail-page .page-header,
+  .batch-actions-panel,
+  .vendor-reminder-panel,
+  .batch-create-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .batch-id-proposal {
+    width: 100%;
+  }
+
+  .eligible-orders-panel .panel-heading {
+    align-items: stretch;
+  }
+
+  .selection-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .eligible-order {
+    grid-template-columns: 22px 1fr;
+    align-items: flex-start;
+    padding: 13px;
+  }
+
+  .eligible-order__main {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .eligible-order__facts {
+    gap: 7px;
+  }
+
+  .vendor-aggregate-table-wrap {
+    display: none;
+  }
+
+  .vendor-aggregate-cards {
+    display: grid;
+    gap: 8px;
+  }
+
+  .vendor-product-card {
+    padding: 13px;
+    background: var(--surface-muted);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+
+  .vendor-product-card summary {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .vendor-product-card summary > span:first-child {
+    display: grid;
+    gap: 3px;
+  }
+
+  .vendor-product-card small {
+    color: var(--muted);
+    font-weight: 400;
+  }
+
+  .vendor-product-card__total {
+    display: grid;
+    min-width: 82px;
+    color: var(--forest-800);
+    text-align: right;
+  }
+
+  .vendor-product-card__total strong {
+    font-size: 1.2rem;
+    font-weight: 850;
+  }
+
+  .vendor-product-card__total small {
+    font-size: 0.66rem;
+  }
+
+  .vendor-product-card > div {
+    padding-top: 12px;
+  }
+
+  .school-breakdown-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .school-allocation header,
+  .batch-member-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .batch-create-bar {
+    position: static;
+  }
+
+  .batch-create-bar .button {
+    width: 100%;
+  }
+
+  .vendor-batch-row {
+    grid-template-columns: 1fr 1fr;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .vendor-batch-row__counts,
+  .vendor-next-step {
+    grid-column: 1 / -1;
+  }
+
+  .vendor-next-step {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .vendor-reminder-panel .inline-action-form,
+  .vendor-reminder-panel .inline-action-form .form-field,
+  .vendor-reminder-panel .button {
+    width: 100%;
+  }
+
+  .batch-timestamps {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .arrival-allocation-list fieldset > div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

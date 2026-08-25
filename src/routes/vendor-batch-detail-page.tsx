@@ -1,0 +1,236 @@
+import { useMemo, useState, type FormEvent } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { buildVendorRecap, getVendorBatchOrders } from '../domain/selectors'
+import type { GoodsArrivalAllocation } from '../domain/types'
+import { usePrototypeStore } from '../store/use-prototype-store'
+import { formatDate, formatDateTime } from '../utils/format'
+import { Button } from '../components/ui/button'
+import { EmptyState } from '../components/ui/empty-state'
+import { FormField } from '../components/ui/form-field'
+import { Modal } from '../components/ui/modal'
+import { PageHeader } from '../components/ui/page-header'
+import { StatusChip } from '../components/ui/status-chip'
+import { VendorRecapView } from '../features/vendor/vendor-recap-view'
+import { downloadVendorWorkbook } from '../features/vendor/vendor-workbook'
+
+const arrivalOptions = [
+  { value: 'NONE', label: 'Tidak dicatat' },
+  { value: 'PARTIAL', label: 'Tiba sebagian' },
+  { value: 'FULL', label: 'Tiba penuh' },
+] as const
+
+type ArrivalChoice = typeof arrivalOptions[number]['value']
+
+export function VendorBatchDetailPage() {
+  const { batchId } = useParams()
+  const batch = usePrototypeStore((state) => batchId ? state.vendorBatches[batchId] : undefined)
+  const orders = usePrototypeStore((state) => state.orders)
+  const generateVendorRecap = usePrototypeStore((state) => state.generateVendorRecap)
+  const markVendorBatchSent = usePrototypeStore((state) => state.markVendorBatchSent)
+  const markVendorConfirmed = usePrototypeStore((state) => state.markVendorConfirmed)
+  const startVendorProcessing = usePrototypeStore((state) => state.startVendorProcessing)
+  const setVendorFollowUp = usePrototypeStore((state) => state.setVendorFollowUp)
+  const recordVendorGoodsArrival = usePrototypeStore((state) => state.recordVendorGoodsArrival)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [feedback, setFeedback] = useState<string | null>(null)
+  const [reminderDate, setReminderDate] = useState(() => batch?.followUpDueAt?.slice(0, 10) ?? '')
+  const [arrivalOpen, setArrivalOpen] = useState(false)
+  const [arrivalChoices, setArrivalChoices] = useState<Record<string, ArrivalChoice>>({})
+
+  const memberOrders = useMemo(
+    () => batch ? getVendorBatchOrders(batch, orders) : [],
+    [batch, orders],
+  )
+  const preview = useMemo(() => {
+    if (!batch) return { recap: null, error: null }
+    try {
+      return { recap: buildVendorRecap(memberOrders), error: null }
+    } catch (error) {
+      return { recap: null, error: error instanceof Error ? error.message : 'Recap tidak valid.' }
+    }
+  }, [batch, memberOrders])
+
+  if (!batch) {
+    return (
+      <EmptyState
+        title="Vendor Batch tidak ditemukan"
+        description="Batch ID tidak ada di demo state atau data lokal sudah direset."
+        action={<Link className="button button--secondary button--md" to="/vendor-batches">Kembali ke Vendor Batch</Link>}
+      />
+    )
+  }
+
+  const runAction = (action: () => void, message: string) => {
+    setActionError(null)
+    setFeedback(null)
+    try {
+      action()
+      setFeedback(message)
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Tindakan gagal disimpan.')
+    }
+  }
+
+  const generateAndDownload = () => {
+    if (!preview.recap) {
+      setActionError(preview.error ?? 'Recap tidak dapat dibuat.')
+      return
+    }
+    runAction(() => {
+      downloadVendorWorkbook(batch, preview.recap)
+      generateVendorRecap(batch.id)
+    }, 'Rekap berhasil dibuat. Batch belum dikirim ke vendor.')
+  }
+
+  const saveReminder = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const dueAt = reminderDate ? `${reminderDate}T08:00:00.000Z` : null
+    runAction(
+      () => setVendorFollowUp(batch.id, dueAt),
+      dueAt ? 'Reminder follow-up vendor disimpan.' : 'Reminder follow-up vendor dihapus.',
+    )
+  }
+
+  const openArrival = () => {
+    setArrivalChoices(Object.fromEntries(memberOrders.map((order) => [order.id, 'NONE'])))
+    setArrivalOpen(true)
+  }
+
+  const saveArrival = () => {
+    const allocations: GoodsArrivalAllocation[] = Object.entries(arrivalChoices).flatMap(
+      ([orderId, arrivalType]) => arrivalType === 'NONE' ? [] : [{ orderId, arrivalType }],
+    )
+    setActionError(null)
+    try {
+      recordVendorGoodsArrival(batch.id, allocations)
+      setArrivalOpen(false)
+      setFeedback('Kedatangan dicatat hanya untuk alokasi order yang dipilih.')
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Kedatangan gagal dicatat.')
+    }
+  }
+
+  const timeline = [...batch.timeline].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
+  const reminderAllowed = ['SENT_TO_VENDOR', 'VENDOR_CONFIRMED', 'PROCESSING', 'PARTIALLY_ARRIVED'].includes(batch.status)
+
+  return (
+    <div className="page-stack vendor-batch-detail-page">
+      <Link className="back-link" to="/vendor-batches">← Semua Vendor Batch</Link>
+      <PageHeader
+        eyebrow="Vendor Batch detail"
+        title={batch.id}
+        description={`${memberOrders.length} order anggota · dibuat ${formatDate(batch.createdAt)}. Quantity recap selalu derived dari OrderItem.`}
+        actions={<StatusChip tone={batch.status === 'ARRIVED' ? 'success' : batch.status === 'DRAFT' ? 'warning' : 'info'} dot>{batch.status.replaceAll('_', ' ')}</StatusChip>}
+      />
+
+      {batch.status === 'RECAP_GENERATED' ? (
+        <div className="callout callout--info recap-not-sent" role="status">
+          <strong>Rekap sudah dibuat, belum dikirim ke vendor.</strong> Download tidak pernah dianggap sebagai pengiriman. Gunakan tindakan “Mark sent to vendor” setelah benar-benar dikirim.
+        </div>
+      ) : null}
+      {feedback ? <div className="callout callout--success" role="status">{feedback}</div> : null}
+      {actionError ? <div className="callout callout--danger" role="alert"><strong>Tindakan gagal.</strong> {actionError}</div> : null}
+
+      <section className="workspace-panel batch-actions-panel" aria-labelledby="batch-actions-title">
+        <div className="panel-heading">
+          <div><h2 id="batch-actions-title">Tindakan lifecycle</h2><p>Setiap tombol mencatat satu kejadian bisnis; tidak ada “Advance status”.</p></div>
+        </div>
+        <div className="batch-lifecycle-actions">
+          {batch.status === 'DRAFT' ? <Button onClick={generateAndDownload}>Generate recap .xlsx</Button> : null}
+          {batch.status === 'RECAP_GENERATED' ? (
+            <>
+              <Button variant="secondary" onClick={generateAndDownload}>Regenerate recap .xlsx</Button>
+              <Button onClick={() => runAction(() => markVendorBatchSent(batch.id), 'Batch ditandai sudah dikirim ke vendor.')}>Mark sent to vendor</Button>
+            </>
+          ) : null}
+          {batch.status === 'SENT_TO_VENDOR' ? <Button onClick={() => runAction(() => markVendorConfirmed(batch.id), 'Konfirmasi vendor dicatat.')}>Mark vendor confirmed</Button> : null}
+          {batch.status === 'VENDOR_CONFIRMED' ? <Button onClick={() => runAction(() => startVendorProcessing(batch.id), 'Vendor mulai processing.')}>Start processing</Button> : null}
+          {batch.status === 'PROCESSING' || batch.status === 'PARTIALLY_ARRIVED' ? (
+            <Button onClick={openArrival}>{batch.status === 'PROCESSING' ? 'Record partial/full arrival' : 'Record additional/full arrival'}</Button>
+          ) : null}
+          {batch.status === 'ARRIVED' ? <span className="inline-clear-state">✓ Semua order anggota tercatat tiba penuh. Goods handling berikutnya tetap di TASK 11.</span> : null}
+        </div>
+      </section>
+
+      {reminderAllowed ? (
+        <section className="workspace-panel vendor-reminder-panel" aria-labelledby="vendor-reminder-title">
+          <div>
+            <h2 id="vendor-reminder-title">Vendor follow-up reminder</h2>
+            <p>PROCESSING tetap pasif sampai tanggal eksplisit ini tercapai. Tidak ada stale threshold otomatis.</p>
+          </div>
+          <form className="inline-action-form" onSubmit={saveReminder}>
+            <FormField label="Tanggal follow-up" htmlFor="vendor-follow-up-date">
+              <input id="vendor-follow-up-date" type="date" value={reminderDate} onChange={(event) => setReminderDate(event.target.value)} />
+            </FormField>
+            <Button type="submit" variant="secondary" disabled={!reminderDate}>Simpan reminder</Button>
+            {batch.followUpDueAt ? <Button type="button" variant="ghost" onClick={() => { setReminderDate(''); runAction(() => setVendorFollowUp(batch.id, null), 'Reminder follow-up vendor dihapus.') }}>Clear reminder</Button> : null}
+          </form>
+        </section>
+      ) : null}
+
+      <section className="workspace-panel batch-members-panel" aria-labelledby="batch-members-title">
+        <div className="panel-heading">
+          <div><h2 id="batch-members-title">Sekolah & order anggota</h2><p>Kedatangan dicatat per order; perubahan satu sekolah tidak mengubah saudaranya.</p></div>
+          <StatusChip>{memberOrders.length} order</StatusChip>
+        </div>
+        <div className="batch-member-list">
+          {memberOrders.map((order) => (
+            <article key={order.id} className="batch-member-row">
+              <div><Link to={`/orders/${order.id}?tab=vendor`}>{order.schoolName}</Link><span>{order.id} · {order.siplah.orderNumber}</span></div>
+              <div><StatusChip tone={order.goods.arrivalType === 'FULL' ? 'success' : order.goods.arrivalType === 'PARTIAL' ? 'warning' : 'neutral'}>Barang {order.goods.arrivalType}</StatusChip><strong>{order.items.reduce((total, item) => total + item.quantity, 0)} buku</strong></div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {preview.error ? <div className="callout callout--danger" role="alert"><strong>Recap invalid.</strong> {preview.error}</div> : null}
+      {preview.recap ? <VendorRecapView recap={preview.recap} /> : null}
+
+      <section className="workspace-panel batch-timeline-panel" aria-labelledby="batch-timeline-title">
+        <div className="panel-heading"><div><h2 id="batch-timeline-title">Timeline batch</h2><p>Timestamps penting untuk membedakan dibuat, direkap, dikirim, dan diproses.</p></div></div>
+        <div className="batch-timestamps">
+          <span><small>Dibuat</small><strong>{formatDateTime(batch.createdAt)}</strong></span>
+          <span><small>Recap terakhir</small><strong>{batch.recapGeneratedAt ? formatDateTime(batch.recapGeneratedAt) : '—'}</strong></span>
+          <span><small>Dikirim</small><strong>{batch.sentAt ? formatDateTime(batch.sentAt) : '—'}</strong></span>
+          <span><small>Dikonfirmasi</small><strong>{batch.confirmedAt ? formatDateTime(batch.confirmedAt) : '—'}</strong></span>
+          <span><small>Processing</small><strong>{batch.processingStartedAt ? formatDateTime(batch.processingStartedAt) : '—'}</strong></span>
+        </div>
+        {timeline.length > 0 ? (
+          <ol className="mini-timeline">
+            {timeline.map((event) => <li key={event.id}><span className="mini-timeline__dot" /><div><strong>{event.title}</strong><p>{event.detail}</p><time>{formatDateTime(event.occurredAt)}</time></div></li>)}
+          </ol>
+        ) : <div className="inline-clear-state inline-clear-state--neutral">Fixture lama belum memiliki event batch terperinci.</div>}
+      </section>
+
+      <Modal
+        open={arrivalOpen}
+        title="Catat kedatangan per sekolah/order"
+        description="Pilih hanya alokasi yang benar-benar tiba. Order lain tidak akan dimutasi."
+        onClose={() => setArrivalOpen(false)}
+        footer={<><Button variant="ghost" onClick={() => setArrivalOpen(false)}>Batal</Button><Button onClick={saveArrival}>Simpan kedatangan</Button></>}
+      >
+        <div className="arrival-allocation-list">
+          {memberOrders.map((order) => (
+            <fieldset key={order.id} disabled={order.goods.arrivalType === 'FULL'}>
+              <legend>{order.schoolName}<small>{order.id} · saat ini {order.goods.arrivalType}</small></legend>
+              <div>
+                {arrivalOptions.map((option) => (
+                  <label key={option.value}>
+                    <input
+                      type="radio"
+                      name={`arrival-${order.id}`}
+                      value={option.value}
+                      checked={(arrivalChoices[order.id] ?? 'NONE') === option.value}
+                      onChange={() => setArrivalChoices((current) => ({ ...current, [order.id]: option.value }))}
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ))}
+        </div>
+      </Modal>
+    </div>
+  )
+}

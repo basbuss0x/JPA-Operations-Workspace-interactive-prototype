@@ -99,7 +99,10 @@ interface LegacyOrderV1 extends Omit<
   nextActionControl: LegacyNextActionControlV1
 }
 
-type LegacyVendorBatchV1 = Omit<VendorBatch, 'followUpDueAt'>
+type LegacyVendorBatch = Partial<VendorBatch> & Pick<
+  VendorBatch,
+  'id' | 'status' | 'createdAt' | 'sentAt' | 'arrivedAt' | 'orderIds'
+>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -265,12 +268,20 @@ function migrateOrderV1(order: LegacyOrderV1): Order {
 }
 
 function migrateVendorBatches(
-  batches: Record<string, LegacyVendorBatchV1 | VendorBatch>,
+  batches: Record<string, LegacyVendorBatch | VendorBatch>,
 ): Record<string, VendorBatch> {
   return Object.fromEntries(
     Object.entries(batches).map(([batchId, batch]) => [
       batchId,
-      { ...batch, followUpDueAt: 'followUpDueAt' in batch ? batch.followUpDueAt : null },
+      {
+        ...batch,
+        recapGeneratedAt: batch.recapGeneratedAt ?? batch.sentAt ?? null,
+        recapGenerationCount: batch.recapGenerationCount ?? (batch.status === 'DRAFT' ? 0 : 1),
+        confirmedAt: batch.confirmedAt ?? null,
+        processingStartedAt: batch.processingStartedAt ?? null,
+        followUpDueAt: batch.followUpDueAt ?? null,
+        timeline: batch.timeline ?? [],
+      },
     ]),
   )
 }
@@ -300,16 +311,28 @@ export function migratePrototypeState(
     return createCanonicalDemoData()
   }
 
-  if (persistedVersion === 1 || persistedVersion === 2 || persistedVersion === 3) {
+  if (
+    persistedVersion === 1 ||
+    persistedVersion === 2 ||
+    persistedVersion === 3 ||
+    persistedVersion === 4
+  ) {
     try {
       return {
         version: DEMO_STATE_VERSION,
-        orders: migrateOrders(
-          persistedState.orders as Record<string, LegacyOrderV1 | LegacyOrderV2 | LegacyOrderV3>,
-          persistedVersion,
-        ),
+        orders: persistedVersion === 4
+          ? Object.fromEntries(
+              Object.entries(persistedState.orders as Record<string, Order>).map(([orderId, order]) => [
+                orderId,
+                normalizeCurrentOrder(order),
+              ]),
+            )
+          : migrateOrders(
+              persistedState.orders as Record<string, LegacyOrderV1 | LegacyOrderV2 | LegacyOrderV3>,
+              persistedVersion,
+            ),
         vendorBatches: migrateVendorBatches(
-          persistedState.vendorBatches as Record<string, LegacyVendorBatchV1 | VendorBatch>,
+          persistedState.vendorBatches as Record<string, LegacyVendorBatch | VendorBatch>,
         ),
       }
     } catch {

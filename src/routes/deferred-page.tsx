@@ -11,13 +11,6 @@ const deferredContent = {
     emptyTitle: 'Pipeline sengaja belum dibangun',
     emptyDescription: 'Pass 1 memprioritaskan Kerjakan Sekarang dan konteks per sekolah. Navigasi ini disiapkan agar struktur shell dapat direview.',
   },
-  '/vendor-batches': {
-    eyebrow: 'Vendor workspace · TASK 09–10',
-    title: 'Vendor Batch',
-    description: 'Batch Builder, agregasi lintas sekolah, recap Excel, dan lifecycle vendor masuk pada vertical slice berikutnya.',
-    emptyTitle: 'Vendor execution ditunda setelah Review Gate 1',
-    emptyDescription: 'State vendor dan batch fixture sudah ada, tetapi UI tidak akan menganggap DRAFT sebagai sudah dikirim.',
-  },
 } as const
 
 export function DeferredPage() {

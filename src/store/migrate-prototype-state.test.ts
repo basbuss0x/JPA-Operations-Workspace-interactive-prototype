@@ -85,7 +85,7 @@ describe('prototype local state migration', () => {
     expect(order?.siplah.documents).toHaveLength(5)
   })
 
-  it('migrates Gate 1.1 v2 SIPLah booleans and items into lifecycle-aware document schema v4', () => {
+  it('migrates Gate 1.1 v2 SIPLah booleans and items into the current lifecycle-aware document schema', () => {
     const canonical = createCanonicalDemoData()
     const source = canonical.orders['ORD-2026-040']
     if (!source) throw new Error('Missing source order')
@@ -133,6 +133,34 @@ describe('prototype local state migration', () => {
     expect(order.siplah.documents.find((document) => document.kind === 'INVOICE')?.requiredForVendorReady).toBe(false)
     expect(order.siplah.documents.find((document) => document.kind === 'INVOICE')?.requiredForAdminCompletion).toBe(true)
     expect(order.supplierPayment.obligationAmount).toBeNull()
+  })
+
+  it('migrates Pass 2 v4 Vendor Batches with recap lifecycle metadata defaults', () => {
+    const canonical = createCanonicalDemoData()
+    const sourceOrder = canonical.orders['ORD-2026-049']
+    const sourceBatch = canonical.vendorBatches['VB-2026-009']
+    if (!sourceOrder || !sourceBatch) throw new Error('Missing Pass 2 source data')
+    const legacyBatch = structuredClone(sourceBatch) as unknown as Record<string, unknown>
+    delete legacyBatch.recapGeneratedAt
+    delete legacyBatch.recapGenerationCount
+    delete legacyBatch.confirmedAt
+    delete legacyBatch.processingStartedAt
+    delete legacyBatch.timeline
+
+    const migrated = migratePrototypeState(
+      {
+        version: 4,
+        orders: { [sourceOrder.id]: sourceOrder },
+        vendorBatches: { [sourceBatch.id]: legacyBatch },
+      },
+      4,
+    )
+    const batch = migrated.vendorBatches[sourceBatch.id]
+
+    expect(batch?.recapGeneratedAt).toBe(sourceBatch.sentAt)
+    expect(batch?.recapGenerationCount).toBe(1)
+    expect(batch?.timeline).toEqual([])
+    expect(batch?.followUpDueAt).toBeNull()
   })
 
   it('resets unknown or malformed schema versions to canonical demo data', () => {

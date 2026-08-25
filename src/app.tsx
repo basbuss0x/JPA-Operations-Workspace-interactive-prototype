@@ -8,6 +8,9 @@ import { NotFoundPage } from './routes/not-found-page'
 import { OrdersPage } from './routes/orders-page'
 import { OrderWorkspacePage } from './routes/order-workspace-page'
 import { SiplahWorkflowPage } from './routes/siplah-workflow-page'
+import { VendorBatchBuilderPage } from './routes/vendor-batch-builder-page'
+import { VendorBatchDetailPage } from './routes/vendor-batch-detail-page'
+import { VendorBatchesPage } from './routes/vendor-batches-page'
 
 export function App() {
   return (
@@ -21,7 +24,9 @@ export function App() {
           <Route path="orders/:orderId/arkas" element={<HetReviewPage />} />
           <Route path="orders/:orderId/siplah" element={<SiplahWorkflowPage />} />
           <Route path="pipeline" element={<DeferredPage />} />
-          <Route path="vendor-batches" element={<DeferredPage />} />
+          <Route path="vendor-batches" element={<VendorBatchesPage />} />
+          <Route path="vendor-batches/new" element={<VendorBatchBuilderPage />} />
+          <Route path="vendor-batches/:batchId" element={<VendorBatchDetailPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

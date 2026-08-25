@@ -1,6 +1,6 @@
 import { calculateArkasBudgetAmount } from './intake'
 import { getHetExceptionCount, isCompletionReady } from './order-state'
-import { calculateBenefitAmount, isVendorBatchEligible } from './selectors'
+import { buildVendorRecap, calculateBenefitAmount, isVendorBatchEligible } from './selectors'
 import { createSiplahDocuments, getSiplahDocument } from './siplah'
 import type {
   ArkasExtractionResult,
@@ -12,7 +12,9 @@ import type {
   PrototypeData,
   SiplahDocumentKind,
   TimelineEvent,
+  VendorBatch,
   VendorBatchStatus,
+  VendorBatchTimelineEvent,
 } from './types'
 
 function timestamp(now?: Date): string {
@@ -530,22 +532,75 @@ export function sendSiplahDocumentToSchool(
   )
 }
 
+function vendorBatchEvent(
+  batch: Pick<VendorBatch, 'id' | 'timeline'>,
+  title: string,
+  detail: string,
+  now?: Date,
+): VendorBatchTimelineEvent {
+  const occurredAt = timestamp(now)
+  return {
+    id: `${batch.id}-${occurredAt}-${batch.timeline.length}`,
+    occurredAt,
+    title,
+    detail,
+  }
+}
+
+function activeBatchContainingOrder(data: PrototypeData, orderId: string): VendorBatch | undefined {
+  return Object.values(data.vendorBatches).find(
+    (batch) => batch.status !== 'ARRIVED' && batch.orderIds.includes(orderId),
+  )
+}
+
 export function createVendorBatch(
   data: PrototypeData,
   orderIds: string[],
   batchId: string,
   now?: Date,
 ): PrototypeData {
-  if (orderIds.length === 0) throw new Error('Pilih minimal satu order.')
-  if (data.vendorBatches[batchId]) throw new Error('Vendor batch ID sudah digunakan.')
-  const orders = orderIds.map((id) => data.orders[id])
-  if (orders.some((order) => !order || !isVendorBatchEligible(order))) {
-    throw new Error('Semua order harus eligible untuk Vendor Batch.')
-  }
+  const uniqueOrderIds = [...new Set(orderIds)]
+  if (uniqueOrderIds.length === 0) throw new Error('Pilih minimal satu order.')
+  if (uniqueOrderIds.length !== orderIds.length) throw new Error('Pilihan order memiliki duplikat.')
+  if (!/^VB-\d{4}-\d{3,}$/.test(batchId)) throw new Error('Format Vendor Batch ID tidak valid.')
+  if (data.vendorBatches[batchId]) throw new Error('Vendor Batch ID sudah digunakan.')
+
+  const orders = uniqueOrderIds.map((id) => {
+    const order = data.orders[id]
+    if (!order) throw new Error(`Order ${id} tidak ditemukan.`)
+    if (order.vendorBatchId) {
+      throw new Error(`${id} sudah menjadi anggota ${order.vendorBatchId}.`)
+    }
+    const existingBatch = activeBatchContainingOrder(data, id)
+    if (existingBatch) throw new Error(`${id} sudah menjadi anggota aktif ${existingBatch.id}.`)
+    if (!isVendorBatchEligible(order)) {
+      throw new Error(`${id} tidak lagi eligible untuk Vendor Batch.`)
+    }
+    return order
+  })
+
+  // Validate the exact same source items used by preview/export before assigning membership.
+  buildVendorRecap(orders)
+
   const createdAt = timestamp(now)
+  const batch: VendorBatch = {
+    id: batchId,
+    status: 'DRAFT',
+    createdAt,
+    recapGeneratedAt: null,
+    recapGenerationCount: 0,
+    sentAt: null,
+    confirmedAt: null,
+    processingStartedAt: null,
+    arrivedAt: null,
+    followUpDueAt: null,
+    orderIds: uniqueOrderIds,
+    timeline: [],
+  }
+  batch.timeline = [vendorBatchEvent(batch, 'Vendor Batch dibuat', `${orders.length} order ditambahkan dalam status DRAFT.`, now)]
+
   const nextOrders = { ...data.orders }
   for (const order of orders) {
-    if (!order) continue
     nextOrders[order.id] = withEvent(
       { ...order, stage: 'VENDOR', vendorBatchId: batchId },
       'Masuk Vendor Batch',
@@ -556,18 +611,7 @@ export function createVendorBatch(
   return {
     ...data,
     orders: nextOrders,
-    vendorBatches: {
-      ...data.vendorBatches,
-      [batchId]: {
-        id: batchId,
-        status: 'DRAFT',
-        createdAt,
-        sentAt: null,
-        arrivedAt: null,
-        followUpDueAt: null,
-        orderIds,
-      },
-    },
+    vendorBatches: { ...data.vendorBatches, [batchId]: batch },
   }
 }
 
@@ -581,6 +625,28 @@ const allowedBatchTransitions: Record<VendorBatchStatus, VendorBatchStatus[]> = 
   ARRIVED: [],
 }
 
+const batchTransitionCopy: Record<
+  Exclude<VendorBatchStatus, 'DRAFT' | 'PARTIALLY_ARRIVED' | 'ARRIVED'>,
+  { title: string; detail: string }
+> = {
+  RECAP_GENERATED: {
+    title: 'Rekap vendor dibuat',
+    detail: 'Workbook dibuat dari OrderItem; batch belum dikirim ke vendor.',
+  },
+  SENT_TO_VENDOR: {
+    title: 'Rekap dikirim ke vendor',
+    detail: 'Operator menandai pengiriman recap secara eksplisit.',
+  },
+  VENDOR_CONFIRMED: {
+    title: 'Vendor mengonfirmasi pesanan',
+    detail: 'Vendor mengonfirmasi recap yang dikirim.',
+  },
+  PROCESSING: {
+    title: 'Vendor mulai memproses',
+    detail: 'Vendor sedang menyiapkan barang; follow-up hanya aktif jika reminder ditetapkan.',
+  },
+}
+
 export function transitionVendorBatch(
   data: PrototypeData,
   batchId: string,
@@ -588,23 +654,91 @@ export function transitionVendorBatch(
   now?: Date,
 ): PrototypeData {
   const batch = data.vendorBatches[batchId]
-  if (!batch) throw new Error('Vendor batch tidak ditemukan.')
+  if (!batch) throw new Error('Vendor Batch tidak ditemukan.')
   if (!allowedBatchTransitions[batch.status].includes(status)) {
     throw new Error(`Transisi ${batch.status} → ${status} tidak diizinkan.`)
   }
   const occurredAt = timestamp(now)
+  const copy = status in batchTransitionCopy
+    ? batchTransitionCopy[status as keyof typeof batchTransitionCopy]
+    : { title: `Status menjadi ${status}`, detail: `Lifecycle ${batch.id} diperbarui.` }
+  const nextBatch: VendorBatch = {
+    ...batch,
+    status,
+    recapGeneratedAt: status === 'RECAP_GENERATED' ? occurredAt : batch.recapGeneratedAt,
+    recapGenerationCount: status === 'RECAP_GENERATED'
+      ? batch.recapGenerationCount + 1
+      : batch.recapGenerationCount,
+    sentAt: status === 'SENT_TO_VENDOR' ? occurredAt : batch.sentAt,
+    confirmedAt: status === 'VENDOR_CONFIRMED' ? occurredAt : batch.confirmedAt,
+    processingStartedAt: status === 'PROCESSING' ? occurredAt : batch.processingStartedAt,
+    arrivedAt: status === 'ARRIVED' ? occurredAt : batch.arrivedAt,
+    timeline: [vendorBatchEvent(batch, copy.title, copy.detail, now), ...batch.timeline],
+  }
+  const nextOrders = { ...data.orders }
+  for (const orderId of batch.orderIds) {
+    const order = nextOrders[orderId]
+    if (order) nextOrders[orderId] = withEvent(order, copy.title, `${batch.id}: ${copy.detail}`, now)
+  }
   return {
     ...data,
-    vendorBatches: {
-      ...data.vendorBatches,
-      [batchId]: {
-        ...batch,
-        status,
-        sentAt: status === 'SENT_TO_VENDOR' ? occurredAt : batch.sentAt,
-        arrivedAt: status === 'ARRIVED' ? occurredAt : batch.arrivedAt,
-      },
-    },
+    orders: nextOrders,
+    vendorBatches: { ...data.vendorBatches, [batchId]: nextBatch },
   }
+}
+
+export function generateVendorRecap(data: PrototypeData, batchId: string, now?: Date): PrototypeData {
+  const batch = data.vendorBatches[batchId]
+  if (!batch) throw new Error('Vendor Batch tidak ditemukan.')
+  const orders = batch.orderIds.map((orderId) => {
+    const order = data.orders[orderId]
+    if (!order) throw new Error(`Order ${orderId} tidak ditemukan.`)
+    return order
+  })
+  buildVendorRecap(orders)
+  if (batch.status === 'DRAFT') {
+    return transitionVendorBatch(data, batchId, 'RECAP_GENERATED', now)
+  }
+  if (batch.status !== 'RECAP_GENERATED') {
+    throw new Error(`Rekap tidak dapat dibuat ulang dari status ${batch.status}.`)
+  }
+  const generatedAt = timestamp(now)
+  const nextBatch: VendorBatch = {
+    ...batch,
+    recapGeneratedAt: generatedAt,
+    recapGenerationCount: batch.recapGenerationCount + 1,
+    timeline: [
+      vendorBatchEvent(batch, 'Rekap vendor dibuat ulang', 'Workbook terbaru dibuat dari OrderItem yang sama.', now),
+      ...batch.timeline,
+    ],
+  }
+  return { ...data, vendorBatches: { ...data.vendorBatches, [batchId]: nextBatch } }
+}
+
+export function setVendorFollowUpReminder(
+  data: PrototypeData,
+  batchId: string,
+  followUpDueAt: string | null,
+  now?: Date,
+): PrototypeData {
+  const batch = data.vendorBatches[batchId]
+  if (!batch) throw new Error('Vendor Batch tidak ditemukan.')
+  if (!['SENT_TO_VENDOR', 'VENDOR_CONFIRMED', 'PROCESSING', 'PARTIALLY_ARRIVED'].includes(batch.status)) {
+    throw new Error(`Reminder vendor tidak relevan untuk status ${batch.status}.`)
+  }
+  if (followUpDueAt !== null && !Number.isFinite(new Date(followUpDueAt).getTime())) {
+    throw new Error('Tanggal reminder vendor tidak valid.')
+  }
+  const title = followUpDueAt ? 'Reminder follow-up vendor diatur' : 'Reminder follow-up vendor dihapus'
+  const detail = followUpDueAt
+    ? `Follow-up dijadwalkan pada ${followUpDueAt}.`
+    : 'Batch kembali pasif tanpa reminder vendor.'
+  const nextBatch: VendorBatch = {
+    ...batch,
+    followUpDueAt,
+    timeline: [vendorBatchEvent(batch, title, detail, now), ...batch.timeline],
+  }
+  return { ...data, vendorBatches: { ...data.vendorBatches, [batchId]: nextBatch } }
 }
 
 export function recordGoodsArrival(
@@ -627,6 +761,10 @@ export function recordGoodsArrival(
     }
     if (allocatedIds.has(allocation.orderId)) {
       throw new Error(`${allocation.orderId} memiliki alokasi duplikat.`)
+    }
+    const existingOrder = data.orders[allocation.orderId]
+    if (existingOrder?.goods.arrivalType === 'FULL' && allocation.arrivalType === 'PARTIAL') {
+      throw new Error(`${allocation.orderId} sudah tiba penuh dan tidak dapat diturunkan menjadi sebagian.`)
     }
     allocatedIds.add(allocation.orderId)
   }
@@ -666,6 +804,16 @@ export function recordGoodsArrival(
         ...batch,
         status: batchFullyArrived ? 'ARRIVED' : 'PARTIALLY_ARRIVED',
         arrivedAt: batchFullyArrived ? arrivedAt : null,
+        followUpDueAt: batchFullyArrived ? null : batch.followUpDueAt,
+        timeline: [
+          vendorBatchEvent(
+            batch,
+            batchFullyArrived ? 'Semua barang batch tiba' : 'Kedatangan barang dicatat',
+            `${allocations.length} alokasi order dicatat; status batch ${batchFullyArrived ? 'ARRIVED' : 'PARTIALLY_ARRIVED'}.`,
+            now,
+          ),
+          ...batch.timeline,
+        ],
       },
     },
   }

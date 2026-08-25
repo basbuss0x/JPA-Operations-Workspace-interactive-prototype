@@ -42,6 +42,7 @@ test('desktop routes render canonical operational context', async ({ page }, tes
   await expect(page.getByRole('heading', { name: 'Pipeline', exact: true })).toBeVisible()
   await page.goto('/vendor-batches')
   await expect(page.getByRole('heading', { name: 'Vendor Batch', exact: true })).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('desktop-vendor-list.png'), fullPage: true })
   expect(pageErrors).toEqual([])
 })
 
@@ -110,7 +111,7 @@ test('snooze, override, persistence, and reset mutate real local state', async (
   await expect.poll(async () => page.evaluate(() => {
     const stored = JSON.parse(window.localStorage.getItem('jpa-operations-prototype') ?? '{}') as { version?: number }
     return stored.version
-  })).toBe(4)
+  })).toBe(5)
 
   await page.evaluate(() => {
     window.localStorage.setItem(
@@ -202,6 +203,79 @@ test('Pass 2 journey reaches Vendor readiness while admin documents remain later
   await expect(page.getByText('Dokumen SIPLah dikirim').first()).toBeVisible()
 })
 
+test('Pass 3 Vendor Batch journey preserves recap, lifecycle, reminders, arrival targeting, and persistence', async ({ page }, testInfo) => {
+  await page.goto('/vendor-batches/new')
+  await expect(page.getByRole('heading', { name: 'Buat Vendor Batch' })).toBeVisible()
+  await expect(page.getByLabel('Usulan Batch ID')).toContainText('VB-2026-010')
+
+  await page.getByLabel('Pilih SDN 40 Ambon').check()
+  await page.getByLabel('Pilih SLB Batu Merah').check()
+
+  const mathRow = page.locator('.vendor-aggregate-table tr[data-product-code="BK-MTK-5"]')
+  const bahasaRow = page.locator('.vendor-aggregate-table tr[data-product-code="BK-BINDO-5"]')
+  await expect(mathRow).toContainText('28')
+  await expect(bahasaRow).toContainText('21')
+  await expect(page.locator('.school-allocation[data-order-id="ORD-2026-040"]')).toContainText('20')
+  await expect(page.locator('.school-allocation[data-order-id="ORD-2026-SLB"]')).toContainText('8')
+
+  await page.getByLabel('Pilih SLB Batu Merah').uncheck()
+  await expect(mathRow).toContainText('20')
+  await page.getByLabel('Pilih SLB Batu Merah').check()
+  await expect(mathRow).toContainText('28')
+  await page.screenshot({ path: testInfo.outputPath('desktop-vendor-builder.png'), fullPage: true })
+
+  await page.getByRole('button', { name: 'Buat DRAFT Batch' }).click()
+  await expect(page).toHaveURL(/\/vendor-batches\/VB-2026-010$/)
+  await expect(page.getByText('DRAFT', { exact: true }).first()).toBeVisible()
+
+  await page.goto('/')
+  await expect(page.getByText('2 pesanan siap masuk Vendor Batch')).toHaveCount(0)
+  await page.goto('/vendor-batches/VB-2026-010')
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Generate recap .xlsx' }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toBe('Rekap-Vendor-VB-2026-010.xlsx')
+  await expect(page.getByText('Rekap sudah dibuat, belum dikirim ke vendor.', { exact: false }).first()).toBeVisible()
+  await expect(page.getByText('RECAP GENERATED', { exact: true }).first()).toBeVisible()
+
+  await page.reload()
+  await expect(page.getByText('RECAP GENERATED', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('Rekap sudah dibuat, belum dikirim ke vendor.', { exact: false }).first()).toBeVisible()
+
+  await page.getByRole('button', { name: 'Mark sent to vendor' }).click()
+  await expect(page.getByText('SENT TO VENDOR', { exact: true }).first()).toBeVisible()
+  await page.getByRole('button', { name: 'Mark vendor confirmed' }).click()
+  await expect(page.getByText('VENDOR CONFIRMED', { exact: true }).first()).toBeVisible()
+  await page.getByRole('button', { name: 'Start processing' }).click()
+  await expect(page.getByText('PROCESSING', { exact: true }).first()).toBeVisible()
+
+  await page.getByLabel('Tanggal follow-up').fill('2026-03-10')
+  await page.getByRole('button', { name: 'Simpan reminder' }).click()
+  await expect(page.getByRole('button', { name: 'Clear reminder' })).toBeVisible()
+  await page.getByRole('button', { name: 'Clear reminder' }).click()
+  await expect(page.getByRole('button', { name: 'Clear reminder' })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Record partial/full arrival' }).click()
+  const sdnAllocation = page.locator('.arrival-allocation-list fieldset').filter({ hasText: 'SDN 40 Ambon' })
+  await sdnAllocation.getByLabel('Tiba sebagian').check()
+  await page.getByRole('button', { name: 'Simpan kedatangan' }).click()
+
+  await expect(page.getByText('PARTIALLY ARRIVED', { exact: true }).first()).toBeVisible()
+  const sdnMember = page.locator('.batch-member-row').filter({ hasText: 'SDN 40 Ambon' })
+  const slbMember = page.locator('.batch-member-row').filter({ hasText: 'SLB Batu Merah' })
+  await expect(sdnMember).toContainText('Barang PARTIAL')
+  await expect(slbMember).toContainText('Barang NONE')
+  await page.reload()
+  await expect(sdnMember).toContainText('Barang PARTIAL')
+  await expect(slbMember).toContainText('Barang NONE')
+  await page.screenshot({ path: testInfo.outputPath('desktop-vendor-partial-arrival.png'), fullPage: true })
+
+  await page.goto('/orders/ORD-2026-040?tab=vendor')
+  await expect(page.getByRole('link', { name: 'VB-2026-010 →' })).toBeVisible()
+  await expect(page.getByText('PARTIALLY ARRIVED', { exact: true }).first()).toBeVisible()
+})
+
 test.describe('mobile operations layout', () => {
   test.use({ viewport: { width: 390, height: 844 } })
 
@@ -218,6 +292,24 @@ test.describe('mobile operations layout', () => {
     await expect(page.getByRole('heading', { name: 'Barang & Distribusi' })).toBeVisible()
     await expect(page.getByText('Sisa 67 buku')).toBeVisible()
     await page.screenshot({ path: testInfo.outputPath('mobile-order-workspace.png'), fullPage: true })
+  })
+
+  test('stacks Vendor selection, aggregate breakdown, and Batch detail', async ({ page }, testInfo) => {
+    await page.goto('/vendor-batches/new')
+    await page.getByLabel('Pilih SDN 40 Ambon').check()
+    await page.getByLabel('Pilih SLB Batu Merah').check()
+    await expect(page.locator('.vendor-aggregate-table-wrap')).toBeHidden()
+    await expect(page.locator('.vendor-aggregate-cards')).toBeVisible()
+    await expect(page.locator('.vendor-product-card[data-product-code="BK-MTK-5"]')).toContainText('28')
+    await expect(page.locator('.school-breakdown-grid')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Buat DRAFT Batch' })).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath('mobile-vendor-builder.png'), fullPage: true })
+
+    await page.goto('/vendor-batches/VB-2026-009')
+    await expect(page.getByRole('heading', { name: 'VB-2026-009' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Vendor follow-up reminder' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Record partial/full arrival' })).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath('mobile-vendor-detail.png'), fullPage: true })
   })
 
   test('renders Pass 2 workflows as stacked mobile operations', async ({ page }, testInfo) => {

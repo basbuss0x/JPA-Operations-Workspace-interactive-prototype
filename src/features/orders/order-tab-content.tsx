@@ -268,16 +268,24 @@ function VendorTab({ order, batch }: { order: Order; batch: VendorBatch | null }
       </div>
       {batch ? (
         <div className="detail-list">
-          <DetailRow label="Vendor Batch" value={batch.id} />
+          <DetailRow label="Vendor Batch" value={<Link className="text-link" to={`/vendor-batches/${batch.id}`}>{batch.id} →</Link>} />
           <DetailRow label="Status batch" detail="Status ini tidak berasal dari lifecycle order" value={<StatusChip tone="info">{batch.status.replaceAll('_', ' ')}</StatusChip>} />
+          <DetailRow label="Anggota batch" detail="Aggregate lengkap tersedia di Batch Workspace" value={`${batch.orderIds.length} order`} />
           <DetailRow label="Dibuat" value={formatDate(batch.createdAt)} />
+          <DetailRow label="Recap dibuat" value={formatDate(batch.recapGeneratedAt)} />
           <DetailRow label="Dikirim ke vendor" value={formatDate(batch.sentAt)} />
           <DetailRow label="Barang tiba" value={formatDate(batch.arrivedAt)} />
           <DetailRow label="Reminder follow-up" value={formatDate(batch.followUpDueAt)} />
+          <div className="deferred-action-note">
+            <strong>{batch.status === 'RECAP_GENERATED' ? 'Rekap sudah dibuat, belum dikirim.' : 'Kelola pekerjaan pada level batch.'}</strong>
+            <span>Tindakan vendor lintas sekolah tidak diduplikasi di workspace order ini.</span>
+            <Link className="button button--secondary button--sm" to={`/vendor-batches/${batch.id}`}>Buka {batch.id}</Link>
+          </div>
         </div>
       ) : isVendorBatchEligible(order) ? (
         <div className="callout callout--warning">
-          <strong>Order siap direkap.</strong> Item sudah terstruktur dan dapat diagregasi bersama sekolah lain tanpa input ulang. Batch Builder sengaja ditunda ke TASK 09.
+          <strong>Order siap direkap.</strong> Item sudah terstruktur dan dapat diagregasi bersama sekolah lain tanpa input ulang.
+          <Link className="button button--primary button--sm" to="/vendor-batches/new">Buka Vendor Batch Builder</Link>
         </div>
       ) : (
         <div className="inline-clear-state inline-clear-state--neutral">Order belum memenuhi semua syarat Vendor Batch.</div>

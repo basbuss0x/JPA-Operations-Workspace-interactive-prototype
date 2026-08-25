@@ -16,7 +16,7 @@ The prototype source of truth lives under `docs/prototype/`.
 
 Read those documents before implementing features.
 
-## Run the prototype through Pass 2
+## Run the prototype through Pass 3
 
 Requirements: Node.js 22+ and npm.
 
@@ -33,7 +33,10 @@ Implemented routes:
 - `/orders/:orderId` — route-aware Order Workspace tabs
 - `/orders/:orderId/arkas` — exception-first HET review and approval
 - `/orders/:orderId/siplah` — SIPLah checkpoints and document workflow
-- `/pipeline` and `/vendor-batches` — safe navigation placeholders for deferred task cards
+- `/vendor-batches/new` — eligible-order selection and derived vendor recap preview
+- `/vendor-batches` — operational Vendor Batch list
+- `/vendor-batches/:batchId` — explicit lifecycle, XLSX recap, reminder, and targeted arrival actions
+- `/pipeline` — safe navigation placeholder for a deferred task card
 
 Prototype state is versioned and persisted under the `jpa-operations-prototype` localStorage key. Use **Reset Demo Data** in the app shell to restore all canonical scenarios.
 
@@ -50,4 +53,4 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-This branch intentionally stops after TASK 08 / Review Gate 2. Vendor Batch, distribution, and finance execution remain deferred to TASK 09+.
+This branch intentionally stops after TASK 10 / Review Gate 3. Detailed distribution and finance execution remain deferred to TASK 11+.

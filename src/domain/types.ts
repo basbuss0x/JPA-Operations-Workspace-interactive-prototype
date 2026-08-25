@@ -212,14 +212,26 @@ export interface Order {
   timeline: TimelineEvent[]
 }
 
+export interface VendorBatchTimelineEvent {
+  id: string
+  occurredAt: string
+  title: string
+  detail: string
+}
+
 export interface VendorBatch {
   id: string
   status: VendorBatchStatus
   createdAt: string
+  recapGeneratedAt: string | null
+  recapGenerationCount: number
   sentAt: string | null
+  confirmedAt: string | null
+  processingStartedAt: string | null
   arrivedAt: string | null
   followUpDueAt: string | null
   orderIds: string[]
+  timeline: VendorBatchTimelineEvent[]
 }
 
 export interface PrototypeData {
@@ -279,6 +291,25 @@ export interface AggregatedVendorItem {
     schoolName: string
     quantity: number
   }>
+}
+
+export interface VendorSchoolBreakdown {
+  orderId: string
+  schoolName: string
+  siplahOrderNumber: string
+  items: Array<{
+    productCode: string
+    title: string
+    quantity: number
+  }>
+}
+
+export interface VendorRecap {
+  aggregatedItems: AggregatedVendorItem[]
+  schoolBreakdown: VendorSchoolBreakdown[]
+  schoolCount: number
+  distinctProductCount: number
+  totalQuantity: number
 }
 
 export const lifecycleLabels: Record<LifecycleStage, string> = {
