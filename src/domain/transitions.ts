@@ -4,12 +4,15 @@ import { buildVendorRecap, calculateBenefitAmount, isVendorBatchEligible } from 
 import { createSiplahDocuments, getSiplahDocument } from './siplah'
 import type {
   ArkasExtractionResult,
+  BenefitPaymentInput,
+  FulfillmentRefreshResult,
   GoodsArrivalAllocation,
   NextActionKind,
   NextActionOverride,
   Order,
   ProductMasterItem,
   PrototypeData,
+  SchoolPaymentInput,
   SiplahDocumentKind,
   TimelineEvent,
   VendorBatch,
@@ -97,20 +100,27 @@ export function createOrderFromExtraction(
       arrivalType: 'NONE',
       preDeliveryCheckCompleted: false,
       checkedAt: null,
+      checkNote: null,
       acceptedBySchoolAt: null,
     },
     fulfillment: {
+      trackerOrderId: `KBT-${input.id.replace('ORD-', '')}`,
+      trackerUrl: `https://kelengkapan.demo.local/orders/${input.id}`,
       orderedQty,
       deliveredQty: 0,
       remainingQty: orderedQty,
       problemCount: 0,
       progressPercent: 0,
       lastUpdated: null,
+      lastSyncAttemptAt: null,
       syncStatus: 'OK',
+      syncMessage: null,
     },
     schoolPayment: {
       status: 'UNPAID',
       schoolPaidAmount: 0,
+      deductionAmount: 0,
+      netReceivedAmount: 0,
       paidAt: null,
       method: null,
       evidenceName: null,
@@ -123,8 +133,11 @@ export function createOrderFromExtraction(
       eligibleAt: null,
       paidAt: null,
       method: null,
+      recipientType: null,
       recipient: null,
+      accountReference: null,
       proofName: null,
+      schoolConfirmedAt: null,
     },
     supplierPayment: {
       status: 'NOT_SET',
@@ -787,6 +800,7 @@ export function recordGoodsArrival(
           arrivalType: allocation.arrivalType,
           preDeliveryCheckCompleted: false,
           checkedAt: null,
+          checkNote: null,
         },
       },
       allocation.arrivalType === 'FULL' ? 'Barang tiba di JPA' : 'Sebagian barang tiba di JPA',
@@ -822,16 +836,165 @@ export function recordGoodsArrival(
   }
 }
 
-export function recordSchoolPayment(
+export function completePreDeliveryCheck(
   order: Order,
-  input: { amount: number; method: string; evidenceName: string },
+  note: string,
   now?: Date,
 ): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
+  if (order.goods.arrivalType === 'NONE' || order.goods.arrivedAt === null) {
+    throw new Error('Barang harus dicatat tiba melalui alokasi Vendor Batch sebelum diperiksa.')
+  }
+  if (order.goods.preDeliveryCheckCompleted) throw new Error('Pemeriksaan barang sudah selesai.')
+  const checkedAt = timestamp(now)
+  return withEvent(
+    {
+      ...order,
+      stage: order.fulfillment.remainingQty > 0 ? 'DISTRIBUTION' : order.stage,
+      goods: {
+        ...order.goods,
+        preDeliveryCheckCompleted: true,
+        checkedAt,
+        checkNote: note.trim() || null,
+      },
+    },
+    'Pemeriksaan barang selesai',
+    note.trim()
+      ? `Barang siap dilanjutkan ke distribusi. Catatan: ${note.trim()}`
+      : 'Barang siap dilanjutkan ke distribusi; status pengantaran sekolah tidak berubah.',
+    now,
+  )
+}
+
+export function refreshFulfillmentSummary(
+  order: Order,
+  result: FulfillmentRefreshResult,
+  now?: Date,
+): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat disinkronkan.')
+  const attemptedAt = timestamp(now)
+  if (result.status !== 'OK') {
+    return withEvent(
+      {
+        ...order,
+        fulfillment: {
+          ...order.fulfillment,
+          lastSyncAttemptAt: attemptedAt,
+          syncStatus: result.status,
+          syncMessage: result.message,
+        },
+      },
+      result.status === 'ERROR' ? 'Sinkronisasi tracker gagal' : 'Ringkasan tracker masih stale',
+      `${result.message} Nilai cache terakhir dipertahankan.`,
+      now,
+    )
+  }
+  const { orderedQty } = order.fulfillment
+  if (!Number.isInteger(result.deliveredQty) || result.deliveredQty < 0 || result.deliveredQty > orderedQty) {
+    throw new Error('Delivered quantity tracker harus berada antara 0 dan ordered quantity.')
+  }
+  if (!Number.isInteger(result.problemCount) || result.problemCount < 0) {
+    throw new Error('Problem count tracker tidak valid.')
+  }
+  const remainingQty = orderedQty - result.deliveredQty
+  const progressPercent = orderedQty === 0 ? 100 : Math.round((result.deliveredQty / orderedQty) * 100)
+  return withEvent(
+    {
+      ...order,
+      stage:
+        order.goods.preDeliveryCheckCompleted && ['VENDOR', 'GOODS_ARRIVED'].includes(order.stage)
+          ? 'DISTRIBUTION'
+          : order.stage,
+      fulfillment: {
+        ...order.fulfillment,
+        deliveredQty: result.deliveredQty,
+        remainingQty,
+        problemCount: result.problemCount,
+        progressPercent,
+        lastUpdated: attemptedAt,
+        lastSyncAttemptAt: attemptedAt,
+        syncStatus: 'OK',
+        syncMessage: 'Cache diperbarui dari snapshot tracker demo.',
+      },
+    },
+    'Ringkasan fulfillment diperbarui',
+    `${result.deliveredQty} dari ${orderedQty} buku sudah diterima sekolah; tersisa ${remainingQty}.`,
+    now,
+  )
+}
+
+export function recordSchoolAcceptance(order: Order, now?: Date): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
+  if (!order.goods.preDeliveryCheckCompleted) {
+    throw new Error('Pemeriksaan barang harus selesai sebelum penerimaan sekolah.')
+  }
+  if (order.goods.arrivalType !== 'FULL') {
+    throw new Error('Kedatangan vendor untuk order harus FULL sebelum penerimaan sekolah.')
+  }
+  if (
+    order.fulfillment.deliveredQty !== order.fulfillment.orderedQty ||
+    order.fulfillment.remainingQty !== 0 ||
+    order.fulfillment.progressPercent !== 100
+  ) {
+    throw new Error('Penerimaan sekolah hanya dapat dicatat setelah fulfillment seluruh order 100%.')
+  }
+  if (order.goods.acceptedBySchoolAt) throw new Error('Penerimaan sekolah sudah dicatat.')
+  const acceptedAt = timestamp(now)
+  return withEvent(
+    {
+      ...order,
+      stage: 'COMPLETION',
+      goods: { ...order.goods, acceptedBySchoolAt: acceptedAt },
+    },
+    'Barang diterima sekolah',
+    'Sekolah mengonfirmasi penerimaan seluruh order; checkpoint lain tetap independen.',
+    now,
+  )
+}
+
+export function setPaymentFollowUpReminder(
+  order: Order,
+  followUpDueAt: string | null,
+  now?: Date,
+): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
+  if (order.schoolPayment.status === 'LUNAS') {
+    throw new Error('Reminder pembayaran tidak relevan setelah LUNAS.')
+  }
+  if (followUpDueAt !== null && !Number.isFinite(new Date(followUpDueAt).getTime())) {
+    throw new Error('Tanggal follow-up pembayaran tidak valid.')
+  }
+  return withEvent(
+    { ...order, schoolPayment: { ...order.schoolPayment, followUpDueAt } },
+    followUpDueAt ? 'Reminder pembayaran diatur' : 'Reminder pembayaran dihapus',
+    followUpDueAt ? `Follow-up pembayaran dijadwalkan pada ${followUpDueAt}.` : 'Tidak ada reminder pembayaran aktif.',
+    now,
+  )
+}
+
+export function recordSchoolPayment(
+  order: Order,
+  input: SchoolPaymentInput,
+  now?: Date,
+): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
   if (order.schoolPayment.status === 'LUNAS') {
     throw new Error('Pembayaran sekolah sudah dikonfirmasi LUNAS.')
   }
-  if (order.finalInvoiceAmount === null || input.amount !== order.finalInvoiceAmount) {
-    throw new Error('Pembayaran penuh harus sesuai finalInvoiceAmount yang sudah ditetapkan.')
+  if (order.finalInvoiceAmount === null || input.schoolPaidAmount !== order.finalInvoiceAmount) {
+    throw new Error('Pembayaran gross harus sama dengan finalInvoiceAmount untuk konfirmasi LUNAS.')
+  }
+  if (!Number.isFinite(input.deductionAmount) || input.deductionAmount < 0) {
+    throw new Error('Deduction amount tidak valid.')
+  }
+  const expectedNet = input.schoolPaidAmount - input.deductionAmount
+  if (expectedNet < 0) throw new Error('Deduction amount tidak boleh melebihi pembayaran gross.')
+  const netReceivedAmount = input.netReceivedAmount ?? expectedNet
+  if (netReceivedAmount !== expectedNet) {
+    throw new Error('Net received harus sama dengan schoolPaidAmount dikurangi deductionAmount.')
+  }
+  if (!input.method.trim() || !input.evidenceName.trim()) {
+    throw new Error('Metode dan bukti pembayaran wajib dicatat.')
   }
   const paidAt = timestamp(now)
   const benefitObligation = Math.round(order.finalInvoiceAmount * 0.1)
@@ -839,10 +1002,12 @@ export function recordSchoolPayment(
     ...order,
     schoolPayment: {
       status: 'LUNAS',
-      schoolPaidAmount: input.amount,
+      schoolPaidAmount: input.schoolPaidAmount,
+      deductionAmount: input.deductionAmount,
+      netReceivedAmount,
       paidAt,
-      method: input.method,
-      evidenceName: input.evidenceName,
+      method: input.method.trim(),
+      evidenceName: input.evidenceName.trim(),
       followUpDueAt: null,
     },
     benefit:
@@ -856,25 +1021,38 @@ export function recordSchoolPayment(
             eligibleAt: paidAt,
           },
   }
-  return withEvent(
+  const paid = withEvent(
     next,
     'Pembayaran sekolah LUNAS',
-    `Pembayaran penuh tercatat. Benefit ${benefitObligation.toLocaleString('id-ID')} dibekukan dan kini eligible.`,
+    `Gross Rp${input.schoolPaidAmount.toLocaleString('id-ID')}; potongan Rp${input.deductionAmount.toLocaleString('id-ID')}; net diterima Rp${netReceivedAmount.toLocaleString('id-ID')}.`,
+    now,
+  )
+  return withEvent(
+    paid,
+    'Benefit menjadi eligible',
+    `Kewajiban 10% dibekukan dari invoice gross menjadi Rp${benefitObligation.toLocaleString('id-ID')}.`,
     now,
   )
 }
 
 export function recordBenefitPayment(
   order: Order,
-  input: { amount: number; method: string; recipient: string; proofName: string },
+  input: BenefitPaymentInput,
   now?: Date,
 ): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
   if (order.schoolPayment.status !== 'LUNAS' || order.benefit.status !== 'ELIGIBLE') {
     throw new Error('Benefit hanya dapat dibayar setelah pembayaran sekolah LUNAS.')
   }
   const obligationAmount = calculateBenefitAmount(order)
   if (obligationAmount === null || input.amount !== obligationAmount) {
-    throw new Error('Nominal benefit harus sesuai kewajiban yang dibekukan saat LUNAS.')
+    throw new Error('Nominal benefit harus sesuai kewajiban yang dibekukan dan dibayar penuh.')
+  }
+  if (!input.recipient.trim() || !input.proofName.trim()) {
+    throw new Error('Penerima dan bukti benefit wajib dicatat.')
+  }
+  if (input.method === 'TRANSFER' && !input.accountReference.trim()) {
+    throw new Error('Referensi rekening/transfer wajib untuk benefit TRANSFER.')
   }
   const paidAt = timestamp(now)
   const next: Order = {
@@ -886,14 +1064,37 @@ export function recordBenefitPayment(
       eligibleAt: order.benefit.eligibleAt,
       paidAt,
       method: input.method,
-      recipient: input.recipient,
-      proofName: input.proofName,
+      recipientType: input.recipientType,
+      recipient: input.recipient.trim(),
+      accountReference: input.accountReference.trim() || null,
+      proofName: input.proofName.trim(),
+      schoolConfirmedAt: null,
     },
   }
-  return withEvent(next, 'Benefit dibayar', `Benefit dibayar kepada ${input.recipient}.`, now)
+  return withEvent(
+    next,
+    'Benefit dibayar',
+    `Benefit Rp${obligationAmount.toLocaleString('id-ID')} dibayar penuh kepada ${input.recipient.trim()} melalui ${input.method}.`,
+    now,
+  )
+}
+
+export function recordBenefitSchoolConfirmation(order: Order, now?: Date): Order {
+  if (order.benefit.status !== 'PAID') {
+    throw new Error('Konfirmasi sekolah hanya dapat dicatat setelah benefit dibayar.')
+  }
+  if (order.benefit.schoolConfirmedAt) throw new Error('Konfirmasi sekolah sudah dicatat.')
+  const confirmedAt = timestamp(now)
+  return withEvent(
+    { ...order, benefit: { ...order.benefit, schoolConfirmedAt: confirmedAt } },
+    'Penerimaan benefit dikonfirmasi sekolah',
+    'Metadata konfirmasi dicatat tanpa memengaruhi syarat penutupan order.',
+    now,
+  )
 }
 
 export function closeOrder(order: Order, now?: Date): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order sudah CLOSED.')
   if (!isCompletionReady(order)) throw new Error('Order belum memenuhi syarat penutupan.')
   return withEvent({ ...order, stage: 'CLOSED' }, 'Order ditutup', 'Semua checkpoint sisi JPA selesai.', now)
 }
@@ -934,6 +1135,7 @@ export function snoozeOrderAction(
 }
 
 export function addTimelineNote(order: Order, note: string, now?: Date): Order {
+  if (!note.trim()) throw new Error('Catatan tidak boleh kosong.')
   const occurredAt = timestamp(now)
   return {
     ...order,
@@ -944,7 +1146,7 @@ export function addTimelineNote(order: Order, note: string, now?: Date): Order {
         occurredAt,
         type: 'NOTE',
         title: 'Catatan operator',
-        detail: note,
+        detail: note.trim(),
       },
       ...order.timeline,
     ],

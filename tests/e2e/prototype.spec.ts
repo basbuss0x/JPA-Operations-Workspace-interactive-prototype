@@ -111,7 +111,7 @@ test('snooze, override, persistence, and reset mutate real local state', async (
   await expect.poll(async () => page.evaluate(() => {
     const stored = JSON.parse(window.localStorage.getItem('jpa-operations-prototype') ?? '{}') as { version?: number }
     return stored.version
-  })).toBe(5)
+  })).toBe(6)
 
   await page.evaluate(() => {
     window.localStorage.setItem(
@@ -276,6 +276,110 @@ test('Pass 3 Vendor Batch journey preserves recap, lifecycle, reminders, arrival
   await expect(page.getByText('PARTIALLY ARRIVED', { exact: true }).first()).toBeVisible()
 })
 
+test('Pass 4 goods check and tracker cache journey preserves whole-order semantics', async ({ page }, testInfo) => {
+  await page.goto('/orders/ORD-2026-239?tab=distribution')
+  await expect(page.getByRole('heading', { name: 'Barang dari Vendor' })).toBeVisible()
+  await expect(page.getByText('Arrival FULL')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Cek barang dan jadwalkan pengantaran' })).toBeVisible()
+  await expect(page.getByText('186', { exact: true }).last()).toBeVisible()
+  await expect(page.getByText('0', { exact: true }).last()).toBeVisible()
+
+  await page.getByRole('button', { name: 'Cek barang selesai' }).click()
+  await page.getByLabel('Catatan singkat').fill('Jumlah kardus sesuai surat jalan.')
+  await page.getByRole('button', { name: 'Cek barang selesai' }).last().click()
+  await expect(page.getByRole('heading', { name: /Lanjutkan pemenuhan · sisa 186 buku/ })).toBeVisible()
+  await expect(page.getByText('Belum diterima')).toBeVisible()
+
+  await page.getByLabel('Hasil simulasi refresh').selectOption('ERROR')
+  await page.getByRole('button', { name: 'Refresh summary' }).click()
+  await expect(page.getByText('Sync ERROR')).toBeVisible()
+  await expect(page.getByText('186', { exact: true }).last()).toBeVisible()
+
+  await page.getByLabel('Hasil simulasi refresh').selectOption('SUCCESS')
+  await page.getByRole('button', { name: 'Refresh summary' }).click()
+  await expect(page.getByText('Sync OK')).toBeVisible()
+  await expect(page.getByText('120', { exact: true })).toBeVisible()
+  await expect(page.getByText('66', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /Lanjutkan pemenuhan · sisa 66 buku/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: /Open Kelengkapan Tracker/ })).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('desktop-distribution-tracker.png'), fullPage: true })
+
+  await page.reload()
+  await expect(page.getByText('120', { exact: true })).toBeVisible()
+  await expect(page.getByText('66', { exact: true })).toBeVisible()
+  await page.getByRole('tab', { name: 'Timeline' }).click()
+  await expect(page.getByText('Pemeriksaan barang selesai')).toBeVisible()
+  await expect(page.getByText('Sinkronisasi tracker gagal')).toBeVisible()
+  await expect(page.getByText('Ringkasan fulfillment diperbarui')).toBeVisible()
+  await page.getByLabel('Add Note').fill('Sekolah meminta pengantaran bertahap.')
+  await page.getByRole('button', { name: 'Simpan catatan' }).click()
+  await expect(page.getByText('Sekolah meminta pengantaran bertahap.')).toBeVisible()
+  await expect(page.getByText('NOTE').first()).toBeVisible()
+})
+
+test('Pass 4 payment and benefit use gross invoice despite settlement deduction', async ({ page }, testInfo) => {
+  await page.goto('/orders/ORD-2026-068?tab=finance')
+  await expect(page.getByRole('heading', { name: 'Pembayaran sekolah' })).toBeVisible()
+  await expect(page.getByText('UNPAID', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText(/Rp\s?24\.350\.000/).first()).toBeVisible()
+
+  await page.getByLabel('Tanggal follow-up').fill('2026-12-10')
+  await page.getByRole('button', { name: 'Simpan reminder' }).click()
+  await expect(page.getByRole('button', { name: 'Clear reminder' })).toBeVisible()
+  await page.getByRole('button', { name: 'Clear reminder' }).click()
+
+  await page.getByRole('button', { name: 'Confirm LUNAS' }).first().click()
+  await page.getByLabel('Potongan settlement').fill('350000')
+  await expect(page.getByText(/Rp\s?24\.000\.000/)).toBeVisible()
+  await page.getByRole('button', { name: 'Confirm LUNAS' }).last().click()
+  await expect(page.getByText('LUNAS', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('ELIGIBLE', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText(/Rp\s?2\.435\.000/).first()).toBeVisible()
+  await expect(page.getByText(/Rp\s?350\.000/)).toBeVisible()
+  await expect(page.getByText(/Rp\s?24\.000\.000/)).toBeVisible()
+
+  await page.getByRole('button', { name: 'Bayar benefit penuh' }).click()
+  await page.getByRole('button', { name: 'Catat benefit PAID' }).click()
+  await expect(page.getByText('PAID', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('Siap ditutup')).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('desktop-payment-benefit.png'), fullPage: true })
+
+  await page.reload()
+  await expect(page.getByText('LUNAS', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('PAID', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText(/Rp\s?2\.435\.000/).first()).toBeVisible()
+})
+
+test('Pass 4 preserves parallel fulfillment and benefit obligations', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: /Lanjutkan pemenuhan · sisa 67 buku/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /Bayar benefit Rp\s?2\.764\.000/ })).toBeVisible()
+
+  await page.goto('/orders/ORD-2026-065')
+  await expect(page.getByRole('heading', { name: /Lanjutkan pemenuhan · sisa 67 buku/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Aksi lain & yang disnooze' })).toBeVisible()
+  await expect(page.getByText(/Bayar benefit Rp\s?2\.764\.000/)).toBeVisible()
+  await expect(page.getByText('Sisa 67 buku')).toBeVisible()
+})
+
+test('Pass 4 explicitly closes a ready order while supplier remains PARTIAL', async ({ page }) => {
+  await page.goto('/orders/ORD-2026-068?tab=finance')
+  await page.getByRole('button', { name: 'Confirm LUNAS' }).first().click()
+  await page.getByRole('button', { name: 'Confirm LUNAS' }).last().click()
+  await page.getByRole('button', { name: 'Bayar benefit penuh' }).click()
+  await page.getByRole('button', { name: 'Catat benefit PAID' }).click()
+
+  await expect(page.getByText('PARTIAL', { exact: true }).last()).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Tutup order' })).toBeVisible()
+  await expect(page.getByText('Siap ditutup')).toBeVisible()
+  await page.getByRole('button', { name: 'Tutup order' }).click()
+  await expect(page.getByText('Selesai', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Tidak ada tindakan aktif' })).toBeVisible()
+  await page.reload()
+  await expect(page.getByText('Selesai', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Confirm LUNAS' })).toHaveCount(0)
+})
+
 test.describe('mobile operations layout', () => {
   test.use({ viewport: { width: 390, height: 844 } })
 
@@ -289,7 +393,7 @@ test.describe('mobile operations layout', () => {
     await page.screenshot({ path: testInfo.outputPath('mobile-orders.png'), fullPage: true })
 
     await page.goto('/orders/ORD-2026-065?tab=distribution')
-    await expect(page.getByRole('heading', { name: 'Barang & Distribusi' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Barang dari Vendor' })).toBeVisible()
     await expect(page.getByText('Sisa 67 buku')).toBeVisible()
     await page.screenshot({ path: testInfo.outputPath('mobile-order-workspace.png'), fullPage: true })
   })
@@ -310,6 +414,26 @@ test.describe('mobile operations layout', () => {
     await expect(page.getByRole('heading', { name: 'Vendor follow-up reminder' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Record partial/full arrival' })).toBeVisible()
     await page.screenshot({ path: testInfo.outputPath('mobile-vendor-detail.png'), fullPage: true })
+  })
+
+  test('keeps Pass 4 critical goods, finance, benefit, and note actions usable', async ({ page }, testInfo) => {
+    await page.goto('/orders/ORD-2026-239?tab=distribution')
+    await expect(page.getByRole('button', { name: 'Cek barang selesai' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Refresh summary' })).toBeVisible()
+    await expect(page.getByRole('link', { name: /Open Kelengkapan Tracker/ })).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath('mobile-distribution.png'), fullPage: true })
+
+    await page.goto('/orders/ORD-2026-068?tab=finance')
+    await expect(page.getByRole('button', { name: 'Confirm LUNAS' })).toBeVisible()
+    await page.getByRole('button', { name: 'Confirm LUNAS' }).click()
+    await expect(page.getByLabel('Gross dibayar sekolah')).toBeVisible()
+    await expect(page.getByLabel('Potongan settlement')).toBeVisible()
+    await expect(page.getByRole('dialog').getByText('Net diterima JPA')).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath('mobile-payment-modal.png'), fullPage: true })
+    await page.getByRole('button', { name: 'Batal' }).click()
+
+    await page.getByRole('tab', { name: 'Timeline' }).click()
+    await expect(page.getByLabel('Add Note')).toBeVisible()
   })
 
   test('renders Pass 2 workflows as stacked mobile operations', async ({ page }, testInfo) => {

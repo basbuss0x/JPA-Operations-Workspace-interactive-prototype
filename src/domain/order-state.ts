@@ -43,9 +43,18 @@ export function isSiplahAdminComplete(order: Order): boolean {
   )
 }
 
+export function isReadyToDeliver(order: Order): boolean {
+  return (
+    order.goods.arrivedAt !== null &&
+    order.goods.arrivalType !== 'NONE' &&
+    order.goods.preDeliveryCheckCompleted
+  )
+}
+
 export function isCompletionReady(order: Order): boolean {
   return (
     order.fulfillment.progressPercent === 100 &&
+    order.fulfillment.deliveredQty === order.fulfillment.orderedQty &&
     order.fulfillment.remainingQty === 0 &&
     order.goods.acceptedBySchoolAt !== null &&
     isSiplahAdminComplete(order) &&

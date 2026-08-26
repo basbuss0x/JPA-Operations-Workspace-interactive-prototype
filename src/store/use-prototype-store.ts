@@ -6,17 +6,25 @@ import {
   addTimelineNote,
   attachSiplahDocument,
   chooseHetProduct,
+  closeOrder,
+  completePreDeliveryCheck,
   confirmHetReview,
   createOrderFromExtraction,
   createVendorBatch as createVendorBatchTransition,
   generateVendorRecap as generateVendorRecapTransition,
   manualOverrideHetItem,
   markSiplahDocumentAvailable,
+  recordBenefitPayment,
+  recordBenefitSchoolConfirmation,
   recordGoodsArrival,
+  recordSchoolAcceptance,
+  recordSchoolPayment,
   recordSiplahOrder,
+  refreshFulfillmentSummary,
   reopenHetReview,
   sendSiplahDocumentToSchool,
   setNextActionOverride,
+  setPaymentFollowUpReminder,
   setSiplahAccessAvailable,
   setVendorFollowUpReminder,
   setSiplahOrderPlaced,
@@ -26,12 +34,15 @@ import {
   type CreateOrderFromExtractionInput,
 } from '../domain/transitions'
 import type {
+  BenefitPaymentInput,
+  FulfillmentRefreshResult,
   GoodsArrivalAllocation,
   NextActionKind,
   NextActionOverride,
   Order,
   ProductMasterItem,
   PrototypeData,
+  SchoolPaymentInput,
   SiplahDocumentKind,
 } from '../domain/types'
 import { migratePrototypeState } from './migrate-prototype-state'
@@ -67,6 +78,14 @@ interface PrototypeStore extends PrototypeData {
   startVendorProcessing: (batchId: string) => void
   setVendorFollowUp: (batchId: string, dueAt: string | null) => void
   recordVendorGoodsArrival: (batchId: string, allocations: GoodsArrivalAllocation[]) => void
+  completeGoodsCheck: (orderId: string, note: string) => void
+  refreshTrackerSummary: (orderId: string, result: FulfillmentRefreshResult) => void
+  recordSchoolAcceptance: (orderId: string) => void
+  confirmSchoolPayment: (orderId: string, input: SchoolPaymentInput) => void
+  setPaymentFollowUp: (orderId: string, dueAt: string | null) => void
+  paySchoolBenefit: (orderId: string, input: BenefitPaymentInput) => void
+  confirmBenefitReceipt: (orderId: string) => void
+  closeSchoolOrder: (orderId: string) => void
   snoozeNextAction: (
     orderIds: string[],
     actionKind: NextActionKind,
@@ -206,6 +225,52 @@ export const usePrototypeStore = create<PrototypeStore>()(
         set((state) => setVendorFollowUpReminder(state, batchId, dueAt)),
       recordVendorGoodsArrival: (batchId, allocations) =>
         set((state) => recordGoodsArrival(state, batchId, allocations)),
+      completeGoodsCheck: (orderId, note) =>
+        set((state) => ({
+          orders: updateOrders(state.orders, [orderId], (order) =>
+            completePreDeliveryCheck(order, note),
+          ),
+        })),
+      refreshTrackerSummary: (orderId, result) =>
+        set((state) => ({
+          orders: updateOrders(state.orders, [orderId], (order) =>
+            refreshFulfillmentSummary(order, result),
+          ),
+        })),
+      recordSchoolAcceptance: (orderId) =>
+        set((state) => ({
+          orders: updateOrders(state.orders, [orderId], (order) =>
+            recordSchoolAcceptance(order),
+          ),
+        })),
+      confirmSchoolPayment: (orderId, input) =>
+        set((state) => ({
+          orders: updateOrders(state.orders, [orderId], (order) =>
+            recordSchoolPayment(order, input),
+          ),
+        })),
+      setPaymentFollowUp: (orderId, dueAt) =>
+        set((state) => ({
+          orders: updateOrders(state.orders, [orderId], (order) =>
+            setPaymentFollowUpReminder(order, dueAt),
+          ),
+        })),
+      paySchoolBenefit: (orderId, input) =>
+        set((state) => ({
+          orders: updateOrders(state.orders, [orderId], (order) =>
+            recordBenefitPayment(order, input),
+          ),
+        })),
+      confirmBenefitReceipt: (orderId) =>
+        set((state) => ({
+          orders: updateOrders(state.orders, [orderId], (order) =>
+            recordBenefitSchoolConfirmation(order),
+          ),
+        })),
+      closeSchoolOrder: (orderId) =>
+        set((state) => ({
+          orders: updateOrders(state.orders, [orderId], (order) => closeOrder(order)),
+        })),
       snoozeNextAction: (orderIds, actionKind, until) =>
         set((state) => ({
           orders: updateOrders(state.orders, orderIds, (order) =>

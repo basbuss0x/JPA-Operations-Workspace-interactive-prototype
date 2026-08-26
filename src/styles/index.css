@@ -3614,3 +3614,193 @@ p {
     flex-direction: column;
   }
 }
+
+/* Pass 4 · Fulfillment, payment, benefit, and context recovery */
+.distribution-workspace,
+.finance-workspace {
+  display: grid;
+  gap: 18px;
+}
+
+.distribution-arrival-panel,
+.tracker-summary-panel,
+.payment-operations-panel,
+.benefit-operations-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.tracker-identity,
+.school-acceptance-panel,
+.payment-reminder-panel,
+.closure-panel,
+.timeline-note-form {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.tracker-identity {
+  padding: 12px 14px;
+  background: var(--forest-50);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.tracker-identity > div {
+  display: grid;
+  gap: 3px;
+}
+
+.tracker-identity span,
+.fulfillment-quantity-grid span,
+.derived-settlement span,
+.derived-settlement small {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.fulfillment-quantity-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.fulfillment-quantity-grid > div {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+  background: var(--surface-muted);
+}
+
+.fulfillment-quantity-grid strong {
+  font-size: 1.2rem;
+}
+
+.fulfillment-quantity-grid .is-warning {
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+
+.tracker-semantics-note {
+  margin: 0;
+  padding: 11px 13px;
+  color: #5b665f;
+  background: #fbfcfb;
+  border-left: 3px solid var(--line-strong);
+  font-size: 0.72rem;
+}
+
+.tracker-refresh-controls {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.tracker-refresh-controls .form-field {
+  min-width: 260px;
+}
+
+.school-acceptance-panel > div:first-child p,
+.payment-reminder-panel > div:first-child p,
+.closure-panel > div:first-child p {
+  margin-bottom: 0;
+}
+
+.school-acceptance-panel__action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.payment-reminder-panel .inline-action-form {
+  align-items: end;
+  margin: 0;
+}
+
+.payment-operations-panel > .button,
+.benefit-operations-panel > .button,
+.distribution-arrival-panel > .button,
+.distribution-arrival-panel > .button + .button {
+  justify-self: start;
+}
+
+.derived-settlement {
+  display: grid;
+  gap: 4px;
+  padding: 13px 14px;
+  background: var(--forest-50);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.derived-settlement strong {
+  color: var(--forest-900);
+  font-size: 1.15rem;
+}
+
+.closure-panel {
+  color: var(--forest-900);
+  background: var(--success-bg);
+  border-color: #bcdcc9;
+}
+
+.timeline-note-form {
+  align-items: end;
+  margin-bottom: 22px;
+  padding: 14px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.timeline-note-form .form-field {
+  flex: 1;
+}
+
+@media (max-width: 680px) {
+  .tracker-identity,
+  .school-acceptance-panel,
+  .payment-reminder-panel,
+  .closure-panel,
+  .timeline-note-form,
+  .tracker-refresh-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .fulfillment-quantity-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .tracker-refresh-controls .form-field,
+  .tracker-refresh-controls .button,
+  .school-acceptance-panel__action,
+  .school-acceptance-panel__action .button,
+  .payment-reminder-panel .inline-action-form,
+  .payment-reminder-panel .inline-action-form .form-field,
+  .payment-reminder-panel .button,
+  .closure-panel .button,
+  .timeline-note-form .button {
+    width: 100%;
+  }
+
+  .school-acceptance-panel__action {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tracker-identity .button,
+  .distribution-arrival-panel > .button,
+  .payment-operations-panel > .button,
+  .benefit-operations-panel > .button {
+    width: 100%;
+  }
+}

@@ -14,6 +14,7 @@ import { getHetExceptionCount, isSiplahReadyForVendor } from './order-state'
 export {
   getHetExceptionCount,
   isCompletionReady,
+  isReadyToDeliver,
   isSiplahAdminComplete,
   isSiplahReadyForVendor,
 } from './order-state'

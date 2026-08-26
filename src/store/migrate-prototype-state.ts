@@ -193,15 +193,51 @@ function normalizeCurrentOrder(order: Order): Order {
     order.benefit.status === 'ELIGIBLE' ||
     order.benefit.status === 'PAID'
   const benefitBase = benefitFrozen ? order.benefit.baseAmount ?? finalInvoiceAmount : null
+  const legacyGoods = order.goods as Omit<Order['goods'], 'checkNote'> & { checkNote?: string | null }
+  const legacyFulfillment = order.fulfillment as Omit<
+    Order['fulfillment'],
+    'trackerOrderId' | 'trackerUrl' | 'lastSyncAttemptAt' | 'syncMessage'
+  > & Partial<Pick<
+    Order['fulfillment'],
+    'trackerOrderId' | 'trackerUrl' | 'lastSyncAttemptAt' | 'syncMessage'
+  >>
+  const legacyPayment = order.schoolPayment as Omit<
+    SchoolPayment,
+    'deductionAmount' | 'netReceivedAmount'
+  > & Partial<Pick<SchoolPayment, 'deductionAmount' | 'netReceivedAmount'>>
+  const legacyBenefit = order.benefit as Omit<
+    SchoolBenefit,
+    'recipientType' | 'accountReference' | 'schoolConfirmedAt'
+  > & Partial<Pick<SchoolBenefit, 'recipientType' | 'accountReference' | 'schoolConfirmedAt'>>
+  const deductionAmount = legacyPayment.deductionAmount ?? 0
   return {
     ...order,
     hetReviewedAmount: order.het.status === 'APPROVED' ? order.hetReviewedAmount : null,
     finalInvoiceAmount,
+    goods: { ...legacyGoods, checkNote: legacyGoods.checkNote ?? null },
+    fulfillment: {
+      ...legacyFulfillment,
+      trackerOrderId: legacyFulfillment.trackerOrderId ?? `KBT-${order.id.replace('ORD-', '')}`,
+      trackerUrl: legacyFulfillment.trackerUrl ?? `https://kelengkapan.demo.local/orders/${order.id}`,
+      lastSyncAttemptAt: legacyFulfillment.lastSyncAttemptAt ?? legacyFulfillment.lastUpdated,
+      syncMessage: legacyFulfillment.syncMessage ?? null,
+    },
+    schoolPayment: {
+      ...legacyPayment,
+      deductionAmount,
+      netReceivedAmount: legacyPayment.netReceivedAmount ?? legacyPayment.schoolPaidAmount - deductionAmount,
+    },
     benefit: {
-      ...order.benefit,
+      ...legacyBenefit,
       baseAmount: benefitBase,
       obligationAmount:
-        benefitBase === null ? null : order.benefit.obligationAmount ?? Math.round(benefitBase * 0.1),
+        benefitBase === null ? null : legacyBenefit.obligationAmount ?? Math.round(benefitBase * 0.1),
+      method: legacyBenefit.method === null
+        ? null
+        : legacyBenefit.method === 'CASH' ? 'CASH' : 'TRANSFER',
+      recipientType: legacyBenefit.recipientType ?? (legacyBenefit.status === 'PAID' ? 'SCHOOL_OFFICIAL' : null),
+      accountReference: legacyBenefit.accountReference ?? null,
+      schoolConfirmedAt: legacyBenefit.schoolConfirmedAt ?? null,
     },
   }
 }
@@ -247,6 +283,8 @@ function migrateOrderV1(order: LegacyOrderV1): Order {
     schoolPayment: {
       status: order.schoolPayment.status,
       schoolPaidAmount: order.schoolPayment.amount,
+      deductionAmount: 0,
+      netReceivedAmount: order.schoolPayment.amount,
       paidAt: order.schoolPayment.paidAt,
       method: order.schoolPayment.method,
       evidenceName: order.schoolPayment.evidenceName,
@@ -315,12 +353,13 @@ export function migratePrototypeState(
     persistedVersion === 1 ||
     persistedVersion === 2 ||
     persistedVersion === 3 ||
-    persistedVersion === 4
+    persistedVersion === 4 ||
+    persistedVersion === 5
   ) {
     try {
       return {
         version: DEMO_STATE_VERSION,
-        orders: persistedVersion === 4
+        orders: persistedVersion === 4 || persistedVersion === 5
           ? Object.fromEntries(
               Object.entries(persistedState.orders as Record<string, Order>).map(([orderId, order]) => [
                 orderId,

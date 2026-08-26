@@ -29,6 +29,8 @@ export type SchoolPaymentStatus = 'UNPAID' | 'LUNAS'
 export type BenefitStatus = 'NOT_ELIGIBLE' | 'ELIGIBLE' | 'PAID'
 export type SupplierPaymentStatus = 'NOT_SET' | 'UNPAID' | 'PARTIAL' | 'PAID'
 export type SyncStatus = 'OK' | 'STALE' | 'ERROR'
+export type BenefitPaymentMethod = 'CASH' | 'TRANSFER'
+export type BenefitRecipientType = 'SCHOOL_OFFICIAL' | 'INDIVIDUAL'
 
 export interface School {
   id: string
@@ -125,22 +127,40 @@ export interface GoodsState {
   arrivalType: 'NONE' | 'PARTIAL' | 'FULL'
   preDeliveryCheckCompleted: boolean
   checkedAt: string | null
+  checkNote: string | null
   acceptedBySchoolAt: string | null
 }
 
 export interface FulfillmentSummary {
+  trackerOrderId: string
+  trackerUrl: string
   orderedQty: number
   deliveredQty: number
   remainingQty: number
   problemCount: number
   progressPercent: number
   lastUpdated: string | null
+  lastSyncAttemptAt: string | null
   syncStatus: SyncStatus
+  syncMessage: string | null
 }
+
+export type FulfillmentRefreshResult =
+  | {
+      status: 'OK'
+      deliveredQty: number
+      problemCount: number
+    }
+  | {
+      status: 'STALE' | 'ERROR'
+      message: string
+    }
 
 export interface SchoolPayment {
   status: SchoolPaymentStatus
   schoolPaidAmount: number
+  deductionAmount: number
+  netReceivedAmount: number
   paidAt: string | null
   method: string | null
   evidenceName: string | null
@@ -153,9 +173,12 @@ export interface SchoolBenefit {
   obligationAmount: number | null
   eligibleAt: string | null
   paidAt: string | null
-  method: string | null
+  method: BenefitPaymentMethod | null
+  recipientType: BenefitRecipientType | null
   recipient: string | null
+  accountReference: string | null
   proofName: string | null
+  schoolConfirmedAt: string | null
 }
 
 export interface SupplierPaymentSummary {
@@ -274,6 +297,23 @@ export interface ActionDerivationContext {
 export interface GoodsArrivalAllocation {
   orderId: string
   arrivalType: 'PARTIAL' | 'FULL'
+}
+
+export interface SchoolPaymentInput {
+  schoolPaidAmount: number
+  deductionAmount: number
+  netReceivedAmount?: number
+  method: string
+  evidenceName: string
+}
+
+export interface BenefitPaymentInput {
+  amount: number
+  method: BenefitPaymentMethod
+  recipientType: BenefitRecipientType
+  recipient: string
+  accountReference: string
+  proofName: string
 }
 
 export interface WorkQueueItem extends NextAction {

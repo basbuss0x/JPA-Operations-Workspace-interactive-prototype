@@ -29,19 +29,19 @@ describe('derived domain selectors', () => {
 
   it('keeps ARKAS, HET-reviewed, final invoice, and school-paid amounts separate', () => {
     const reviewOrder = canonicalOrder('ORD-2026-030')
-    const paidOrder = canonicalOrder('ORD-2026-068')
+    const paidOrder = canonicalOrder('ORD-2026-065')
 
     expect(reviewOrder.arkasBudgetAmount).toBe(18_940_000)
     expect(reviewOrder.hetReviewedAmount).toBeNull()
     expect(reviewOrder.finalInvoiceAmount).toBeNull()
-    expect(paidOrder.finalInvoiceAmount).toBe(24_350_000)
-    expect(paidOrder.schoolPayment.schoolPaidAmount).toBe(24_350_000)
+    expect(paidOrder.finalInvoiceAmount).toBe(27_640_000)
+    expect(paidOrder.schoolPayment.schoolPaidAmount).toBe(27_640_000)
   })
 
   it('uses a frozen benefit obligation after school payment is LUNAS', () => {
-    const order = canonicalOrder('ORD-2026-068')
-    expect(order.benefit.baseAmount).toBe(24_350_000)
-    expect(calculateBenefitAmount(order)).toBe(2_435_000)
+    const order = canonicalOrder('ORD-2026-065')
+    expect(order.benefit.baseAmount).toBe(27_640_000)
+    expect(calculateBenefitAmount(order)).toBe(2_764_000)
     expect(isBenefitEligible(order)).toBe(true)
   })
 

@@ -74,6 +74,8 @@ describe('important transitions', () => {
     expect(target?.stage).toBe('GOODS_ARRIVED')
     expect(target?.goods.arrivalType).toBe('FULL')
     expect(target?.goods.preDeliveryCheckCompleted).toBe(false)
+    expect(target?.timeline[0]?.title).toBe('Barang tiba di JPA')
+    expect(target?.timeline[0]?.detail).toContain('VB-2026-010')
     expect(sibling).toEqual(siblingBefore)
     expect(sibling?.goods.arrivedAt).toBeNull()
 
@@ -91,7 +93,7 @@ describe('important transitions', () => {
     if (order.finalInvoiceAmount === null) throw new Error('Expected finalized invoice')
     const paid = recordSchoolPayment(
       order,
-      { amount: order.finalInvoiceAmount, method: 'Transfer bank', evidenceName: 'payment.pdf' },
+      { schoolPaidAmount: order.finalInvoiceAmount, deductionAmount: 0, method: 'Transfer bank', evidenceName: 'payment.pdf' },
       now,
     )
 
@@ -108,7 +110,7 @@ describe('important transitions', () => {
     if (order.finalInvoiceAmount === null) throw new Error('Expected finalized invoice')
     const paid = recordSchoolPayment(
       order,
-      { amount: order.finalInvoiceAmount, method: 'Transfer bank', evidenceName: 'payment.pdf' },
+      { schoolPaidAmount: order.finalInvoiceAmount, deductionAmount: 0, method: 'Transfer bank', evidenceName: 'payment.pdf' },
       now,
     )
     const frozenAmount = paid.benefit.obligationAmount
@@ -125,8 +127,10 @@ describe('important transitions', () => {
       changedInvoice,
       {
         amount: frozenAmount,
-        method: 'Transfer bank',
+        method: 'TRANSFER',
+        recipientType: 'SCHOOL_OFFICIAL',
         recipient: 'Bendahara sekolah',
+        accountReference: 'BANK-001',
         proofName: 'benefit.pdf',
       },
       now,
@@ -138,16 +142,24 @@ describe('important transitions', () => {
 
   it('recomputes primary action after a real benefit transition', () => {
     const order = canonicalOrder('ORD-2026-068')
-    const before = deriveActionCandidates(order, { vendorBatch: null }, now)
+    if (order.finalInvoiceAmount === null) throw new Error('Expected final invoice')
+    const schoolPaid = recordSchoolPayment(
+      order,
+      { schoolPaidAmount: order.finalInvoiceAmount, deductionAmount: 0, method: 'Transfer bank', evidenceName: 'payment.pdf' },
+      now,
+    )
+    const before = deriveActionCandidates(schoolPaid, { vendorBatch: null }, now)
     expect(derivePrimaryNextAction(before)?.kind).toBe('PAY_BENEFIT')
-    const obligationAmount = calculateBenefitAmount(order)
+    const obligationAmount = calculateBenefitAmount(schoolPaid)
     if (obligationAmount === null) throw new Error('Expected benefit obligation')
     const paid = recordBenefitPayment(
-      order,
+      schoolPaid,
       {
         amount: obligationAmount,
-        method: 'Transfer bank',
+        method: 'TRANSFER',
+        recipientType: 'SCHOOL_OFFICIAL',
         recipient: 'Kepala sekolah',
+        accountReference: 'BANK-002',
         proofName: 'benefit.pdf',
       },
       now,

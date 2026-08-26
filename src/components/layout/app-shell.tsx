@@ -53,7 +53,7 @@ export function AppShell() {
         <Navigation />
         <div className="sidebar__foot">
           <span className="prototype-dot" />
-          Demo lokal · Pass 3
+          Demo lokal · Pass 4
         </div>
       </aside>
 

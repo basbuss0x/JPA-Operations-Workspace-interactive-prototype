@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom'
 import {
-  calculateBenefitAmount,
   getHetExceptionCount,
   isSiplahAdminComplete,
   isSiplahReadyForVendor,
@@ -11,6 +10,9 @@ import { formatCurrency, formatDate, formatDateTime } from '../../utils/format'
 import { ExceptionIndicator } from '../../components/ui/exception-indicator'
 import { StatusChip } from '../../components/ui/status-chip'
 import { OrderStateSummary } from '../../components/orders/order-state-summary'
+import { DistributionWorkspace } from '../distribution/distribution-workspace'
+import { FinanceWorkspace } from '../finance/finance-workspace'
+import { OrderTimeline } from '../timeline/order-timeline'
 
 export type OrderTab = 'overview' | 'arkas' | 'siplah' | 'vendor' | 'distribution' | 'finance' | 'timeline'
 
@@ -294,113 +296,16 @@ function VendorTab({ order, batch }: { order: Order; batch: VendorBatch | null }
   )
 }
 
-function DistributionTab({ order }: { order: Order }) {
-  const fulfillment = order.fulfillment
-  return (
-    <section className="workspace-panel focused-workflow">
-      <div className="panel-heading">
-        <div>
-          <h2>Barang & Distribusi</h2>
-          <p>Ringkasan dari Kelengkapan Buku Tracker; detail judul tetap dikelola di aplikasi tersebut.</p>
-        </div>
-        <StatusChip tone={fulfillment.progressPercent === 100 ? 'success' : order.goods.arrivedAt ? 'warning' : 'neutral'}>
-          {fulfillment.progressPercent}% terpenuhi
-        </StatusChip>
-      </div>
-      <div className="progress-block">
-        <div className="progress-block__head"><span>Progres distribusi</span><strong>{fulfillment.deliveredQty} / {fulfillment.orderedQty} buku</strong></div>
-        <div className="progress-track"><span style={{ width: `${fulfillment.progressPercent}%` }} /></div>
-      </div>
-      <div className="detail-list">
-        <DetailRow label="Barang tiba di JPA" value={formatDate(order.goods.arrivedAt)} />
-        <DetailRow label="Pemeriksaan pra-kirim" value={<StatusChip tone={order.goods.preDeliveryCheckCompleted ? 'success' : 'warning'}>{order.goods.preDeliveryCheckCompleted ? 'Selesai' : 'Belum dilakukan'}</StatusChip>} />
-        <DetailRow label="Sisa pengantaran" value={`${fulfillment.remainingQty} buku`} />
-        <DetailRow label="Masalah dari tracker" value={`${fulfillment.problemCount} masalah`} />
-        <DetailRow label="Sinkron terakhir" value={`${formatDate(fulfillment.lastUpdated)} · ${fulfillment.syncStatus}`} />
-      </div>
-      <button className="button button--secondary button--md" type="button" disabled>
-        Buka Kelengkapan Tracker · simulasi Pass 4
-      </button>
-    </section>
-  )
+function DistributionTab({ order, batch }: { order: Order; batch: VendorBatch | null }) {
+  return <DistributionWorkspace order={order} batch={batch} />
 }
 
 function FinanceTab({ order }: { order: Order }) {
-  const benefitAmount = calculateBenefitAmount(order)
-  return (
-    <div className="workspace-grid">
-      <section className="workspace-panel">
-        <div className="panel-heading">
-          <div><h2>Pembayaran sekolah</h2><p>Operasional, bukan ledger accounting.</p></div>
-          <StatusChip tone={order.schoolPayment.status === 'LUNAS' ? 'success' : 'warning'}>{order.schoolPayment.status}</StatusChip>
-        </div>
-        <div className="detail-list">
-          <DetailRow label="Anggaran ARKAS" value={formatCurrency(order.arkasBudgetAmount)} />
-          <DetailRow label="Hasil review HET" value={order.hetReviewedAmount === null ? '—' : formatCurrency(order.hetReviewedAmount)} />
-          <DetailRow label="Invoice final" value={order.finalInvoiceAmount === null ? 'Belum ditetapkan' : formatCurrency(order.finalInvoiceAmount)} />
-          <DetailRow label="Diterima sekolah" value={formatCurrency(order.schoolPayment.schoolPaidAmount)} />
-          <DetailRow label="Tanggal" value={formatDate(order.schoolPayment.paidAt)} />
-          <DetailRow label="Metode" value={order.schoolPayment.method ?? '—'} />
-          <DetailRow label="Bukti" value={order.schoolPayment.evidenceName ?? 'Belum ada'} />
-        </div>
-      </section>
-      <section className="workspace-panel">
-        <div className="panel-heading">
-          <div><h2>Benefit sekolah</h2><p>Tepat 10% dari invoice final, dibayar satu kali penuh.</p></div>
-          <StatusChip tone={order.benefit.status === 'PAID' ? 'success' : order.benefit.status === 'ELIGIBLE' ? 'warning' : 'neutral'}>{order.benefit.status.replaceAll('_', ' ')}</StatusChip>
-        </div>
-        <div className="benefit-amount">
-          <span>Nominal benefit {order.benefit.obligationAmount === null ? '(belum dibekukan)' : '(dibekukan saat LUNAS)'}</span>
-          <strong>{benefitAmount === null ? '—' : formatCurrency(benefitAmount)}</strong>
-        </div>
-        <div className="detail-list">
-          <DetailRow label="Eligible sejak" value={formatDate(order.benefit.eligibleAt)} />
-          <DetailRow label="Dibayar" value={formatDate(order.benefit.paidAt)} />
-          <DetailRow label="Penerima" value={order.benefit.recipient ?? '—'} />
-        </div>
-        {order.benefit.status === 'ELIGIBLE' ? (
-          <div className="deferred-action-note">
-            <strong>Benefit belum otomatis dibayar.</strong>
-            <span>Form pencatatan pembayaran benefit akan diuji pada TASK 12.</span>
-          </div>
-        ) : null}
-      </section>
-      <section className="workspace-panel workspace-panel--wide supplier-summary">
-        <div><span>Kewajiban supplier</span><strong>{order.supplierPayment.obligationAmount === null ? 'Belum ditetapkan' : formatCurrency(order.supplierPayment.obligationAmount)}</strong></div>
-        <div><span>Sudah dibayar</span><strong>{formatCurrency(order.supplierPayment.paidAmount)}</strong></div>
-        <div><span>Status</span><StatusChip tone={order.supplierPayment.status === 'PAID' ? 'success' : 'neutral'}>{order.supplierPayment.status}</StatusChip></div>
-        <p>Kewajiban supplier tidak boleh diasumsikan dari ARKAS; outstanding juga tidak memblokir penutupan order sisi JPA.</p>
-      </section>
-    </div>
-  )
+  return <FinanceWorkspace order={order} />
 }
 
 function TimelineTab({ order }: { order: Order }) {
-  const events = [...order.timeline].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
-  return (
-    <section className="workspace-panel focused-workflow">
-      <div className="panel-heading">
-        <div><h2>Timeline order</h2><p>Riwayat otomatis dan catatan operator untuk memulihkan konteks.</p></div>
-        <StatusChip>{events.length} event</StatusChip>
-      </div>
-      <ol className="timeline-list">
-        {events.map((event) => (
-          <li key={event.id}>
-            <div className={event.type === 'NOTE' ? 'timeline-list__marker is-note' : 'timeline-list__marker'} />
-            <div className="timeline-list__content">
-              <div><strong>{event.title}</strong><StatusChip tone={event.type === 'NOTE' ? 'info' : 'neutral'}>{event.type === 'NOTE' ? 'Catatan' : 'Otomatis'}</StatusChip></div>
-              <p>{event.detail}</p>
-              <time>{formatDateTime(event.occurredAt)}</time>
-            </div>
-          </li>
-        ))}
-      </ol>
-      <div className="deferred-action-note">
-        <strong>Timeline event sudah dibuat oleh transition engine.</strong>
-        <span>Form catatan/reminder lengkap sengaja ditunda ke TASK 15.</span>
-      </div>
-    </section>
-  )
+  return <OrderTimeline order={order} />
 }
 
 export function OrderTabContent({
@@ -422,7 +327,7 @@ export function OrderTabContent({
     case 'vendor':
       return <VendorTab order={order} batch={batch} />
     case 'distribution':
-      return <DistributionTab order={order} />
+      return <DistributionTab order={order} batch={batch} />
     case 'finance':
       return <FinanceTab order={order} />
     case 'timeline':

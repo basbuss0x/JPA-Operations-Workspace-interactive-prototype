@@ -14,7 +14,7 @@ import type {
   TimelineEvent,
 } from '../domain/types'
 
-export const DEMO_STATE_VERSION = 5
+export const DEMO_STATE_VERSION = 6
 
 const DATE = {
   created: '2026-01-12T08:00:00.000Z',
@@ -90,7 +90,17 @@ const noGoods: GoodsState = {
   arrivalType: 'NONE',
   preDeliveryCheckCompleted: false,
   checkedAt: null,
+  checkNote: null,
   acceptedBySchoolAt: null,
+}
+
+function trackerIdentity(orderId: string) {
+  return {
+    trackerOrderId: `KBT-${orderId.replace('ORD-', '')}`,
+    trackerUrl: `https://kelengkapan.demo.local/orders/${orderId}`,
+    lastSyncAttemptAt: null,
+    syncMessage: null,
+  }
 }
 
 function event(id: string, title: string, detail: string, occurredAt = DATE.recent): TimelineEvent {
@@ -113,6 +123,7 @@ interface MakeOrderOptions {
   fulfillment?: Order['fulfillment']
   paymentStatus?: SchoolPaymentStatus
   schoolPaidAmount?: number
+  deductionAmount?: number
   paymentDate?: string | null
   benefitStatus?: BenefitStatus
   benefitDate?: string | null
@@ -160,6 +171,7 @@ function makeOrder(options: MakeOrderOptions): Order {
     vendorBatchId: options.vendorBatchId ?? null,
     goods: options.goods ?? { ...noGoods },
     fulfillment: options.fulfillment ?? {
+      ...trackerIdentity(options.id),
       orderedQty,
       deliveredQty: 0,
       remainingQty: orderedQty,
@@ -171,6 +183,8 @@ function makeOrder(options: MakeOrderOptions): Order {
     schoolPayment: {
       status: options.paymentStatus ?? 'UNPAID',
       schoolPaidAmount,
+      deductionAmount: options.deductionAmount ?? 0,
+      netReceivedAmount: schoolPaidAmount - (options.deductionAmount ?? 0),
       paidAt: options.paymentDate ?? null,
       method: options.paymentStatus === 'LUNAS' ? 'Transfer bank' : null,
       evidenceName: options.paymentStatus === 'LUNAS' ? `Bukti-${options.id}.pdf` : null,
@@ -188,9 +202,12 @@ function makeOrder(options: MakeOrderOptions): Order {
           ? (options.paymentDate ?? DATE.recent)
           : null,
       paidAt: options.benefitDate ?? null,
-      method: benefitStatus === 'PAID' ? 'Transfer bank' : null,
+      method: benefitStatus === 'PAID' ? 'TRANSFER' : null,
+      recipientType: benefitStatus === 'PAID' ? 'SCHOOL_OFFICIAL' : null,
       recipient: benefitStatus === 'PAID' ? 'Penerima resmi sekolah' : null,
+      accountReference: benefitStatus === 'PAID' ? `REF-${options.id}` : null,
       proofName: benefitStatus === 'PAID' ? `Benefit-${options.id}.pdf` : null,
+      schoolConfirmedAt: null,
     },
     supplierPayment: {
       status: options.supplierStatus ?? 'NOT_SET',
@@ -344,6 +361,7 @@ function canonicalOrders(): Order[] {
         arrivalType: 'FULL',
         preDeliveryCheckCompleted: false,
         checkedAt: null,
+        checkNote: null,
         acceptedBySchoolAt: null,
       },
       timeline: [
@@ -366,9 +384,11 @@ function canonicalOrders(): Order[] {
         arrivalType: 'FULL',
         preDeliveryCheckCompleted: true,
         checkedAt: '2026-02-04T10:00:00.000Z',
+        checkNote: 'Barang siap dilanjutkan ke distribusi bertahap.',
         acceptedBySchoolAt: null,
       },
       fulfillment: {
+        ...trackerIdentity('ORD-2026-065'),
         orderedQty: 314,
         deliveredQty: 247,
         remainingQty: 67,
@@ -380,8 +400,7 @@ function canonicalOrders(): Order[] {
       paymentStatus: 'LUNAS',
       schoolPaidAmount: 27_640_000,
       paymentDate: '2026-02-10T03:00:00.000Z',
-      benefitStatus: 'PAID',
-      benefitDate: '2026-02-12T03:00:00.000Z',
+      benefitStatus: 'ELIGIBLE',
       supplierStatus: 'PARTIAL',
       supplierPaid: 12_000_000,
     }),
@@ -401,9 +420,11 @@ function canonicalOrders(): Order[] {
         arrivalType: 'FULL',
         preDeliveryCheckCompleted: true,
         checkedAt: '2026-01-28T08:30:00.000Z',
+        checkNote: 'Barang lengkap dan sudah dicek sebelum pengantaran.',
         acceptedBySchoolAt: '2026-02-03T03:00:00.000Z',
       },
       fulfillment: {
+        ...trackerIdentity('ORD-2026-068'),
         orderedQty: 275,
         deliveredQty: 275,
         remainingQty: 0,
@@ -412,12 +433,13 @@ function canonicalOrders(): Order[] {
         lastUpdated: '2026-02-03T03:00:00.000Z',
         syncStatus: 'OK',
       },
-      paymentStatus: 'LUNAS',
-      paymentDate: '2026-02-18T04:00:00.000Z',
-      benefitStatus: 'ELIGIBLE',
+      paymentStatus: 'UNPAID',
+      benefitStatus: 'NOT_ELIGIBLE',
+      supplierStatus: 'PARTIAL',
+      supplierPaid: 5_000_000,
       timeline: [
         event('068-1', 'Barang diterima sekolah', 'Kelengkapan 100% dan diterima sekolah.'),
-        event('068-2', 'Pembayaran sekolah LUNAS', 'Benefit 10% menjadi eligible.', DATE.today),
+        event('068-2', 'Menunggu pembayaran sekolah', 'Fulfillment selesai; pembayaran tetap checkpoint independen.', DATE.today),
       ],
     }),
     makeOrder({
@@ -436,9 +458,11 @@ function canonicalOrders(): Order[] {
         arrivalType: 'FULL',
         preDeliveryCheckCompleted: true,
         checkedAt: '2025-12-01T07:00:00.000Z',
+        checkNote: 'Barang lengkap.',
         acceptedBySchoolAt: '2025-12-06T02:00:00.000Z',
       },
       fulfillment: {
+        ...trackerIdentity('ORD-2025-999'),
         orderedQty: 200,
         deliveredQty: 200,
         remainingQty: 0,

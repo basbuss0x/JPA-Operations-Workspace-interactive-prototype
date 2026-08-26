@@ -57,10 +57,10 @@ function toLegacyOrderV1(order: Order): Record<string, unknown> {
 describe('prototype local state migration', () => {
   it('migrates v1 amounts, benefit freeze, SIPLah, and controls into current schema', () => {
     const canonical = createCanonicalDemoData()
-    const source = canonical.orders['ORD-2026-068']
+    const source = canonical.orders['ORD-2026-065']
     if (!source) throw new Error('Missing source order')
     const legacyOrder = toLegacyOrderV1(source)
-    legacyOrder.schoolName = 'Migrated SDN 68'
+    legacyOrder.schoolName = 'Migrated SDN 65'
 
     const migrated = migratePrototypeState(
       {
@@ -73,13 +73,13 @@ describe('prototype local state migration', () => {
     const order = migrated.orders[source.id]
 
     expect(migrated.version).toBe(DEMO_STATE_VERSION)
-    expect(order?.schoolName).toBe('Migrated SDN 68')
-    expect(order?.arkasBudgetAmount).toBe(24_350_000)
-    expect(order?.hetReviewedAmount).toBe(24_350_000)
-    expect(order?.finalInvoiceAmount).toBe(24_350_000)
-    expect(order?.schoolPayment.schoolPaidAmount).toBe(24_350_000)
-    expect(order?.benefit.baseAmount).toBe(24_350_000)
-    expect(order?.benefit.obligationAmount).toBe(2_435_000)
+    expect(order?.schoolName).toBe('Migrated SDN 65')
+    expect(order?.arkasBudgetAmount).toBe(27_640_000)
+    expect(order?.hetReviewedAmount).toBe(27_640_000)
+    expect(order?.finalInvoiceAmount).toBe(27_640_000)
+    expect(order?.schoolPayment.schoolPaidAmount).toBe(27_640_000)
+    expect(order?.benefit.baseAmount).toBe(27_640_000)
+    expect(order?.benefit.obligationAmount).toBe(2_764_000)
     expect(order?.nextActionControl.controlsByActionKey).toEqual({})
     expect(order?.siplah).not.toHaveProperty('adminCompleted')
     expect(order?.siplah.documents).toHaveLength(5)
@@ -161,6 +161,41 @@ describe('prototype local state migration', () => {
     expect(batch?.recapGenerationCount).toBe(1)
     expect(batch?.timeline).toEqual([])
     expect(batch?.followUpDueAt).toBeNull()
+  })
+
+  it('migrates Pass 3 v5 orders with tracker, settlement, and benefit metadata defaults', () => {
+    const canonical = createCanonicalDemoData()
+    const source = canonical.orders['ORD-2026-065']
+    if (!source) throw new Error('Missing Pass 3 source order')
+    const legacy = structuredClone(source) as unknown as Record<string, unknown>
+    const goods = legacy.goods as Record<string, unknown>
+    const fulfillment = legacy.fulfillment as Record<string, unknown>
+    const payment = legacy.schoolPayment as Record<string, unknown>
+    const benefit = legacy.benefit as Record<string, unknown>
+    delete goods.checkNote
+    delete fulfillment.trackerOrderId
+    delete fulfillment.trackerUrl
+    delete fulfillment.lastSyncAttemptAt
+    delete fulfillment.syncMessage
+    delete payment.deductionAmount
+    delete payment.netReceivedAmount
+    delete benefit.recipientType
+    delete benefit.accountReference
+    delete benefit.schoolConfirmedAt
+
+    const migrated = migratePrototypeState(
+      { version: 5, orders: { [source.id]: legacy }, vendorBatches: {} },
+      5,
+    )
+    const order = migrated.orders[source.id]
+
+    expect(migrated.version).toBe(DEMO_STATE_VERSION)
+    expect(order?.fulfillment.trackerOrderId).toBe('KBT-2026-065')
+    expect(order?.fulfillment.remainingQty).toBe(67)
+    expect(order?.schoolPayment.deductionAmount).toBe(0)
+    expect(order?.schoolPayment.netReceivedAmount).toBe(27_640_000)
+    expect(order?.benefit.recipientType).toBeNull()
+    expect(order?.benefit.schoolConfirmedAt).toBeNull()
   })
 
   it('resets unknown or malformed schema versions to canonical demo data', () => {

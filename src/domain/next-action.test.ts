@@ -33,7 +33,7 @@ const expectedPrimaryKinds: Record<string, NextActionKind | null> = {
   'ORD-2026-049': null,
   'ORD-2026-239': 'CHECK_GOODS',
   'ORD-2026-065': 'CONTINUE_FULFILLMENT',
-  'ORD-2026-068': 'PAY_BENEFIT',
+  'ORD-2026-068': null,
   'ORD-2025-999': null,
 }
 
