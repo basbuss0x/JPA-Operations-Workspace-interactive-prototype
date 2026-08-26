@@ -4,6 +4,10 @@ import { buildVendorRecap, getVendorBatchOrders } from '../domain/selectors'
 import type { GoodsArrivalAllocation } from '../domain/types'
 import { usePrototypeStore } from '../store/use-prototype-store'
 import { formatDate, formatDateTime } from '../utils/format'
+import {
+  calendarDateToReminderTimestamp,
+  reminderTimestampToCalendarDate,
+} from '../utils/reminder-date'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { FormField } from '../components/ui/form-field'
@@ -33,7 +37,9 @@ export function VendorBatchDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
-  const [reminderDate, setReminderDate] = useState(() => batch?.followUpDueAt?.slice(0, 10) ?? '')
+  const [reminderDate, setReminderDate] = useState(() =>
+    reminderTimestampToCalendarDate(batch?.followUpDueAt ?? null),
+  )
   const [arrivalOpen, setArrivalOpen] = useState(false)
   const [arrivalChoices, setArrivalChoices] = useState<Record<string, ArrivalChoice>>({})
 
@@ -93,7 +99,7 @@ export function VendorBatchDetailPage() {
 
   const saveReminder = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const dueAt = reminderDate ? `${reminderDate}T08:00:00.000Z` : null
+    const dueAt = reminderDate ? calendarDateToReminderTimestamp(reminderDate) : null
     runAction(
       () => setVendorFollowUp(batch.id, dueAt),
       dueAt ? 'Reminder follow-up vendor disimpan.' : 'Reminder follow-up vendor dihapus.',

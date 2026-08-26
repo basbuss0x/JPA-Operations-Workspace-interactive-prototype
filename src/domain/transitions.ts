@@ -896,6 +896,23 @@ export function refreshFulfillmentSummary(
   if (!Number.isInteger(result.problemCount) || result.problemCount < 0) {
     throw new Error('Problem count tracker tidak valid.')
   }
+  if (result.deliveredQty < order.fulfillment.deliveredQty) {
+    const syncMessage = `Konflik snapshot tracker: delivered kumulatif masuk ${result.deliveredQty}, lebih rendah dari cache ${order.fulfillment.deliveredQty}. Cache terakhir dipertahankan.`
+    return withEvent(
+      {
+        ...order,
+        fulfillment: {
+          ...order.fulfillment,
+          lastSyncAttemptAt: attemptedAt,
+          syncStatus: 'STALE',
+          syncMessage,
+        },
+      },
+      'Konflik snapshot tracker',
+      syncMessage,
+      now,
+    )
+  }
   const remainingQty = orderedQty - result.deliveredQty
   const progressPercent = orderedQty === 0 ? 100 : Math.round((result.deliveredQty / orderedQty) * 100)
   return withEvent(
@@ -1066,7 +1083,7 @@ export function recordBenefitPayment(
       method: input.method,
       recipientType: input.recipientType,
       recipient: input.recipient.trim(),
-      accountReference: input.accountReference.trim() || null,
+      accountReference: input.method === 'TRANSFER' ? input.accountReference.trim() : null,
       proofName: input.proofName.trim(),
       schoolConfirmedAt: null,
     },
@@ -1080,6 +1097,7 @@ export function recordBenefitPayment(
 }
 
 export function recordBenefitSchoolConfirmation(order: Order, now?: Date): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
   if (order.benefit.status !== 'PAID') {
     throw new Error('Konfirmasi sekolah hanya dapat dicatat setelah benefit dibayar.')
   }

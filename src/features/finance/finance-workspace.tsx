@@ -3,6 +3,10 @@ import { calculateBenefitAmount, isCompletionReady } from '../../domain/selector
 import type { BenefitPaymentMethod, BenefitRecipientType, Order } from '../../domain/types'
 import { usePrototypeStore } from '../../store/use-prototype-store'
 import { formatCurrency, formatDate } from '../../utils/format'
+import {
+  calendarDateToReminderTimestamp,
+  reminderTimestampToCalendarDate,
+} from '../../utils/reminder-date'
 import { Button } from '../../components/ui/button'
 import { FormField } from '../../components/ui/form-field'
 import { Modal } from '../../components/ui/modal'
@@ -29,7 +33,9 @@ export function FinanceWorkspace({ order }: { order: Order }) {
   const [deductionAmount, setDeductionAmount] = useState('0')
   const [paymentMethod, setPaymentMethod] = useState('SIPLah settlement')
   const [paymentEvidence, setPaymentEvidence] = useState(`Bukti-${order.id}.pdf`)
-  const [followUpDate, setFollowUpDate] = useState(order.schoolPayment.followUpDueAt?.slice(0, 10) ?? '')
+  const [followUpDate, setFollowUpDate] = useState(() =>
+    reminderTimestampToCalendarDate(order.schoolPayment.followUpDueAt),
+  )
   const [benefitMethod, setBenefitMethod] = useState<BenefitPaymentMethod>('TRANSFER')
   const [recipientType, setRecipientType] = useState<BenefitRecipientType>('SCHOOL_OFFICIAL')
   const [recipient, setRecipient] = useState('Bendahara sekolah')
@@ -91,7 +97,7 @@ export function FinanceWorkspace({ order }: { order: Order }) {
 
   const saveReminder = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const dueAt = followUpDate ? `${followUpDate}T08:00:00.000Z` : null
+    const dueAt = followUpDate ? calendarDateToReminderTimestamp(followUpDate) : null
     run(
       () => setPaymentFollowUp(order.id, dueAt),
       dueAt ? 'Reminder pembayaran disimpan.' : 'Reminder pembayaran dihapus.',
@@ -204,7 +210,11 @@ export function FinanceWorkspace({ order }: { order: Order }) {
       >
         <form id="benefit-payment-form" className="form-stack" onSubmit={submitBenefit}>
           <div className="derived-settlement"><span>Benefit obligation</span><strong>{benefitAmount === null ? '—' : formatCurrency(benefitAmount)}</strong><small>10% invoice final gross</small></div>
-          <FormField label="Metode" htmlFor="benefit-method"><select id="benefit-method" value={benefitMethod} onChange={(event) => setBenefitMethod(event.target.value as BenefitPaymentMethod)}><option value="TRANSFER">TRANSFER</option><option value="CASH">CASH</option></select></FormField>
+          <FormField label="Metode" htmlFor="benefit-method"><select id="benefit-method" value={benefitMethod} onChange={(event) => {
+            const method = event.target.value as BenefitPaymentMethod
+            setBenefitMethod(method)
+            if (method === 'CASH') setAccountReference('')
+          }}><option value="TRANSFER">TRANSFER</option><option value="CASH">CASH</option></select></FormField>
           <FormField label="Tipe penerima" htmlFor="benefit-recipient-type"><select id="benefit-recipient-type" value={recipientType} onChange={(event) => setRecipientType(event.target.value as BenefitRecipientType)}><option value="SCHOOL_OFFICIAL">SCHOOL_OFFICIAL</option><option value="INDIVIDUAL">INDIVIDUAL</option></select></FormField>
           <FormField label="Nama penerima" htmlFor="benefit-recipient"><input id="benefit-recipient" value={recipient} onChange={(event) => setRecipient(event.target.value)} required /></FormField>
           {benefitMethod === 'TRANSFER' ? <FormField label="Rekening / referensi transfer" htmlFor="benefit-account-reference"><input id="benefit-account-reference" value={accountReference} onChange={(event) => setAccountReference(event.target.value)} required /></FormField> : null}

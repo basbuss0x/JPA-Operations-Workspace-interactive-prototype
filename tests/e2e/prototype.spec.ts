@@ -339,6 +339,11 @@ test('Pass 4 payment and benefit use gross invoice despite settlement deduction'
   await expect(page.getByText(/Rp\s?24\.000\.000/)).toBeVisible()
 
   await page.getByRole('button', { name: 'Bayar benefit penuh' }).click()
+  await page.getByLabel('Metode').last().selectOption('CASH')
+  await expect(page.getByLabel('Rekening / referensi transfer')).toHaveCount(0)
+  await page.getByLabel('Metode').last().selectOption('TRANSFER')
+  await expect(page.getByLabel('Rekening / referensi transfer')).toHaveValue('')
+  await page.getByLabel('Rekening / referensi transfer').fill('BANK-068')
   await page.getByRole('button', { name: 'Catat benefit PAID' }).click()
   await expect(page.getByText('PAID', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('Siap ditutup')).toBeVisible()

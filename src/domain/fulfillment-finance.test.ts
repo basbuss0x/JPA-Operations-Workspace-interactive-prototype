@@ -132,7 +132,7 @@ describe('goods check and cached fulfillment boundary', () => {
     expect(failed.fulfillment.syncStatus).toBe('ERROR')
   })
 
-  it('updates and derives the cached summary on successful refresh', () => {
+  it('updates and derives the cached summary when cumulative delivery increases from 247 to 300', () => {
     const order = canonicalOrder('ORD-2026-065')
     const refreshed = refreshFulfillmentSummary(
       order,
@@ -152,6 +152,36 @@ describe('goods check and cached fulfillment boundary', () => {
     })
   })
 
+  it('preserves the last known good cumulative cache when an OK snapshot regresses from 300 to 247', () => {
+    const order = canonicalOrder('ORD-2026-065')
+    const cached = refreshFulfillmentSummary(
+      order,
+      { status: 'OK', deliveredQty: 300, problemCount: 1 },
+      new Date('2026-02-20T08:00:00.000Z'),
+    )
+    const before = structuredClone(cached.fulfillment)
+    const conflicted = refreshFulfillmentSummary(
+      cached,
+      { status: 'OK', deliveredQty: 247, problemCount: 9 },
+      now,
+    )
+
+    expect(conflicted.fulfillment).toMatchObject({
+      orderedQty: 314,
+      deliveredQty: 300,
+      remainingQty: 14,
+      problemCount: 1,
+      progressPercent: 96,
+      lastUpdated: before.lastUpdated,
+      lastSyncAttemptAt: now.toISOString(),
+      syncStatus: 'STALE',
+    })
+    expect(conflicted.fulfillment.syncMessage).toMatch(/247.*300|300.*247/)
+    expect(conflicted.timeline).toHaveLength(cached.timeline.length + 1)
+    expect(conflicted.timeline[0]?.title).toMatch(/konflik/i)
+    expect(conflicted.timeline[0]?.detail).toMatch(/cache terakhir dipertahankan/i)
+  })
+
   it('does not regress a completion-stage order when refreshing its independent tracker cache', () => {
     const order = canonicalOrder('ORD-2026-068')
     const refreshed = refreshFulfillmentSummary(
@@ -160,6 +190,25 @@ describe('goods check and cached fulfillment boundary', () => {
       now,
     )
     expect(refreshed.stage).toBe('COMPLETION')
+  })
+
+  it('cannot silently make a 100% fulfilled order incomplete from an older snapshot', () => {
+    const completed = canonicalOrder('ORD-2026-068')
+    const conflicted = refreshFulfillmentSummary(
+      completed,
+      { status: 'OK', deliveredQty: 247, problemCount: 3 },
+      now,
+    )
+
+    expect(conflicted.stage).toBe('COMPLETION')
+    expect(conflicted.fulfillment).toMatchObject({
+      deliveredQty: 275,
+      remainingQty: 0,
+      progressPercent: 100,
+      problemCount: 0,
+      syncStatus: 'STALE',
+    })
+    expect(conflicted.fulfillment.syncMessage).toMatch(/247.*275|275.*247/)
   })
 
   it('cannot use school acceptance to manufacture fulfillment completion', () => {
@@ -233,7 +282,64 @@ describe('school payment gross, deduction, and net semantics', () => {
     expect(changed.benefit.obligationAmount).toBe(2_435_000)
   })
 
-  it('rejects partial benefit and records one exact full payment', () => {
+  it('requires and stores a trimmed transfer reference for an exact full benefit payment', () => {
+    const paid = payCanonical68()
+    if (paid.benefit.obligationAmount === null) throw new Error('Missing benefit obligation')
+    const benefitPaid = recordBenefitPayment(paid, {
+      amount: paid.benefit.obligationAmount,
+      method: 'TRANSFER',
+      recipientType: 'SCHOOL_OFFICIAL',
+      recipient: 'Bendahara SDN 68',
+      accountReference: '  BANK-068  ',
+      proofName: 'benefit-068.pdf',
+    }, now)
+
+    expect(benefitPaid.benefit).toMatchObject({
+      status: 'PAID',
+      obligationAmount: 2_435_000,
+      method: 'TRANSFER',
+      recipientType: 'SCHOOL_OFFICIAL',
+      recipient: 'Bendahara SDN 68',
+      accountReference: 'BANK-068',
+    })
+  })
+
+  it('rejects a transfer benefit without an account reference', () => {
+    const paid = payCanonical68()
+    const obligationAmount = paid.benefit.obligationAmount
+    if (obligationAmount === null) throw new Error('Missing benefit obligation')
+
+    expect(() => recordBenefitPayment(paid, {
+      amount: obligationAmount,
+      method: 'TRANSFER',
+      recipientType: 'SCHOOL_OFFICIAL',
+      recipient: 'Bendahara SDN 68',
+      accountReference: '   ',
+      proofName: 'benefit-068.pdf',
+    }, now)).toThrow(/Referensi rekening\/transfer wajib/)
+  })
+
+  it('stores no account reference for CASH even when stale transfer text is supplied', () => {
+    const paid = payCanonical68()
+    if (paid.benefit.obligationAmount === null) throw new Error('Missing benefit obligation')
+    const benefitPaid = recordBenefitPayment(paid, {
+      amount: paid.benefit.obligationAmount,
+      method: 'CASH',
+      recipientType: 'INDIVIDUAL',
+      recipient: 'Kepala Sekolah',
+      accountReference: 'STALE-BANK-REFERENCE',
+      proofName: 'cash-proof.jpg',
+    }, now)
+
+    expect(benefitPaid.benefit).toMatchObject({
+      status: 'PAID',
+      obligationAmount: 2_435_000,
+      method: 'CASH',
+      accountReference: null,
+    })
+  })
+
+  it('rejects partial benefit while preserving one-time full-payment semantics', () => {
     const paid = payCanonical68()
     expect(() => recordBenefitPayment(paid, {
       amount: 1_000_000,
@@ -243,15 +349,6 @@ describe('school payment gross, deduction, and net semantics', () => {
       accountReference: '',
       proofName: 'cash-proof.jpg',
     }, now)).toThrow(/dibayar penuh/)
-
-    const benefitPaid = payBenefit(paid)
-    expect(benefitPaid.benefit).toMatchObject({
-      status: 'PAID',
-      obligationAmount: 2_435_000,
-      method: 'TRANSFER',
-      recipientType: 'SCHOOL_OFFICIAL',
-      recipient: 'Bendahara SDN 68',
-    })
   })
 
   it('records payment and benefit eligibility as meaningful separate timeline events', () => {
@@ -320,5 +417,19 @@ describe('parallel actions and explicit company closure', () => {
     expect(closed.stage).toBe('CLOSED')
     expect(closed.timeline[0]?.title).toBe('Order ditutup')
     expect(deriveActionCandidates(closed, { vendorBatch: null }, now)).toEqual([])
+  })
+
+  it('rejects optional benefit school confirmation after the order is CLOSED', () => {
+    const ready = payBenefit(payCanonical68())
+    const closed = closeOrder(ready, now)
+    const before = structuredClone(closed)
+
+    expect(() => recordBenefitSchoolConfirmation(
+      closed,
+      new Date('2026-02-22T08:00:00.000Z'),
+    )).toThrow(/CLOSED/)
+    expect(closed).toEqual(before)
+    expect(closed.stage).toBe('CLOSED')
+    expect(closed.benefit.schoolConfirmedAt).toBeNull()
   })
 })
