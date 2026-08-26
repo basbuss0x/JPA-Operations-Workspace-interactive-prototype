@@ -11,7 +11,6 @@ import { Modal } from '../components/ui/modal'
 import { PageHeader } from '../components/ui/page-header'
 import { StatusChip } from '../components/ui/status-chip'
 import { VendorRecapView } from '../features/vendor/vendor-recap-view'
-import { downloadVendorWorkbook } from '../features/vendor/vendor-workbook'
 
 const arrivalOptions = [
   { value: 'NONE', label: 'Tidak dicatat' },
@@ -33,6 +32,7 @@ export function VendorBatchDetailPage() {
   const recordVendorGoodsArrival = usePrototypeStore((state) => state.recordVendorGoodsArrival)
   const [actionError, setActionError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
   const [reminderDate, setReminderDate] = useState(() => batch?.followUpDueAt?.slice(0, 10) ?? '')
   const [arrivalOpen, setArrivalOpen] = useState(false)
   const [arrivalChoices, setArrivalChoices] = useState<Record<string, ArrivalChoice>>({})
@@ -71,15 +71,24 @@ export function VendorBatchDetailPage() {
     }
   }
 
-  const generateAndDownload = () => {
+  const generateAndDownload = async () => {
     if (!preview.recap) {
       setActionError(preview.error ?? 'Recap tidak dapat dibuat.')
       return
     }
-    runAction(() => {
+    setActionError(null)
+    setFeedback(null)
+    setExporting(true)
+    try {
+      const { downloadVendorWorkbook } = await import('../features/vendor/vendor-workbook')
       downloadVendorWorkbook(batch, preview.recap)
       generateVendorRecap(batch.id)
-    }, 'Rekap berhasil dibuat. Batch belum dikirim ke vendor.')
+      setFeedback('Rekap berhasil dibuat. Batch belum dikirim ke vendor.')
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Rekap gagal dibuat.')
+    } finally {
+      setExporting(false)
+    }
   }
 
   const saveReminder = (event: FormEvent<HTMLFormElement>) => {
@@ -136,10 +145,10 @@ export function VendorBatchDetailPage() {
           <div><h2 id="batch-actions-title">Tindakan lifecycle</h2><p>Setiap tombol mencatat satu kejadian bisnis; tidak ada “Advance status”.</p></div>
         </div>
         <div className="batch-lifecycle-actions">
-          {batch.status === 'DRAFT' ? <Button onClick={generateAndDownload}>Generate recap .xlsx</Button> : null}
+          {batch.status === 'DRAFT' ? <Button onClick={generateAndDownload} disabled={exporting}>{exporting ? 'Generating recap…' : 'Generate recap .xlsx'}</Button> : null}
           {batch.status === 'RECAP_GENERATED' ? (
             <>
-              <Button variant="secondary" onClick={generateAndDownload}>Regenerate recap .xlsx</Button>
+              <Button variant="secondary" onClick={generateAndDownload} disabled={exporting}>{exporting ? 'Regenerating recap…' : 'Regenerate recap .xlsx'}</Button>
               <Button onClick={() => runAction(() => markVendorBatchSent(batch.id), 'Batch ditandai sudah dikirim ke vendor.')}>Mark sent to vendor</Button>
             </>
           ) : null}

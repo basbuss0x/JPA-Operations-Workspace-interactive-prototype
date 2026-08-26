@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx'
+import { read, utils } from 'xlsx'
 import { describe, expect, it } from 'vitest'
 import { createCanonicalDemoData } from '../../data/demo-data'
 import { buildVendorRecap } from '../../domain/selectors'
@@ -40,7 +40,7 @@ describe('Vendor recap XLSX', () => {
     // XLSX is a ZIP container (PK), not CSV renamed with an .xlsx extension.
     expect(Array.from(bytes.slice(0, 2))).toEqual([0x50, 0x4b])
 
-    const workbook = XLSX.read(file, { type: 'array' })
+    const workbook = read(file, { type: 'array' })
     expect(workbook.SheetNames).toEqual([
       VENDOR_WORKBOOK_SHEETS.summary,
       VENDOR_WORKBOOK_SHEETS.schoolBreakdown,
@@ -49,8 +49,8 @@ describe('Vendor recap XLSX', () => {
     const summarySheet = workbook.Sheets[VENDOR_WORKBOOK_SHEETS.summary]
     const breakdownSheet = workbook.Sheets[VENDOR_WORKBOOK_SHEETS.schoolBreakdown]
     if (!summarySheet || !breakdownSheet) throw new Error('Missing expected workbook sheet')
-    const summary = XLSX.utils.sheet_to_json<SummaryRow>(summarySheet, { range: 7 })
-    const breakdown = XLSX.utils.sheet_to_json<BreakdownRow>(breakdownSheet)
+    const summary = utils.sheet_to_json<SummaryRow>(summarySheet, { range: 7 })
+    const breakdown = utils.sheet_to_json<BreakdownRow>(breakdownSheet)
 
     expect(summary.find((row) => row['Kode Produk'] === 'BK-MTK-5')?.['Total Qty']).toBe(28)
     expect(summary.find((row) => row['Kode Produk'] === 'BK-BINDO-5')?.['Total Qty']).toBe(21)

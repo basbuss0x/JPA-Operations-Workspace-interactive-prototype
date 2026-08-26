@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx'
+import { utils, write, writeFile, type WorkBook } from 'xlsx'
 import type { VendorBatch, VendorRecap } from '../../domain/types'
 
 export const VENDOR_WORKBOOK_SHEETS = {
@@ -10,7 +10,7 @@ export function vendorWorkbookFilename(batchId: string): string {
   return `Rekap-Vendor-${batchId}.xlsx`
 }
 
-export function createVendorWorkbook(batch: VendorBatch, recap: VendorRecap): XLSX.WorkBook {
+export function createVendorWorkbook(batch: VendorBatch, recap: VendorRecap): WorkBook {
   const summaryRows: Array<Array<string | number>> = [
     ['Rekap Vendor'],
     ['Batch ID', batch.id],
@@ -41,14 +41,14 @@ export function createVendorWorkbook(batch: VendorBatch, recap: VendorRecap): XL
     ),
   ]
 
-  const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows)
+  const summarySheet = utils.aoa_to_sheet(summaryRows)
   summarySheet['!cols'] = [
     { wch: 20 },
     { wch: 44 },
     { wch: 14 },
     { wch: 18 },
   ]
-  const breakdownSheet = XLSX.utils.aoa_to_sheet(breakdownRows)
+  const breakdownSheet = utils.aoa_to_sheet(breakdownRows)
   breakdownSheet['!cols'] = [
     { wch: 24 },
     { wch: 18 },
@@ -58,14 +58,14 @@ export function createVendorWorkbook(batch: VendorBatch, recap: VendorRecap): XL
     { wch: 10 },
   ]
 
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, summarySheet, VENDOR_WORKBOOK_SHEETS.summary)
-  XLSX.utils.book_append_sheet(workbook, breakdownSheet, VENDOR_WORKBOOK_SHEETS.schoolBreakdown)
+  const workbook = utils.book_new()
+  utils.book_append_sheet(workbook, summarySheet, VENDOR_WORKBOOK_SHEETS.summary)
+  utils.book_append_sheet(workbook, breakdownSheet, VENDOR_WORKBOOK_SHEETS.schoolBreakdown)
   return workbook
 }
 
 export function serializeVendorWorkbook(batch: VendorBatch, recap: VendorRecap): ArrayBuffer {
-  return XLSX.write(createVendorWorkbook(batch, recap), {
+  return write(createVendorWorkbook(batch, recap), {
     type: 'array',
     bookType: 'xlsx',
     compression: true,
@@ -73,7 +73,7 @@ export function serializeVendorWorkbook(batch: VendorBatch, recap: VendorRecap):
 }
 
 export function downloadVendorWorkbook(batch: VendorBatch, recap: VendorRecap): void {
-  XLSX.writeFile(createVendorWorkbook(batch, recap), vendorWorkbookFilename(batch.id), {
+  writeFile(createVendorWorkbook(batch, recap), vendorWorkbookFilename(batch.id), {
     bookType: 'xlsx',
     compression: true,
   })

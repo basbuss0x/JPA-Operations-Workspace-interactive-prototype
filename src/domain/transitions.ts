@@ -620,8 +620,8 @@ const allowedBatchTransitions: Record<VendorBatchStatus, VendorBatchStatus[]> = 
   RECAP_GENERATED: ['SENT_TO_VENDOR'],
   SENT_TO_VENDOR: ['VENDOR_CONFIRMED'],
   VENDOR_CONFIRMED: ['PROCESSING'],
-  PROCESSING: ['PARTIALLY_ARRIVED', 'ARRIVED'],
-  PARTIALLY_ARRIVED: ['ARRIVED'],
+  PROCESSING: [],
+  PARTIALLY_ARRIVED: [],
   ARRIVED: [],
 }
 
@@ -655,6 +655,9 @@ export function transitionVendorBatch(
 ): PrototypeData {
   const batch = data.vendorBatches[batchId]
   if (!batch) throw new Error('Vendor Batch tidak ditemukan.')
+  if (status === 'PARTIALLY_ARRIVED' || status === 'ARRIVED') {
+    throw new Error('Status kedatangan hanya dapat diturunkan oleh recordGoodsArrival dari alokasi order.')
+  }
   if (!allowedBatchTransitions[batch.status].includes(status)) {
     throw new Error(`Transisi ${batch.status} → ${status} tidak diizinkan.`)
   }
@@ -672,7 +675,7 @@ export function transitionVendorBatch(
     sentAt: status === 'SENT_TO_VENDOR' ? occurredAt : batch.sentAt,
     confirmedAt: status === 'VENDOR_CONFIRMED' ? occurredAt : batch.confirmedAt,
     processingStartedAt: status === 'PROCESSING' ? occurredAt : batch.processingStartedAt,
-    arrivedAt: status === 'ARRIVED' ? occurredAt : batch.arrivedAt,
+    arrivedAt: batch.arrivedAt,
     timeline: [vendorBatchEvent(batch, copy.title, copy.detail, now), ...batch.timeline],
   }
   const nextOrders = { ...data.orders }
