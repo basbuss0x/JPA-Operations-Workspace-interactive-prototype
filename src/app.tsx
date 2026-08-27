@@ -1,6 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { AppShell } from './components/layout/app-shell'
-import { DeferredPage } from './routes/deferred-page'
+import { PipelinePage } from './routes/pipeline-page'
 import { HomePage } from './routes/home-page'
 import { HetReviewPage } from './routes/het-review-page'
 import { NewOrderPage } from './routes/new-order-page'
@@ -23,7 +23,7 @@ export function App() {
           <Route path="orders/:orderId" element={<OrderWorkspacePage />} />
           <Route path="orders/:orderId/arkas" element={<HetReviewPage />} />
           <Route path="orders/:orderId/siplah" element={<SiplahWorkflowPage />} />
-          <Route path="pipeline" element={<DeferredPage />} />
+          <Route path="pipeline" element={<PipelinePage />} />
           <Route path="vendor-batches" element={<VendorBatchesPage />} />
           <Route path="vendor-batches/new" element={<VendorBatchBuilderPage />} />
           <Route path="vendor-batches/:batchId" element={<VendorBatchDetailPage />} />

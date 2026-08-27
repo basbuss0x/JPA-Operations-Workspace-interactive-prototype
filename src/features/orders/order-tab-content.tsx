@@ -88,6 +88,13 @@ function OverviewTab({ order, batch }: { order: Order; batch: VendorBatch | null
               value={<StatusChip tone="warning">Sisa {order.fulfillment.remainingQty}</StatusChip>}
             />
           ) : null}
+          {order.schoolPayment.status === 'UNPAID' && order.finalInvoiceAmount !== null ? (
+            <DetailRow
+              label="Pembayaran sekolah"
+              detail={order.schoolPayment.followUpDueAt ? `Reminder ${formatDate(order.schoolPayment.followUpDueAt)}` : 'Belum ada reminder follow-up aktif'}
+              value={<StatusChip tone="warning">Belum dibayar</StatusChip>}
+            />
+          ) : null}
           {order.benefit.status === 'ELIGIBLE' ? (
             <DetailRow label="Benefit" detail="10% dari invoice final" value={<StatusChip tone="warning">Siap dibayar</StatusChip>} />
           ) : null}
@@ -95,6 +102,7 @@ function OverviewTab({ order, batch }: { order: Order; batch: VendorBatch | null
           isSiplahAdminComplete(order) &&
           (!order.goods.arrivedAt || order.goods.preDeliveryCheckCompleted) &&
           order.fulfillment.remainingQty === 0 &&
+          order.schoolPayment.status === 'LUNAS' &&
           order.benefit.status !== 'ELIGIBLE' ? (
             <div className="inline-clear-state">✓ Tidak ada exception operasional yang terbuka.</div>
           ) : null}

@@ -1,6 +1,7 @@
 import { PRODUCT_MASTER } from '../data/product-master'
 import type {
   AggregatedVendorItem,
+  LifecycleStage,
   Order,
   PrototypeData,
   VendorBatch,
@@ -8,7 +9,11 @@ import type {
   VendorSchoolBreakdown,
   WorkQueueItem,
 } from './types'
-import { deriveActionCandidates, getActiveActionCandidates } from './next-action'
+import {
+  deriveActionCandidates,
+  derivePrimaryNextAction,
+  getActiveActionCandidates,
+} from './next-action'
 import { getHetExceptionCount, isSiplahReadyForVendor } from './order-state'
 
 export {
@@ -46,6 +51,48 @@ export function getOrderBatch(order: Order, batches: Record<string, VendorBatch>
 
 export function getOrders(data: Pick<PrototypeData, 'orders'>): Order[] {
   return Object.values(data.orders).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+}
+
+const pipelineStages: Array<Exclude<LifecycleStage, 'CLOSED'>> = [
+  'INTAKE',
+  'HET_REVIEW',
+  'SIPLAH',
+  'VENDOR',
+  'GOODS_ARRIVED',
+  'DISTRIBUTION',
+  'COMPLETION',
+]
+
+export interface PipelineColumn {
+  stage: LifecycleStage
+  orders: Order[]
+}
+
+export function derivePipelineColumns(
+  data: Pick<PrototypeData, 'orders' | 'vendorBatches'>,
+  now: Date,
+  includeClosed = false,
+): PipelineColumn[] {
+  const stages: LifecycleStage[] = includeClosed ? [...pipelineStages, 'CLOSED'] : pipelineStages
+
+  return stages.map((stage) => ({
+    stage,
+    orders: Object.values(data.orders)
+      .filter((order) => order.stage === stage)
+      .sort((left, right) => {
+        const leftAction = derivePrimaryNextAction(
+          getActiveActionCandidates(getOrderActionCandidates(left, data.vendorBatches, now)),
+        )
+        const rightAction = derivePrimaryNextAction(
+          getActiveActionCandidates(getOrderActionCandidates(right, data.vendorBatches, now)),
+        )
+        const priorityDifference = (leftAction?.priority ?? Number.POSITIVE_INFINITY) -
+          (rightAction?.priority ?? Number.POSITIVE_INFINITY)
+        return priorityDifference ||
+          right.updatedAt.localeCompare(left.updatedAt) ||
+          left.schoolName.localeCompare(right.schoolName, 'id')
+      }),
+  }))
 }
 
 function getCanonicalVendorProduct(order: Order, item: Order['items'][number]) {

@@ -3,6 +3,7 @@ import { createCanonicalDemoData } from '../data/demo-data'
 import {
   aggregateVendorItems,
   calculateBenefitAmount,
+  derivePipelineColumns,
   deriveWorkQueue,
   getHetExceptionCount,
   isBenefitEligible,
@@ -107,5 +108,28 @@ describe('derived domain selectors', () => {
     expect(vendorItem?.orderIds).toEqual(['ORD-2026-040', 'ORD-2026-SLB'])
     expect(vendorItem?.title).toBe('2 pesanan siap masuk Vendor Batch')
     expect(queue.some((item) => item.kind === 'FOLLOW_UP_VENDOR')).toBe(false)
+  })
+
+  it('derives Pipeline columns from lifecycle stage and prioritizes existing active actions', () => {
+    const data = createCanonicalDemoData()
+    const columns = derivePipelineColumns(data, now)
+
+    expect(columns.map((column) => column.stage)).toEqual([
+      'INTAKE',
+      'HET_REVIEW',
+      'SIPLAH',
+      'VENDOR',
+      'GOODS_ARRIVED',
+      'DISTRIBUTION',
+      'COMPLETION',
+    ])
+    expect(columns.find((column) => column.stage === 'HET_REVIEW')?.orders.map((order) => order.id))
+      .toEqual(['ORD-2026-030'])
+    expect(columns.find((column) => column.stage === 'SIPLAH')?.orders.map((order) => order.id))
+      .toEqual(['ORD-2026-071', 'ORD-2026-040', 'ORD-2026-SLB'])
+    expect(columns.find((column) => column.stage === 'VENDOR')?.orders.map((order) => order.id))
+      .toEqual(['ORD-2026-049'])
+    expect(derivePipelineColumns(data, now, true).at(-1)?.orders.map((order) => order.id))
+      .toEqual(['ORD-2025-999'])
   })
 })

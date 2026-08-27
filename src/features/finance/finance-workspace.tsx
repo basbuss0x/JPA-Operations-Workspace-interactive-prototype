@@ -107,7 +107,7 @@ export function FinanceWorkspace({ order }: { order: Order }) {
   return (
     <div className="finance-workspace">
       {feedback ? <div className="callout callout--success" role="status">{feedback}</div> : null}
-      {error ? <div className="callout callout--danger" role="alert"><strong>Tindakan gagal.</strong> {error}</div> : null}
+      {error && !paymentOpen && !benefitOpen ? <div className="callout callout--danger" role="alert"><strong>Tindakan gagal.</strong> {error}</div> : null}
 
       <div className="workspace-grid">
         <section className="workspace-panel payment-operations-panel">
@@ -124,8 +124,8 @@ export function FinanceWorkspace({ order }: { order: Order }) {
             <FinanceRow label="Metode" value={order.schoolPayment.method ?? '—'} />
             <FinanceRow label="Bukti" value={order.schoolPayment.evidenceName ?? 'Belum ada'} />
           </div>
-          {order.schoolPayment.status === 'UNPAID' && order.finalInvoiceAmount !== null ? (
-            <Button onClick={() => setPaymentOpen(true)}>Confirm LUNAS</Button>
+          {order.stage !== 'CLOSED' && order.schoolPayment.status === 'UNPAID' && order.finalInvoiceAmount !== null ? (
+            <Button onClick={() => { setError(null); setPaymentOpen(true) }}>Confirm LUNAS</Button>
           ) : null}
         </section>
 
@@ -147,7 +147,7 @@ export function FinanceWorkspace({ order }: { order: Order }) {
             <FinanceRow label="Referensi" value={order.benefit.accountReference ?? '—'} />
             <FinanceRow label="Konfirmasi sekolah" detail="Opsional; tidak memblokir closure" value={formatDate(order.benefit.schoolConfirmedAt)} />
           </div>
-          {order.benefit.status === 'ELIGIBLE' ? <Button onClick={() => setBenefitOpen(true)}>Bayar benefit penuh</Button> : null}
+          {order.stage !== 'CLOSED' && order.benefit.status === 'ELIGIBLE' ? <Button onClick={() => { setError(null); setBenefitOpen(true) }}>Bayar benefit penuh</Button> : null}
           {order.benefit.status === 'PAID' && !order.benefit.schoolConfirmedAt && order.stage !== 'CLOSED' ? (
             <Button variant="secondary" onClick={() => run(() => confirmBenefitReceipt(order.id), 'Konfirmasi penerimaan benefit oleh sekolah dicatat.')}>Catat konfirmasi sekolah</Button>
           ) : null}
@@ -189,6 +189,7 @@ export function FinanceWorkspace({ order }: { order: Order }) {
         footer={<><Button variant="ghost" onClick={() => setPaymentOpen(false)}>Batal</Button><Button type="submit" form="school-payment-form">Confirm LUNAS</Button></>}
       >
         <form id="school-payment-form" className="form-stack" onSubmit={submitPayment}>
+          {error ? <div className="callout callout--danger" role="alert"><strong>Pembayaran belum tersimpan.</strong> {error}</div> : null}
           <FormField label="Gross dibayar sekolah" htmlFor="school-paid-gross">
             <input id="school-paid-gross" type="number" min="0" value={grossAmount} onChange={(event) => setGrossAmount(event.target.value)} required />
           </FormField>
@@ -209,6 +210,7 @@ export function FinanceWorkspace({ order }: { order: Order }) {
         footer={<><Button variant="ghost" onClick={() => setBenefitOpen(false)}>Batal</Button><Button type="submit" form="benefit-payment-form">Catat benefit PAID</Button></>}
       >
         <form id="benefit-payment-form" className="form-stack" onSubmit={submitBenefit}>
+          {error ? <div className="callout callout--danger" role="alert"><strong>Benefit belum tersimpan.</strong> {error}</div> : null}
           <div className="derived-settlement"><span>Benefit obligation</span><strong>{benefitAmount === null ? '—' : formatCurrency(benefitAmount)}</strong><small>10% invoice final gross</small></div>
           <FormField label="Metode" htmlFor="benefit-method"><select id="benefit-method" value={benefitMethod} onChange={(event) => {
             const method = event.target.value as BenefitPaymentMethod

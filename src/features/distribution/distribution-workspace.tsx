@@ -30,6 +30,7 @@ export function DistributionWorkspace({ order, batch }: { order: Order; batch: V
   const [feedback, setFeedback] = useState<string | null>(null)
   const fulfillment = order.fulfillment
   const canAccept =
+    order.stage !== 'CLOSED' &&
     fulfillment.progressPercent === 100 &&
     fulfillment.remainingQty === 0 &&
     fulfillment.deliveredQty === fulfillment.orderedQty &&
@@ -94,10 +95,10 @@ export function DistributionWorkspace({ order, batch }: { order: Order; batch: V
           <StateRow label="Checked at" value={formatDate(order.goods.checkedAt)} />
           <StateRow label="Kesiapan distribusi" detail="Derived dari kedatangan + pemeriksaan, bukan delivery sekolah" value={<StatusChip tone={isReadyToDeliver(order) ? 'success' : 'neutral'}>{isReadyToDeliver(order) ? 'Siap didistribusikan' : 'Belum siap'}</StatusChip>} />
         </div>
-        {!order.goods.preDeliveryCheckCompleted && order.goods.arrivedAt ? (
+        {order.stage !== 'CLOSED' && !order.goods.preDeliveryCheckCompleted && order.goods.arrivedAt ? (
           <Button onClick={() => setCheckOpen(true)}>Cek barang selesai</Button>
         ) : null}
-        {!order.goods.arrivedAt && batch ? (
+        {order.stage !== 'CLOSED' && !order.goods.arrivedAt && batch ? (
           <Link className="button button--secondary button--md" to={`/vendor-batches/${batch.id}`}>Kelola alokasi kedatangan</Link>
         ) : null}
       </section>
@@ -134,16 +135,20 @@ export function DistributionWorkspace({ order, batch }: { order: Order; batch: V
           <StateRow label="Percobaan sync terakhir" value={fulfillment.lastSyncAttemptAt ? formatDateTime(fulfillment.lastSyncAttemptAt) : '—'} />
           {fulfillment.syncMessage ? <StateRow label="Pesan sync" value={fulfillment.syncMessage} /> : null}
         </div>
-        <div className="tracker-refresh-controls">
-          <FormField label="Hasil simulasi refresh" htmlFor={`tracker-outcome-${order.id}`} hint="Prototype deterministic; tidak melakukan request jaringan.">
-            <select id={`tracker-outcome-${order.id}`} value={refreshOutcome} onChange={(event) => setRefreshOutcome(event.target.value as MockTrackerOutcome)}>
-              <option value="SUCCESS">Successful sync</option>
-              <option value="STALE">Stale snapshot</option>
-              <option value="ERROR">Connection error</option>
-            </select>
-          </FormField>
-          <Button variant="secondary" onClick={refresh}>Refresh summary</Button>
-        </div>
+        {order.stage !== 'CLOSED' ? (
+          <div className="tracker-refresh-controls">
+            <FormField label="Hasil simulasi refresh" htmlFor={`tracker-outcome-${order.id}`} hint="Prototype deterministic; tidak melakukan request jaringan.">
+              <select id={`tracker-outcome-${order.id}`} value={refreshOutcome} onChange={(event) => setRefreshOutcome(event.target.value as MockTrackerOutcome)}>
+                <option value="SUCCESS">Successful sync</option>
+                <option value="STALE">Stale snapshot</option>
+                <option value="ERROR">Connection error</option>
+              </select>
+            </FormField>
+            <Button variant="secondary" onClick={refresh}>Refresh summary</Button>
+          </div>
+        ) : (
+          <p className="readonly-workflow-note">Order sudah CLOSED. Cache tracker ditampilkan sebagai konteks read-only.</p>
+        )}
       </section>
 
       <section className="workspace-panel school-acceptance-panel">

@@ -3804,3 +3804,250 @@ p {
     width: 100%;
   }
 }
+
+/* Pass 5 · Pipeline overview and final mobile operations */
+.pipeline-context-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  padding: 12px 14px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.74rem;
+}
+
+.pipeline-context-strip strong {
+  color: var(--ink);
+}
+
+.pipeline-context-strip span:last-child {
+  margin-left: auto;
+}
+
+.pipeline-board {
+  display: grid;
+  grid-auto-columns: minmax(238px, 1fr);
+  grid-auto-flow: column;
+  gap: 12px;
+  align-items: start;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  scroll-snap-type: x proximity;
+}
+
+.pipeline-column {
+  min-width: 0;
+  overflow: hidden;
+  background: #eef2f0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  scroll-snap-align: start;
+}
+
+.pipeline-column__header {
+  display: flex;
+  min-height: 61px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.pipeline-column__header h2,
+.pipeline-column__header span {
+  margin: 0;
+}
+
+.pipeline-column__header h2 {
+  font-size: 0.82rem;
+}
+
+.pipeline-column__header div > span {
+  color: var(--muted);
+  font-size: 0.63rem;
+}
+
+.pipeline-column__body {
+  display: grid;
+  gap: 8px;
+  padding: 9px;
+}
+
+.pipeline-column .empty-state {
+  min-height: 132px;
+  padding: 18px 12px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.pipeline-column .empty-state__mark {
+  width: 30px;
+  height: 30px;
+  margin-bottom: 8px;
+}
+
+.pipeline-column .empty-state h2 {
+  margin-bottom: 4px;
+  font-size: 0.78rem;
+}
+
+.pipeline-column .empty-state p {
+  margin: 0;
+  font-size: 0.66rem;
+}
+
+.pipeline-card {
+  display: grid;
+  gap: 11px;
+  min-height: 170px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  text-decoration: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.pipeline-card:hover {
+  border-color: #9eb2a9;
+  box-shadow: 0 4px 14px rgba(21, 48, 39, 0.07);
+}
+
+.pipeline-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pipeline-card__header div,
+.pipeline-card__header strong,
+.pipeline-card__header span {
+  min-width: 0;
+}
+
+.pipeline-card__header strong,
+.pipeline-card__header div > span {
+  display: block;
+}
+
+.pipeline-card__header strong {
+  overflow-wrap: anywhere;
+  font-size: 0.79rem;
+}
+
+.pipeline-card__header div > span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.pipeline-card__signals {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 5px;
+  min-height: 25px;
+}
+
+.pipeline-card__signals .status-chip {
+  max-width: 100%;
+  white-space: normal;
+}
+
+.pipeline-card__action {
+  position: relative;
+  display: grid;
+  gap: 3px;
+  margin-top: auto;
+  padding: 10px 26px 0 0;
+  color: var(--forest-800);
+  border-top: 1px solid var(--line);
+}
+
+.pipeline-card__action > span:first-child {
+  color: var(--muted);
+  font-size: 0.59rem;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.pipeline-card__action strong {
+  overflow-wrap: anywhere;
+  font-size: 0.73rem;
+  line-height: 1.4;
+}
+
+.pipeline-card__arrow {
+  position: absolute;
+  top: 12px;
+  right: 2px;
+  font-size: 1rem;
+}
+
+.readonly-workflow-note {
+  margin: 0;
+  padding: 11px 13px;
+  color: var(--muted);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.72rem;
+}
+
+@media (max-width: 680px) {
+  .button,
+  .button--sm,
+  .filter-chip,
+  .tabs__tab,
+  .form-field input,
+  .form-field select {
+    min-height: 44px;
+  }
+
+  .pipeline-context-strip {
+    display: grid;
+  }
+
+  .pipeline-context-strip span:last-child {
+    margin-left: 0;
+  }
+
+  .pipeline-board {
+    display: grid;
+    grid-auto-columns: auto;
+    grid-auto-flow: row;
+    overflow: visible;
+    padding-bottom: 0;
+    scroll-snap-type: none;
+  }
+
+  .pipeline-column__body {
+    grid-template-columns: 1fr;
+  }
+
+  .pipeline-card {
+    min-height: 0;
+  }
+
+  .timeline-list__content > div {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .timeline-list__content strong {
+    width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .modal__header,
+  .modal__content,
+  .modal__footer {
+    padding-inline: 16px;
+  }
+}

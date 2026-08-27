@@ -16,7 +16,7 @@ The prototype source of truth lives under `docs/prototype/`.
 
 Read those documents before implementing features.
 
-## Run the prototype through Pass 4
+## Run the final integrated prototype
 
 Requirements: Node.js 22+ and npm.
 
@@ -39,7 +39,7 @@ Implemented routes:
 - `/orders/:orderId?tab=distribution` — goods check and cached external fulfillment summary
 - `/orders/:orderId?tab=finance` — gross/net school payment, benefit, and explicit closure workflow
 - `/orders/:orderId?tab=timeline` — system history and manual notes
-- `/pipeline` — safe navigation placeholder for a deferred task card
+- `/pipeline` — lifecycle-derived, secondary cross-order overview with compact action context
 
 Prototype state is versioned and persisted under the `jpa-operations-prototype` localStorage key. Use **Reset Demo Data** in the app shell to restore all canonical scenarios.
 
@@ -56,4 +56,6 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-This branch intentionally stops after TASK 12 / Review Gate 4. Pipeline, final mobile hardening, and final QA remain deferred to TASK 13, 16, and 17.
+The integrated prototype covers TASK 00–17 and stops at the Final Prototype Review Gate. See [`docs/prototype/FINAL-WALKTHROUGH.md`](docs/prototype/FINAL-WALKTHROUGH.md) for the demo journeys and the explicit production boundary.
+
+This validates workflow and domain interaction, deterministic simulated integrations, local demo persistence/reset, and real client-side XLSX export. It is **not production-ready**: there is no backend/database, authentication/authorization, real file storage, SIPLah or tracker integration, multi-user concurrency, production audit/security model, or deployment architecture.

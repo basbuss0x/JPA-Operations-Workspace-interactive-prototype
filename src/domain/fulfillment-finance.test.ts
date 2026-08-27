@@ -271,6 +271,13 @@ describe('school payment gross, deduction, and net semantics', () => {
       method: 'Settlement',
       evidenceName: 'proof.pdf',
     }, now)).toThrow(/Net received/)
+
+    expect(() => recordSchoolPayment(order, {
+      schoolPaidAmount: 24_350_000,
+      deductionAmount: 25_000_000,
+      method: 'Settlement',
+      evidenceName: 'proof.pdf',
+    }, now)).toThrow(/tidak boleh melebihi/)
   })
 
   it('freezes benefit at exactly 10% of gross final invoice, never net received', () => {

@@ -107,6 +107,7 @@ export function VendorBatchDetailPage() {
   }
 
   const openArrival = () => {
+    setActionError(null)
     setArrivalChoices(Object.fromEntries(memberOrders.map((order) => [order.id, 'NONE'])))
     setArrivalOpen(true)
   }
@@ -144,7 +145,7 @@ export function VendorBatchDetailPage() {
         </div>
       ) : null}
       {feedback ? <div className="callout callout--success" role="status">{feedback}</div> : null}
-      {actionError ? <div className="callout callout--danger" role="alert"><strong>Tindakan gagal.</strong> {actionError}</div> : null}
+      {actionError && !arrivalOpen ? <div className="callout callout--danger" role="alert"><strong>Tindakan gagal.</strong> {actionError}</div> : null}
 
       <section className="workspace-panel batch-actions-panel" aria-labelledby="batch-actions-title">
         <div className="panel-heading">
@@ -224,6 +225,7 @@ export function VendorBatchDetailPage() {
         onClose={() => setArrivalOpen(false)}
         footer={<><Button variant="ghost" onClick={() => setArrivalOpen(false)}>Batal</Button><Button onClick={saveArrival}>Simpan kedatangan</Button></>}
       >
+        {actionError ? <div className="callout callout--danger" role="alert"><strong>Kedatangan belum tersimpan.</strong> {actionError}</div> : null}
         <div className="arrival-allocation-list">
           {memberOrders.map((order) => (
             <fieldset key={order.id} disabled={order.goods.arrivalType === 'FULL'}>

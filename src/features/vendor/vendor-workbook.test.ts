@@ -54,6 +54,7 @@ describe('Vendor recap XLSX', () => {
 
     expect(summary.find((row) => row['Kode Produk'] === 'BK-MTK-5')?.['Total Qty']).toBe(28)
     expect(summary.find((row) => row['Kode Produk'] === 'BK-BINDO-5')?.['Total Qty']).toBe(21)
+    expect(summary.find((row) => row['Kode Produk'] === 'BK-IPAS-5')?.['Total Qty']).toBe(20)
     expect(breakdown.filter((row) => row['Kode Produk'] === 'BK-MTK-5')).toEqual([
       {
         Sekolah: 'SDN 40 Ambon',
@@ -73,5 +74,15 @@ describe('Vendor recap XLSX', () => {
       },
     ])
     expect(breakdown.filter((row) => row['Kode Produk'] === 'BK-BINDO-5').map((row) => row.Qty)).toEqual([15, 6])
+    expect(breakdown.filter((row) => row['Kode Produk'] === 'BK-IPAS-5')).toEqual([
+      {
+        Sekolah: 'SDN 40 Ambon',
+        'Order ID': 'ORD-2026-040',
+        'Nomor SIPLah': 'SPL-2026-1840',
+        'Kode Produk': 'BK-IPAS-5',
+        'Nama Buku': 'IPAS Kelas V',
+        Qty: 20,
+      },
+    ])
   })
 })

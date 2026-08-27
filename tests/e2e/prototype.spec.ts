@@ -46,6 +46,58 @@ test('desktop routes render canonical operational context', async ({ page }, tes
   expect(pageErrors).toEqual([])
 })
 
+test('Pipeline derives lifecycle columns, prioritizes actions, and keeps completed orders compact', async ({ page }, testInfo) => {
+  await page.goto('/pipeline')
+  await expect(page.getByRole('heading', { name: 'Pipeline', exact: true })).toBeVisible()
+  await expect(page.getByText('8 order aktif')).toBeVisible()
+
+  const hetColumn = page.locator('.pipeline-column[data-stage="HET_REVIEW"]')
+  const siplahColumn = page.locator('.pipeline-column[data-stage="SIPLAH"]')
+  const distributionColumn = page.locator('.pipeline-column[data-stage="DISTRIBUTION"]')
+  await expect(hetColumn.getByText('SDN 30 Ambon')).toBeVisible()
+  await expect(hetColumn.getByText('2 selisih HET', { exact: true })).toBeVisible()
+  await expect(siplahColumn.locator('.pipeline-card').first()).toContainText('SDN 71')
+  await expect(distributionColumn.getByText('Sisa 67 buku', { exact: true })).toBeVisible()
+  await expect(distributionColumn.getByText('Benefit ELIGIBLE')).toBeVisible()
+  await expect(page.getByText('Demo Closed School')).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Tampilkan selesai (1)' }).click()
+  await expect(page.locator('.pipeline-column[data-stage="CLOSED"]')).toContainText('Demo Closed School')
+  await page.screenshot({ path: testInfo.outputPath('desktop-pipeline.png'), fullPage: true })
+
+  await distributionColumn.locator('.pipeline-card[data-order-id="ORD-2026-065"]').click()
+  await expect(page).toHaveURL(/\/orders\/ORD-2026-065$/)
+  await expect(page.getByRole('heading', { name: 'SDN 65 Ambon' })).toBeVisible()
+})
+
+test('context recovery shows what happened, what is missing, and what comes next', async ({ page }) => {
+  const actionableOrders = [
+    ['ORD-2026-030', /Review 2 selisih HET/],
+    ['ORD-2026-071', /Belanjakan pesanan di TokoLadang\/SIPLah/],
+    ['ORD-2026-040', /Masukkan ke Vendor Batch/],
+    ['ORD-2026-239', /Cek barang dan jadwalkan pengantaran/],
+    ['ORD-2026-065', /Lanjutkan pemenuhan · sisa 67 buku/],
+  ] as const
+
+  for (const [orderId, nextAction] of actionableOrders) {
+    await page.goto(`/orders/${orderId}`)
+    await expect(page.getByRole('heading', { name: nextAction })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Yang masih kurang' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Kejadian terakhir' })).toBeVisible()
+  }
+
+  await page.goto('/orders/ORD-2026-049')
+  await expect(page.getByRole('heading', { name: 'Tidak ada tindakan aktif' })).toBeVisible()
+  await expect(page.getByText('PROCESSING', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('Vendor memproses')).toBeVisible()
+
+  await page.goto('/orders/ORD-2026-068')
+  await expect(page.getByText('Pembayaran sekolah', { exact: true })).toBeVisible()
+  await expect(page.getByText('Belum dibayar', { exact: true })).toBeVisible()
+  await expect(page.getByText('Menunggu pembayaran sekolah')).toBeVisible()
+  await expect(page.getByText('Tidak ada exception operasional yang terbuka.')).toHaveCount(0)
+})
+
 test('snooze, override, persistence, and reset mutate real local state', async ({ page }, testInfo) => {
   await page.goto('/')
 
@@ -122,6 +174,32 @@ test('snooze, override, persistence, and reset mutate real local state', async (
   await page.goto('/orders/ORD-2026-030')
   await expect(page.getByRole('heading', { name: 'SDN 30 Ambon' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Review 2 selisih HET' })).toBeVisible()
+})
+
+test('empty routes and invalid finance input stay inside accessible app feedback', async ({ page }) => {
+  const browserDialogs: string[] = []
+  page.on('dialog', async (dialog) => {
+    browserDialogs.push(dialog.message())
+    await dialog.dismiss()
+  })
+
+  await page.goto('/orders/ORD-NOT-FOUND')
+  await expect(page.getByRole('heading', { name: 'Order tidak ditemukan' })).toBeVisible()
+  await page.goto('/vendor-batches/VB-NOT-FOUND')
+  await expect(page.getByRole('heading', { name: 'Vendor Batch tidak ditemukan' })).toBeVisible()
+  await page.goto('/vendor-batches/new')
+  await expect(page.getByRole('heading', { name: 'Pilih order untuk melihat recap' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Buat DRAFT Batch' })).toHaveCount(0)
+
+  await page.goto('/orders/ORD-2026-068?tab=finance')
+  await page.getByRole('button', { name: 'Confirm LUNAS' }).click()
+  await expect(page.getByRole('button', { name: 'Tutup dialog' })).toBeFocused()
+  await page.getByLabel('Gross dibayar sekolah').fill('24000000')
+  await page.getByRole('dialog').getByRole('button', { name: 'Confirm LUNAS' }).click()
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('gross harus sama')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('button', { name: 'Confirm LUNAS' })).toBeFocused()
+  expect(browserDialogs).toEqual([])
 })
 
 test('Pass 2 journey reaches Vendor readiness while admin documents remain later', async ({ page }, testInfo) => {
@@ -317,6 +395,43 @@ test('Pass 4 goods check and tracker cache journey preserves whole-order semanti
   await expect(page.getByText('NOTE').first()).toBeVisible()
 })
 
+test('tracker cumulative regression is visible while the last good cache remains intact', async ({ page }) => {
+  await page.goto('/orders/ORD-2026-065?tab=distribution')
+  await page.getByRole('button', { name: 'Reset Demo Data' }).click()
+  await page.getByRole('button', { name: 'Reset sekarang' }).click()
+  await page.evaluate(() => {
+    const key = 'jpa-operations-prototype'
+    const persisted = JSON.parse(window.localStorage.getItem(key) ?? '{}') as {
+      state?: { orders?: Record<string, { fulfillment?: Record<string, unknown> }> }
+    }
+    const fulfillment = persisted.state?.orders?.['ORD-2026-065']?.fulfillment
+    if (!fulfillment) throw new Error('Missing persisted fulfillment cache')
+    Object.assign(fulfillment, {
+      deliveredQty: 300,
+      remainingQty: 14,
+      problemCount: 1,
+      progressPercent: 96,
+      lastUpdated: '2026-02-21T08:00:00.000Z',
+      syncStatus: 'OK',
+      syncMessage: null,
+    })
+    window.localStorage.setItem(key, JSON.stringify(persisted))
+  })
+  await page.reload()
+
+  await expect(page.getByText('300', { exact: true })).toBeVisible()
+  await expect(page.getByText('14', { exact: true })).toBeVisible()
+  await page.getByLabel('Hasil simulasi refresh').selectOption('SUCCESS')
+  await page.getByRole('button', { name: 'Refresh summary' }).click()
+
+  await expect(page.getByText('Sync STALE')).toBeVisible()
+  await expect(page.getByText('300', { exact: true })).toBeVisible()
+  await expect(page.getByText('14', { exact: true })).toBeVisible()
+  await expect(page.getByText(/delivered kumulatif masuk 247, lebih rendah dari cache 300/)).toBeVisible()
+  await page.getByRole('tab', { name: 'Timeline' }).click()
+  await expect(page.getByText('Konflik snapshot tracker').first()).toBeVisible()
+})
+
 test('Pass 4 payment and benefit use gross invoice despite settlement deduction', async ({ page }, testInfo) => {
   await page.goto('/orders/ORD-2026-068?tab=finance')
   await expect(page.getByRole('heading', { name: 'Pembayaran sekolah' })).toBeVisible()
@@ -365,6 +480,11 @@ test('Pass 4 preserves parallel fulfillment and benefit obligations', async ({ p
   await expect(page.getByRole('heading', { name: 'Aksi lain & yang disnooze' })).toBeVisible()
   await expect(page.getByText(/Bayar benefit Rp\s?2\.764\.000/)).toBeVisible()
   await expect(page.getByText('Sisa 67 buku')).toBeVisible()
+
+  await page.locator('.next-action').getByRole('button', { name: 'Snooze 3 hari' }).click()
+  await expect(page.getByRole('heading', { name: /Bayar benefit Rp\s?2\.764\.000/ })).toBeVisible()
+  await expect(page.getByText(/Lanjutkan pemenuhan · sisa 67 buku/)).toBeVisible()
+  await expect(page.getByText(/Snooze sampai/)).toBeVisible()
 })
 
 test('Pass 4 explicitly closes a ready order while supplier remains PARTIAL', async ({ page }) => {
@@ -383,6 +503,11 @@ test('Pass 4 explicitly closes a ready order while supplier remains PARTIAL', as
   await page.reload()
   await expect(page.getByText('Selesai', { exact: true }).first()).toBeVisible()
   await expect(page.getByRole('button', { name: 'Confirm LUNAS' })).toHaveCount(0)
+  await page.getByRole('tab', { name: 'Barang & Distribusi' }).click()
+  await expect(page.getByRole('button', { name: 'Refresh summary' })).toHaveCount(0)
+  await expect(page.getByText(/Cache tracker ditampilkan sebagai konteks read-only/)).toBeVisible()
+  await page.getByRole('tab', { name: 'Timeline' }).click()
+  await expect(page.getByLabel('Add Note')).toHaveCount(0)
 })
 
 test.describe('mobile operations layout', () => {
@@ -400,7 +525,15 @@ test.describe('mobile operations layout', () => {
     await page.goto('/orders/ORD-2026-065?tab=distribution')
     await expect(page.getByRole('heading', { name: 'Barang dari Vendor' })).toBeVisible()
     await expect(page.getByText('Sisa 67 buku')).toBeVisible()
+    await expect(page.getByRole('tab', { name: 'Overview' })).toBeVisible()
+    await expect(page.getByRole('tab', { name: 'Timeline' })).toBeVisible()
     await page.screenshot({ path: testInfo.outputPath('mobile-order-workspace.png'), fullPage: true })
+
+    await page.goto('/pipeline')
+    await expect(page.locator('.mobile-nav')).toBeVisible()
+    await expect(page.locator('.pipeline-column[data-stage="DISTRIBUTION"]')).toContainText('SDN 65 Ambon')
+    await expect(page.locator('.pipeline-board')).toHaveCSS('overflow-x', 'visible')
+    await page.screenshot({ path: testInfo.outputPath('mobile-pipeline.png'), fullPage: true })
   })
 
   test('stacks Vendor selection, aggregate breakdown, and Batch detail', async ({ page }, testInfo) => {
