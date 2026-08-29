@@ -4,6 +4,7 @@ Status: JPA-COR-07–09 implemented; Review Gate A pending
 Baseline: `00a747e` on `prototype/pass-5-final-integration`  
 Audit source: `outputs/jpa-ui-ux-audit/JPA-Operations-Workspace-UI-UX-Audit.md`  
 Design plan: `outputs/jpa-ui-ux-audit/JPA-Graph-First-Correction-Plan.md`
+Decision provenance: #1–#3 were explicitly reconfirmed by the user on 2026-08-29 before the follow-up correction pass.
 
 This is the canonical post-audit task map. Detailed implementation cards are assets linked from each prototype ticket. Execute one numbered ticket per agent session unless the map explicitly describes a review gate.
 
@@ -164,7 +165,7 @@ Can valid reminders be saved and can every unscheduled `UNPAID`/`PROCESSING` wai
 
 ### Answer
 
-Implemented and verified: unscheduled active `UNPAID` payment waits expose one non-snoozable **Atur tindak lanjut pembayaran** obligation; `PROCESSING` vendor waits expose one grouped, non-snoozable **Atur tindak lanjut vendor** obligation per batch. Confirmed dates are persisted as local calendar days, become due actions only when reached, and are removed when payment is confirmed or the batch fully arrives. Partial arrival preserves an existing batch reminder. Automated checks and interactive desktop/390 px browser verification passed.
+Implemented with targeted regression coverage: unscheduled active `UNPAID` payment waits expose one non-snoozable **Atur tindak lanjut pembayaran** obligation; `PROCESSING` and partial-arrival vendor waits expose one grouped, non-snoozable **Atur tindak lanjut vendor** obligation per batch, scoped to members that have not arrived fully. Confirmed dates are persisted as local calendar days, become due actions only when reached, and are removed when payment is confirmed or the batch fully arrives. Reminder save failures retain the entered date and expose retry behavior. Targeted automated and browser checks cover unscheduled, partial, due, resolved, and persistence-failure paths; the full Review Gate A/COR-18 scenario matrix remains pending.
 
 ## #8: Can order closure be deliberate and recoverable?
 

@@ -417,6 +417,16 @@ describe('parallel actions and explicit company closure', () => {
     })
   })
 
+  it('explains a missing final invoice amount as a concrete closure blocker', () => {
+    const source = canonicalOrder('ORD-2026-068')
+    const withoutFinalInvoice: Order = { ...source, finalInvoiceAmount: null }
+    const siplahItem = getClosureChecklist(withoutFinalInvoice).find((item) => item.key === 'SIPLAH_ADMIN')
+
+    expect(siplahItem).toMatchObject({ complete: false, blocking: true })
+    expect(siplahItem?.detail).toContain('nominal final')
+    expect(siplahItem?.detail).not.toContain('checkpoint administrasi SIPLah')
+  })
+
   it('blocks closure when each locked requirement is missing', () => {
     const ready = payBenefit(payCanonical68())
     const variants: Order[] = [

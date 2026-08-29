@@ -4,12 +4,7 @@ import type { BenefitPaymentMethod, BenefitRecipientType, Order } from '../../do
 import { ClosureChecklist } from '../../components/orders/closure-checklist'
 import { usePrototypeStore } from '../../store/use-prototype-store'
 import { formatCurrency, formatDate } from '../../utils/format'
-import {
-  calendarDateToReminderTimestamp,
-  futureCalendarDate,
-  reminderTimestampToCalendarDate,
-  validateReminderCalendarDate,
-} from '../../utils/reminder-date'
+import { ReminderForm } from '../../components/work-queue/reminder-form'
 import { Button } from '../../components/ui/button'
 import { FormField } from '../../components/ui/form-field'
 import { Modal } from '../../components/ui/modal'
@@ -36,10 +31,6 @@ export function FinanceWorkspace({ order }: { order: Order }) {
   const [deductionAmount, setDeductionAmount] = useState('0')
   const [paymentMethod, setPaymentMethod] = useState('SIPLah settlement')
   const [paymentEvidence, setPaymentEvidence] = useState(`Bukti-${order.id}.pdf`)
-  const [followUpDate, setFollowUpDate] = useState(() =>
-    reminderTimestampToCalendarDate(order.schoolPayment.followUpDueAt) || futureCalendarDate(3),
-  )
-  const [reminderError, setReminderError] = useState<string | null>(null)
   const [benefitMethod, setBenefitMethod] = useState<BenefitPaymentMethod>('TRANSFER')
   const [recipientType, setRecipientType] = useState<BenefitRecipientType>('SCHOOL_OFFICIAL')
   const [recipient, setRecipient] = useState('Bendahara sekolah')
@@ -103,24 +94,6 @@ export function FinanceWorkspace({ order }: { order: Order }) {
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Benefit gagal dicatat.')
     }
-  }
-
-  const saveReminder = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const validationError = validateReminderCalendarDate(followUpDate)
-    if (validationError) {
-      setReminderError(validationError)
-      setError(null)
-      setFeedback(null)
-      return
-    }
-
-    const dueAt = calendarDateToReminderTimestamp(followUpDate)
-    setReminderError(null)
-    run(
-      () => setPaymentFollowUp(order.id, dueAt),
-      'Reminder pembayaran disimpan.',
-    )
   }
 
   const openCloseReview = (event: MouseEvent<HTMLButtonElement>) => {
@@ -217,53 +190,24 @@ export function FinanceWorkspace({ order }: { order: Order }) {
             <h2>Reminder pembayaran</h2>
             <p>UNPAID tetap pasif sampai tanggal follow-up eksplisit tercapai.</p>
           </div>
-          {!reminderTimestampToCalendarDate(order.schoolPayment.followUpDueAt) ? (
-            <div className="callout callout--warning reminder-setup-callout">
-              <strong>Atur tindak lanjut pembayaran.</strong> Tanggal belum dikonfirmasi; kolom sudah diisi saran tiga hari dari hari ini. Simpan untuk mengaktifkan jadwal.
-            </div>
-          ) : (
-            <div className="callout callout--success reminder-setup-callout">
-              <strong>Reminder pembayaran tersimpan.</strong> Follow-up dijadwalkan pada {formatDate(order.schoolPayment.followUpDueAt)}.
-            </div>
-          )}
-          <form className="inline-action-form" onSubmit={saveReminder}>
-            <FormField
-              label="Tanggal follow-up"
-              htmlFor={`payment-follow-up-${order.id}`}
-              hint="Tanggal hari ini atau sesudahnya; tetap klik Simpan reminder untuk konfirmasi."
-            >
-              <input
-                id={`payment-follow-up-${order.id}`}
-                type="date"
-                value={followUpDate}
-                aria-invalid={Boolean(reminderError)}
-                aria-describedby={reminderError ? `payment-follow-up-error-${order.id}` : undefined}
-                onChange={(event) => {
-                  setFollowUpDate(event.target.value)
-                  setReminderError(null)
-                  setError(null)
-                }}
-              />
-              {reminderError ? <span id={`payment-follow-up-error-${order.id}`} className="form-error" role="alert">{reminderError}</span> : null}
-            </FormField>
-            <div className="reminder-form-actions">
-              <Button variant="secondary" type="submit">Simpan reminder</Button>
-              {order.schoolPayment.followUpDueAt ? (
-                <Button
-                  variant="ghost"
-                  type="button"
-                  onClick={(event) => {
-                    if (event.detail > 1) return
-                    setFollowUpDate('')
-                    setReminderError(null)
-                    run(() => setPaymentFollowUp(order.id, null), 'Reminder pembayaran dihapus.')
-                  }}
-                >
-                  Clear reminder
-                </Button>
-              ) : null}
-            </div>
-          </form>
+          <ReminderForm
+            inputId={`payment-follow-up-${order.id}`}
+            currentDueAt={order.schoolPayment.followUpDueAt}
+            setupRequired
+            setupTitle="Atur tindak lanjut pembayaran."
+            setupDescription="Tanggal belum dikonfirmasi; kolom sudah diisi saran tiga hari dari hari ini. Simpan untuk mengaktifkan jadwal."
+            savedTitle="Reminder pembayaran tersimpan."
+            savedDescription={(date) => `Follow-up dijadwalkan pada ${date}.`}
+            saveSuccessMessage="Reminder pembayaran disimpan."
+            clearSuccessMessage="Reminder pembayaran dihapus."
+            onSave={(dueAt) => setPaymentFollowUp(order.id, dueAt)}
+            onClear={() => setPaymentFollowUp(order.id, null)}
+            onBeforeAction={() => {
+              setError(null)
+              setFeedback(null)
+            }}
+            onCompleted={setFeedback}
+          />
         </section>
       ) : null}
 

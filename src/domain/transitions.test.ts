@@ -176,6 +176,28 @@ describe('important transitions', () => {
     expect(derivePrimaryNextAction(actions)?.kind).toBe('CHECK_GOODS')
   })
 
+  it('rejects goods arrival for a CLOSED member order before mutating the batch', () => {
+    const processing = createProcessingBatch()
+    const closedOrder = processing.orders['ORD-2026-040']
+    if (!closedOrder) throw new Error('Missing batch member')
+    const dataWithClosedMember: PrototypeData = {
+      ...processing,
+      orders: {
+        ...processing.orders,
+        [closedOrder.id]: { ...closedOrder, stage: 'CLOSED' },
+      },
+    }
+    const before = structuredClone(dataWithClosedMember)
+
+    expect(() => recordGoodsArrival(
+      dataWithClosedMember,
+      'VB-2026-010',
+      [{ orderId: closedOrder.id, arrivalType: 'FULL' }],
+      now,
+    )).toThrow(/CLOSED/)
+    expect(dataWithClosedMember).toEqual(before)
+  })
+
   it('makes benefit eligible after LUNAS without auto-paying or changing stage', () => {
     const order = canonicalOrder('ORD-2026-040')
     if (order.finalInvoiceAmount === null) throw new Error('Expected finalized invoice')

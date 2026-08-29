@@ -352,40 +352,90 @@ function isPersistedSchool(value: unknown, key: string): value is School {
   )
 }
 
-function migrateSchools(
+interface SchoolIdentityMigration {
+  schools: Record<string, School>
+  orders: Record<string, Order>
+}
+
+function migrateSchoolIdentities(
   orders: Record<string, Order>,
   persistedSchools?: unknown,
-): Record<string, School> {
+): SchoolIdentityMigration {
   const schools = createCanonicalSchools()
-  if (isRecord(persistedSchools)) {
-    for (const [schoolId, value] of Object.entries(persistedSchools)) {
-      if (isPersistedSchool(value, schoolId)) schools[schoolId] = { ...value, id: schoolId }
+  const schoolIdAliases = new Map<string, string>()
+  const schoolIdsByName = new Map<string, string>()
+
+  const rememberName = (name: string, schoolId: string) => {
+    const normalizedName = normalizeSchoolName(name)
+    if (normalizedName && !schoolIdsByName.has(normalizedName)) {
+      schoolIdsByName.set(normalizedName, schoolId)
     }
   }
 
-  for (const order of Object.values(orders)) {
-    if (schools[order.schoolId]) continue
-    const duplicate = Object.values(schools).find(
-      (school) => normalizeSchoolName(school.name) === normalizeSchoolName(order.schoolName),
-    )
-    if (duplicate) {
-      schools[order.schoolId] = {
-        ...duplicate,
-        id: order.schoolId,
-        name: order.schoolName,
+  // Canonical demo IDs win over legacy IDs when the school name is the same.
+  for (const school of Object.values(schools)) {
+    schoolIdAliases.set(school.id, school.id)
+    rememberName(school.name, school.id)
+  }
+
+  if (isRecord(persistedSchools)) {
+    for (const [schoolId, value] of Object.entries(persistedSchools).sort(([left], [right]) => left.localeCompare(right, 'id'))) {
+      if (!isPersistedSchool(value, schoolId)) continue
+
+      const existingById = schools[schoolId]
+      if (existingById) {
+        // An explicit persisted registry record may carry a user-maintained display name.
+        // Keep its old name as an alias so legacy orders still resolve to this same ID.
+        rememberName(existingById.name, schoolId)
+        schools[schoolId] = { ...value, id: schoolId }
+        schoolIdAliases.set(schoolId, schoolId)
+        rememberName(value.name, schoolId)
+        continue
       }
-      continue
-    }
-    // Historical state did not have an eligibility source. Preserve unknown schools as active
-    // rather than inferring inactivity from an order's CLOSED lifecycle stage.
-    schools[order.schoolId] = {
-      id: order.schoolId,
-      name: order.schoolName,
-      city: 'Lokasi belum diisi',
-      status: 'ACTIVE',
+
+      const canonicalId = schoolIdsByName.get(normalizeSchoolName(value.name))
+      if (canonicalId) {
+        schoolIdAliases.set(schoolId, canonicalId)
+        continue
+      }
+
+      schools[schoolId] = { ...value, id: schoolId }
+      schoolIdAliases.set(schoolId, schoolId)
+      rememberName(value.name, schoolId)
     }
   }
-  return schools
+
+  const migratedOrders: Record<string, Order> = { ...orders }
+  // Sorting makes the chosen ID deterministic when old data has only duplicate unknown IDs.
+  for (const order of Object.values(orders).sort((left, right) => left.id.localeCompare(right.id, 'id'))) {
+    const schoolIdByLegacyId = schoolIdAliases.get(order.schoolId)
+    const schoolIdByName = schoolIdsByName.get(normalizeSchoolName(order.schoolName))
+    let canonicalId = schoolIdByLegacyId ?? schoolIdByName
+
+    if (!canonicalId) {
+      // Historical state did not have an eligibility source. Preserve unknown schools as active
+      // rather than inferring inactivity from an order's CLOSED lifecycle stage.
+      canonicalId = order.schoolId
+      schools[canonicalId] = {
+        id: canonicalId,
+        name: order.schoolName,
+        city: 'Lokasi belum diisi',
+        status: 'ACTIVE',
+      }
+      schoolIdAliases.set(canonicalId, canonicalId)
+      rememberName(order.schoolName, canonicalId)
+    }
+
+    const school = schools[canonicalId]
+    if (!school) throw new Error(`Registry sekolah ${canonicalId} tidak dapat dipulihkan.`)
+    migratedOrders[order.id] = {
+      ...order,
+      schoolId: canonicalId,
+      schoolName: school.name,
+    }
+  }
+
+  return { schools, orders: migratedOrders }
 }
 
 export function migratePrototypeState(
@@ -403,24 +453,27 @@ export function migratePrototypeState(
     persistedVersion === 3 ||
     persistedVersion === 4 ||
     persistedVersion === 5 ||
-    persistedVersion === 6
+    persistedVersion === 6 ||
+    persistedVersion === 7
   ) {
     try {
-      const orders = persistedVersion === 4 || persistedVersion === 5 || persistedVersion === 6
-        ? Object.fromEntries(
+      const orders = persistedVersion === 1 || persistedVersion === 2 || persistedVersion === 3
+        ? migrateOrders(
+            persistedState.orders as Record<string, LegacyOrderV1 | LegacyOrderV2 | LegacyOrderV3>,
+            persistedVersion,
+          )
+        : Object.fromEntries(
             Object.entries(persistedState.orders as Record<string, Order>).map(([orderId, order]) => [
               orderId,
               normalizeCurrentOrder(order),
             ]),
           )
-        : migrateOrders(
-            persistedState.orders as Record<string, LegacyOrderV1 | LegacyOrderV2 | LegacyOrderV3>,
-            persistedVersion,
-          )
       return {
         version: DEMO_STATE_VERSION,
-        schools: migrateSchools(orders),
-        orders,
+        ...migrateSchoolIdentities(
+          orders,
+          persistedState.schools,
+        ),
         vendorBatches: migrateVendorBatches(
           persistedState.vendorBatches as Record<string, LegacyVendorBatch | VendorBatch>,
         ),
@@ -433,11 +486,10 @@ export function migratePrototypeState(
   if (persistedVersion === DEMO_STATE_VERSION && isRecord(persistedState.schools)) {
     return {
       version: DEMO_STATE_VERSION,
-      schools: migrateSchools(
+      ...migrateSchoolIdentities(
         persistedState.orders as Record<string, Order>,
         persistedState.schools,
       ),
-      orders: persistedState.orders as Record<string, Order>,
       vendorBatches: persistedState.vendorBatches as Record<string, VendorBatch>,
     }
   }

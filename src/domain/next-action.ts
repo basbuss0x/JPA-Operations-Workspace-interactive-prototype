@@ -17,6 +17,10 @@ function hasValidReminderDate(value: string | null): boolean {
   return value !== null && Number.isFinite(new Date(value).getTime())
 }
 
+function awaitsVendorArrival(order: Order): boolean {
+  return order.goods.arrivalType !== 'FULL'
+}
+
 export function getActionSnoozedUntil(order: Order, kind: NextActionKind): string | null {
   if (!isActionSnoozable(kind)) return null
   return order.nextActionControl.controlsByActionKey[kind]?.snoozedUntil ?? null
@@ -230,16 +234,24 @@ export function deriveActionCandidates(
   }
 
   const batch = context.vendorBatch
+  const vendorArrivalPending = batch ? awaitsVendorArrival(order) : false
+  const vendorFollowUpRelevant = batch &&
+    ['SENT_TO_VENDOR', 'VENDOR_CONFIRMED', 'PROCESSING', 'PARTIALLY_ARRIVED'].includes(batch.status)
+  const vendorSetupRelevant = batch &&
+    ['PROCESSING', 'PARTIALLY_ARRIVED'].includes(batch.status)
   if (
     batch &&
-    batch.status === 'PROCESSING' &&
+    vendorArrivalPending &&
+    vendorSetupRelevant &&
     !hasValidReminderDate(batch.followUpDueAt)
   ) {
     candidates.push(
       action(order, now, {
         kind: 'SCHEDULE_VENDOR_FOLLOW_UP',
         title: 'Atur tindak lanjut vendor',
-        reason: `Vendor Batch ${batch.id} sedang PROCESSING tanpa tanggal follow-up yang dikonfirmasi.`,
+        reason: batch.status === 'PARTIALLY_ARRIVED'
+          ? `Vendor Batch ${batch.id} baru tiba sebagian; order ini belum tiba penuh dan belum memiliki tanggal follow-up yang dikonfirmasi.`
+          : `Vendor Batch ${batch.id} sedang PROCESSING tanpa tanggal follow-up yang dikonfirmasi.`,
         href: `/vendor-batches/${batch.id}`,
         ctaLabel: 'Atur reminder',
         priority: 61,
@@ -248,7 +260,8 @@ export function deriveActionCandidates(
     )
   } else if (
     batch &&
-    ['SENT_TO_VENDOR', 'VENDOR_CONFIRMED', 'PROCESSING', 'PARTIALLY_ARRIVED'].includes(batch.status) &&
+    vendorArrivalPending &&
+    vendorFollowUpRelevant &&
     reached(batch.followUpDueAt, now)
   ) {
     candidates.push(

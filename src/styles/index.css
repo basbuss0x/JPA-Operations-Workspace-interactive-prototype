@@ -3411,10 +3411,18 @@ p {
   flex-wrap: wrap;
 }
 
-.reminder-setup-callout {
+.reminder-setup-callout,
+.reminder-action-error {
   flex: 1 1 100%;
-  order: 3;
   margin-top: -4px;
+}
+
+.reminder-setup-callout {
+  order: 3;
+}
+
+.reminder-action-error {
+  order: 4;
 }
 
 .batch-actions-panel .panel-heading {

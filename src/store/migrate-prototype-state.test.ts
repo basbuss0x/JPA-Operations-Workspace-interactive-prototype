@@ -73,7 +73,7 @@ describe('prototype local state migration', () => {
     const order = migrated.orders[source.id]
 
     expect(migrated.version).toBe(DEMO_STATE_VERSION)
-    expect(order?.schoolName).toBe('Migrated SDN 65')
+    expect(order?.schoolName).toBe('SDN 65 Ambon')
     expect(order?.arkasBudgetAmount).toBe(27_640_000)
     expect(order?.hetReviewedAmount).toBe(27_640_000)
     expect(order?.finalInvoiceAmount).toBe(27_640_000)
@@ -101,7 +101,7 @@ describe('prototype local state migration', () => {
     )
     const order = migrated.orders[source.id]
 
-    expect(order?.schoolName).toBe('Migrated Gate 1.1 School')
+    expect(order?.schoolName).toBe('SDN 40 Ambon')
     expect(order?.siplah.documents.filter((document) => document.requiredForAdminCompletion)).toHaveLength(4)
     expect(order?.siplah.documents.filter((document) => document.requiredForVendorReady).map((document) => document.kind)).toEqual(['SURAT_PESANAN'])
     expect(order?.siplah.documents.every((document) => !document.requiredForAdminCompletion || document.verified)).toBe(true)
@@ -216,6 +216,68 @@ describe('prototype local state migration', () => {
       status: 'INACTIVE',
     })
     expect(migrated.orders[source.id]?.schoolId).toBe(source.schoolId)
+  })
+
+  it('deduplicates same-name legacy schools and remaps every order to the canonical identity', () => {
+    const canonical = createCanonicalDemoData()
+    const source = canonical.orders['ORD-2026-040']
+    if (!source) throw new Error('Missing source order')
+
+    const firstOrder: Order = {
+      ...source,
+      id: 'ORD-LEGACY-A',
+      schoolId: 'LEGACY-SCHOOL-A',
+      schoolName: 'SDN 40 Ambon',
+    }
+    const secondOrder: Order = {
+      ...source,
+      id: 'ORD-LEGACY-B',
+      schoolId: 'LEGACY-SCHOOL-B',
+      schoolName: ' SDN 40 Ambon ',
+    }
+
+    const migrated = migratePrototypeState(
+      {
+        version: 7,
+        schools: {
+          'LEGACY-SCHOOL-A': { id: 'LEGACY-SCHOOL-A', name: 'SDN 40 Ambon', city: 'Ambon', status: 'ACTIVE' },
+          'LEGACY-SCHOOL-B': { id: 'LEGACY-SCHOOL-B', name: 'SDN 40 Ambon', city: 'Ambon', status: 'ACTIVE' },
+        },
+        orders: { [firstOrder.id]: firstOrder, [secondOrder.id]: secondOrder },
+        vendorBatches: {},
+      },
+      7,
+    )
+
+    expect(migrated.orders[firstOrder.id]).toMatchObject({ schoolId: 'SCH-040', schoolName: 'SDN 40 Ambon' })
+    expect(migrated.orders[secondOrder.id]).toMatchObject({ schoolId: 'SCH-040', schoolName: 'SDN 40 Ambon' })
+    expect(Object.values(migrated.schools).filter((school) => school.name === 'SDN 40 Ambon')).toHaveLength(1)
+    expect(migrated.schools['SCH-040']).toMatchObject({ id: 'SCH-040', name: 'SDN 40 Ambon' })
+    expect(migrated.schools['LEGACY-SCHOOL-A']).toBeUndefined()
+    expect(migrated.schools['LEGACY-SCHOOL-B']).toBeUndefined()
+  })
+
+  it('keeps registry and order names aligned when a persisted school identity already exists', () => {
+    const canonical = createCanonicalDemoData()
+    const source = canonical.orders['ORD-2026-040']
+    if (!source) throw new Error('Missing source order')
+    const order: Order = { ...source, schoolName: 'Nama legacy berbeda' }
+
+    const migrated = migratePrototypeState(
+      {
+        version: 7,
+        schools: {
+          'SCH-040': { id: 'SCH-040', name: 'Nama sekolah registry', city: 'Ambon', status: 'ACTIVE' },
+        },
+        orders: { [order.id]: order },
+        vendorBatches: {},
+      },
+      7,
+    )
+
+    expect(migrated.orders[order.id]?.schoolId).toBe('SCH-040')
+    expect(migrated.orders[order.id]?.schoolName).toBe('Nama sekolah registry')
+    expect(migrated.schools['SCH-040']?.name).toBe('Nama sekolah registry')
   })
 
   it('resets unknown or malformed schema versions to canonical demo data', () => {

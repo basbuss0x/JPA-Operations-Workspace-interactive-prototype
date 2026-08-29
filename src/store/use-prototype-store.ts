@@ -154,9 +154,43 @@ function updateOrders(
 
 const initialData = createCanonicalDemoData()
 
+const persistenceControl = { bypassWrites: 0 }
+const jsonStorage = createJSONStorage(() => localStorage)
+const transactionalStorage = jsonStorage
+  ? {
+      getItem: (name: string) => jsonStorage.getItem(name),
+      setItem: (name: string, value: Parameters<typeof jsonStorage.setItem>[1]) => {
+        if (persistenceControl.bypassWrites > 0) return
+        return jsonStorage.setItem(name, value)
+      },
+      removeItem: (name: string) => jsonStorage.removeItem(name),
+    }
+  : undefined
+
+type StoreUpdate =
+  | PrototypeStore
+  | Partial<PrototypeStore>
+  | ((state: PrototypeStore) => PrototypeStore | Partial<PrototypeStore>)
+
 export const usePrototypeStore = create<PrototypeStore>()(
   persist(
-    (set) => ({
+    (rawSet, get, api) => {
+      const set = (update: StoreUpdate) => {
+        const previousState = get()
+        try {
+          rawSet(update)
+        } catch (error) {
+          persistenceControl.bypassWrites += 1
+          try {
+            api.setState(previousState, true)
+          } finally {
+            persistenceControl.bypassWrites -= 1
+          }
+          throw error
+        }
+      }
+
+      return {
       ...initialData,
       resetDemoData: () => set(createCanonicalDemoData()),
       createExtractedOrder: (input) => {
@@ -327,11 +361,12 @@ export const usePrototypeStore = create<PrototypeStore>()(
         set((state) => ({
           orders: updateOrders(state.orders, [orderId], (order) => addTimelineNote(order, note)),
         })),
-    }),
+      }
+    },
     {
       name: 'jpa-operations-prototype',
       version: DEMO_STATE_VERSION,
-      storage: createJSONStorage(() => localStorage),
+      storage: transactionalStorage,
       partialize: (state) => ({
         version: state.version,
         schools: state.schools,

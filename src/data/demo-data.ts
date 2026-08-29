@@ -15,7 +15,7 @@ import type {
   TimelineEvent,
 } from '../domain/types'
 
-export const DEMO_STATE_VERSION = 7
+export const DEMO_STATE_VERSION = 8
 
 const canonicalSchools: School[] = [
   { id: 'SCH-030', name: 'SDN 30 Ambon', city: 'Ambon', status: 'ACTIVE' },

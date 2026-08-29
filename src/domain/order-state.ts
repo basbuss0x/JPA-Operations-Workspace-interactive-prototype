@@ -79,6 +79,7 @@ function getSiplahAdminMissingRequirements(order: Order): string[] {
   const missing: string[] = []
   if (!order.siplah.orderPlaced) missing.push('pesanan SIPLah dibuat')
   if (!order.siplah.orderNumber) missing.push('nomor order SIPLah')
+  if (order.finalInvoiceAmount === null) missing.push('nominal final SIPLah belum dikonfirmasi')
   for (const document of order.siplah.documents) {
     if (document.requiredForAdminCompletion && !isDocumentComplete(document)) {
       missing.push(document.label)

@@ -168,6 +168,56 @@ test('COR-07 makes unscheduled waits explicit and keeps confirmed reminders dura
   await page.screenshot({ path: testInfo.outputPath('desktop-reminders-persisted.png'), fullPage: true })
 })
 
+test('does not report reminder success when localStorage persistence fails', async ({ page }) => {
+  const futureDate = localCalendarDateOffset(5)
+
+  await page.goto('/orders/ORD-2026-068?tab=finance')
+  await page.evaluate(() => {
+    const originalSetItem = Storage.prototype.setItem
+    Storage.prototype.setItem = function setItem(name, value) {
+      if (name === 'jpa-operations-prototype') throw new Error('Simulated localStorage failure')
+      return originalSetItem.call(this, name, value)
+    }
+    ;(window as unknown as { restoreStorage?: () => void }).restoreStorage = () => {
+      Storage.prototype.setItem = originalSetItem
+    }
+  })
+
+  const paymentDate = page.getByLabel('Tanggal follow-up')
+  await paymentDate.fill(futureDate)
+  await page.getByRole('button', { name: 'Simpan reminder' }).click()
+  await expect(page.getByRole('alert')).toContainText('Reminder belum tersimpan')
+  await expect(paymentDate).toHaveValue(futureDate)
+  await expect(page.getByRole('button', { name: 'Clear reminder' })).toHaveCount(0)
+  await expect(page.getByText('Reminder pembayaran tersimpan.', { exact: false })).toHaveCount(0)
+
+  await page.evaluate(() => (window as unknown as { restoreStorage?: () => void }).restoreStorage?.())
+  await page.getByRole('button', { name: 'Simpan reminder' }).click()
+  await expect(page.getByRole('button', { name: 'Clear reminder' })).toBeVisible()
+})
+
+test('turns a due payment reminder into one queue action and clears it after LUNAS', async ({ page }) => {
+  const dueDate = localCalendarDateOffset(0)
+
+  await page.goto('/orders/ORD-2026-068?tab=finance')
+  await page.getByLabel('Tanggal follow-up').fill(dueDate)
+  await page.getByRole('button', { name: 'Simpan reminder' }).click()
+
+  await page.goto('/')
+  const duePayment = page.locator('.next-action').filter({ hasText: 'Follow-up pembayaran sekolah' })
+  await expect(duePayment).toHaveCount(1)
+  await expect(duePayment).toContainText('SDN 68 Ambon')
+
+  await page.goto('/orders/ORD-2026-068?tab=finance')
+  await page.getByRole('button', { name: 'Confirm LUNAS' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Confirm LUNAS' }).click()
+  await expect(page.getByText('LUNAS', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Reminder pembayaran' })).toHaveCount(0)
+
+  await page.goto('/')
+  await expect(page.locator('.next-action').filter({ hasText: 'Follow-up pembayaran sekolah' })).toHaveCount(0)
+})
+
 test('snooze, override, persistence, and reset mutate real local state', async ({ page }, testInfo) => {
   await page.goto('/')
 
@@ -229,11 +279,11 @@ test('snooze, override, persistence, and reset mutate real local state', async (
     )
   })
   await page.goto('/orders/ORD-2026-068')
-  await expect(page.getByRole('heading', { name: 'Migrated SDN 68' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'SDN 68 Ambon' })).toBeVisible()
   await expect.poll(async () => page.evaluate(() => {
     const stored = JSON.parse(window.localStorage.getItem('jpa-operations-prototype') ?? '{}') as { version?: number }
     return stored.version
-  })).toBe(7)
+  })).toBe(8)
 
   await page.evaluate(() => {
     window.localStorage.setItem(
@@ -270,6 +320,28 @@ test('empty routes and invalid finance input stay inside accessible app feedback
   await page.keyboard.press('Escape')
   await expect(page.getByRole('button', { name: 'Confirm LUNAS' })).toBeFocused()
   expect(browserDialogs).toEqual([])
+})
+
+test('closure checklist names an unconfirmed final invoice amount', async ({ page }) => {
+  await page.goto('/orders/ORD-2026-068?tab=finance')
+  await expect(page.getByRole('heading', { name: 'Penutupan order belum siap' })).toBeVisible()
+  await page.getByRole('button', { name: 'Reset Demo Data' }).click()
+  await page.getByRole('button', { name: 'Reset sekarang' }).click()
+  await expect(page.getByRole('heading', { name: 'Penutupan order belum siap' })).toBeVisible()
+  await page.evaluate(() => {
+    const key = 'jpa-operations-prototype'
+    const persisted = JSON.parse(window.localStorage.getItem(key) ?? '{}') as {
+      state?: { orders?: Record<string, { finalInvoiceAmount?: number | null }> }
+    }
+    const order = persisted.state?.orders?.['ORD-2026-068']
+    if (!order) throw new Error('Missing closure fixture')
+    order.finalInvoiceAmount = null
+    window.localStorage.setItem(key, JSON.stringify(persisted))
+  })
+  await page.reload()
+
+  await expect(page.getByText('nominal final SIPLah belum dikonfirmasi', { exact: false })).toBeVisible()
+  await expect(page.getByText('Belum lengkap: checkpoint administrasi SIPLah.', { exact: true })).toHaveCount(0)
 })
 
 test('COR-09 requires explicit eligible school context before ARKAS extraction', async ({ page }) => {
@@ -457,17 +529,24 @@ test('Pass 3 Vendor Batch journey preserves recap, lifecycle, reminders, arrival
 
   await page.getByRole('button', { name: 'Record partial/full arrival' }).click()
   const sdnAllocation = page.locator('.arrival-allocation-list fieldset').filter({ hasText: 'SDN 40 Ambon' })
-  await sdnAllocation.getByLabel('Tiba sebagian').check()
+  await sdnAllocation.getByLabel('Tiba penuh').check()
   await page.getByRole('button', { name: 'Simpan kedatangan' }).click()
 
   await expect(page.getByText('PARTIALLY ARRIVED', { exact: true }).first()).toBeVisible()
   const sdnMember = page.locator('.batch-member-row').filter({ hasText: 'SDN 40 Ambon' })
   const slbMember = page.locator('.batch-member-row').filter({ hasText: 'SLB Batu Merah' })
-  await expect(sdnMember).toContainText('Barang PARTIAL')
+  await expect(sdnMember).toContainText('Barang FULL')
   await expect(slbMember).toContainText('Barang NONE')
+  await expect(page.getByText('Atur tindak lanjut vendor.', { exact: false })).toBeVisible()
   await page.reload()
-  await expect(sdnMember).toContainText('Barang PARTIAL')
+  await expect(sdnMember).toContainText('Barang FULL')
   await expect(slbMember).toContainText('Barang NONE')
+  await expect(page.getByText('Atur tindak lanjut vendor.', { exact: false })).toBeVisible()
+  await page.goto('/')
+  const partialSetup = page.locator('.next-action').filter({ hasText: 'Atur tindak lanjut vendor · VB-2026-010' })
+  await expect(partialSetup).toHaveCount(1)
+  await expect(partialSetup).toContainText('SLB Batu Merah')
+  await expect(partialSetup).not.toContainText('SDN 40 Ambon')
   await page.screenshot({ path: testInfo.outputPath('desktop-vendor-partial-arrival.png'), fullPage: true })
 
   await page.goto('/orders/ORD-2026-040?tab=vendor')

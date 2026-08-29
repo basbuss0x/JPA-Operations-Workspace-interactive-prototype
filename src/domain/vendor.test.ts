@@ -5,6 +5,7 @@ import {
   aggregateVendorItems,
   buildVendorRecap,
   deriveWorkQueue,
+  getVendorBatchOperationalState,
   isVendorBatchEligible,
   proposeVendorBatchId,
 } from './selectors'
@@ -199,6 +200,51 @@ describe('Vendor Batch domain', () => {
     expect(setup[0]?.orderIds).toEqual(['ORD-2026-040', 'ORD-2026-SLB'])
     expect(setup[0]?.snoozable).toBe(false)
     expect(setup[0]?.dueAt).toBeNull()
+  })
+
+  it('keeps partial-batch follow-up scoped to members that are not fully arrived', () => {
+    const processing = processingBatch()
+    const partial = recordGoodsArrival(
+      processing,
+      'VB-2026-010',
+      [{ orderId: 'ORD-2026-040', arrivalType: 'FULL' }],
+      now,
+    )
+    const batch = partial.vendorBatches['VB-2026-010']
+    if (!batch) throw new Error('Missing partially arrived batch')
+
+    const arrivedMemberActions = deriveActionCandidates(
+      order(partial, 'ORD-2026-040'),
+      { vendorBatch: batch },
+      now,
+    )
+    const pendingMemberActions = deriveActionCandidates(
+      order(partial, 'ORD-2026-SLB'),
+      { vendorBatch: batch },
+      now,
+    )
+
+    expect(arrivedMemberActions.some((action) => ['SCHEDULE_VENDOR_FOLLOW_UP', 'FOLLOW_UP_VENDOR'].includes(action.kind))).toBe(false)
+    expect(pendingMemberActions.filter((action) => action.kind === 'SCHEDULE_VENDOR_FOLLOW_UP')).toHaveLength(1)
+    expect(getVendorBatchOperationalState(batch, now)).toMatchObject({
+      label: 'Atur tindak lanjut vendor',
+      actionable: true,
+    })
+
+    const queue = deriveWorkQueue(partial, now).filter(
+      (item) => item.kind === 'SCHEDULE_VENDOR_FOLLOW_UP' && item.id.includes('VB-2026-010'),
+    )
+    expect(queue).toHaveLength(1)
+    expect(queue[0]?.orderIds).toEqual(['ORD-2026-SLB'])
+    expect(queue[0]?.context).toContain('SLB Batu Merah')
+    expect(queue[0]?.context).not.toContain('SDN 40 Ambon')
+
+    const due = setVendorFollowUpReminder(partial, 'VB-2026-010', now.toISOString(), now)
+    const dueQueue = deriveWorkQueue(due, now).filter(
+      (item) => item.kind === 'FOLLOW_UP_VENDOR' && item.id.includes('VB-2026-010'),
+    )
+    expect(dueQueue).toHaveLength(1)
+    expect(dueQueue[0]?.orderIds).toEqual(['ORD-2026-SLB'])
   })
 
   it('targets partial arrival and derives ARRIVED only after every member order is FULL', () => {

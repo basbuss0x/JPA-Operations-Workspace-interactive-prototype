@@ -813,7 +813,11 @@ export function recordGoodsArrival(
       throw new Error(`${allocation.orderId} memiliki alokasi duplikat.`)
     }
     const existingOrder = data.orders[allocation.orderId]
-    if (existingOrder?.goods.arrivalType === 'FULL' && allocation.arrivalType === 'PARTIAL') {
+    if (!existingOrder) throw new Error(`Order ${allocation.orderId} tidak ditemukan.`)
+    if (existingOrder.stage === 'CLOSED') {
+      throw new Error(`Order ${allocation.orderId} CLOSED tidak dapat diubah tanpa dibuka kembali.`)
+    }
+    if (existingOrder.goods.arrivalType === 'FULL' && allocation.arrivalType === 'PARTIAL') {
       throw new Error(`${allocation.orderId} sudah tiba penuh dan tidak dapat diturunkan menjadi sebagian.`)
     }
     allocatedIds.add(allocation.orderId)

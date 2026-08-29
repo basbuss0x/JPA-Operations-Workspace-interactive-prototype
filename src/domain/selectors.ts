@@ -255,7 +255,14 @@ export function getVendorBatchOperationalState(
           }
         : { label: 'Menunggu vendor', detail: 'Pasif sampai reminder follow-up tercapai.', priority: 70, actionable: false }
     case 'PARTIALLY_ARRIVED':
-      return { label: 'Catat kedatangan berikutnya', detail: 'Sebagian sekolah/order sudah menerima alokasi.', priority: 50, actionable: true }
+      return !hasValidDate(batch.followUpDueAt)
+        ? {
+            label: 'Atur tindak lanjut vendor',
+            detail: 'Batch baru tiba sebagian dan belum memiliki tanggal follow-up yang dikonfirmasi untuk order yang masih menunggu.',
+            priority: 51,
+            actionable: true,
+          }
+        : { label: 'Catat kedatangan berikutnya', detail: 'Sebagian sekolah/order sudah menerima alokasi.', priority: 50, actionable: true }
     case 'ARRIVED':
       return { label: 'Barang tiba', detail: 'Goods handling dilanjutkan pada alur distribusi.', priority: 100, actionable: false }
   }
@@ -340,11 +347,12 @@ export function deriveWorkQueue(
       const order = data.orders[orderId]
       return order ? [order.schoolName] : []
     })
+    const pendingLabel = `${orderIds.length} order anggota belum tiba penuh`
     rest.push({
       ...first,
       id: `queue-schedule-vendor-${batchId}`,
       title: `Atur tindak lanjut vendor · ${batchId}`,
-      reason: `Vendor Batch ${batchId} sedang PROCESSING tanpa tanggal follow-up; tetapkan satu reminder untuk seluruh order anggota.`,
+      reason: `Vendor Batch ${batchId} memiliki ${pendingLabel}; tetapkan satu reminder untuk order yang masih menunggu.`,
       href: `/vendor-batches/${batchId}`,
       ctaLabel: 'Atur reminder',
       schoolName: batchId,
@@ -362,15 +370,16 @@ export function deriveWorkQueue(
   for (const [batchId, batchItems] of followUpsByBatch) {
     const first = batchItems[0]
     if (!first) continue
+    const pendingOrderIds = batchItems.flatMap((item) => item.orderIds)
     rest.push({
       ...first,
       id: `queue-follow-up-${batchId}`,
       title: `Follow-up vendor · ${batchId}`,
-      reason: `Reminder batch sudah tercapai; ${batchItems.length} sekolah menunggu tindak lanjut yang sama.`,
+      reason: `Reminder batch sudah tercapai; ${pendingOrderIds.length} order anggota belum tiba penuh dan menunggu tindak lanjut yang sama.`,
       href: `/vendor-batches/${batchId}`,
       ctaLabel: 'Buka batch',
       schoolName: batchId,
-      orderIds: batchItems.flatMap((item) => item.orderIds),
+      orderIds: pendingOrderIds,
       context: `${batchId} · ${batchItems.map((item) => item.schoolName).join(' · ')}`,
     })
   }
