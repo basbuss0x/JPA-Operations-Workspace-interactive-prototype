@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { derivePrimaryNextAction, getActiveActionCandidates } from '../domain/next-action'
 import { OrderStateSummary } from '../components/orders/order-state-summary'
-import { getOrderStateItems } from '../domain/presentation'
 import {
   getHetExceptionCount,
   getOrderActionCandidates,
@@ -109,12 +108,7 @@ export function OrdersPage() {
                   <th>Sekolah / order</th>
                   <th>Posisi</th>
                   <th>Masalah / next action</th>
-                  <th>HET</th>
-                  <th>SIPLah</th>
-                  <th>Vendor</th>
-                  <th>Barang</th>
-                  <th>Bayar</th>
-                  <th>Benefit</th>
+                  <th>Sinyal order</th>
                 </tr>
               </thead>
               <tbody>
@@ -126,7 +120,6 @@ export function OrdersPage() {
                   const action = derivePrimaryNextAction(candidates)
                   const otherActionCount = Math.max(0, candidates.length - (action ? 1 : 0))
                   const exceptions = getHetExceptionCount(order)
-                  const stateItems = getOrderStateItems(order, batch)
                   return (
                     <tr key={order.id}>
                       <td>
@@ -143,12 +136,9 @@ export function OrdersPage() {
                         </Link>
                         {otherActionCount > 0 ? <span className="other-action-count">+{otherActionCount} aksi lain</span> : null}
                       </td>
-                      {stateItems.slice(0, 3).map((item) => (
-                        <td key={item.label}><StatusChip tone={item.tone}>{item.value}</StatusChip></td>
-                      ))}
-                      <td><span className="table-value">{stateItems[3].value}</span></td>
-                      <td><StatusChip tone={stateItems[4].tone}>{stateItems[4].value}</StatusChip></td>
-                      <td><StatusChip tone={stateItems[5].tone}>{stateItems[5].value}</StatusChip></td>
+                      <td className="orders-table__signals">
+                        <OrderStateSummary order={order} batch={batch} compact />
+                      </td>
                     </tr>
                   )
                 })}

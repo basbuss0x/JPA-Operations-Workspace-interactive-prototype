@@ -1,6 +1,6 @@
 # JPA Post-Audit Correction Map
 
-Status: JPA-COR-07–09 implemented; Review Gate A pending
+Status: JPA-COR-07–10 implemented; Review Gate A pending
 Baseline: `00a747e` on `prototype/pass-5-final-integration`  
 Audit source: `outputs/jpa-ui-ux-audit/JPA-Operations-Workspace-UI-UX-Audit.md`  
 Design plan: `outputs/jpa-ui-ux-audit/JPA-Graph-First-Correction-Plan.md`
@@ -210,7 +210,7 @@ Can Orders expose payment/benefit signals and can Pipeline expose later stages w
 
 ### Answer
 
-Pending implementation and interactive browser proof.
+Implemented with targeted viewport regression coverage: Orders now uses a four-column desktop table with a compact six-signal summary, keeping school identity, lifecycle position, Next Action, HET/SIPLah/Vendor/Barang, Bayar, and Benefit visible at 1366px and the wide desktop baseline without horizontal table overflow. Pipeline now uses an intentional responsive grid that exposes all seven lifecycle stages without horizontal scrolling; empty stages remain named and closed orders remain secondary. Long school names wrap safely, keyboard-focusable order links remain reachable, and the existing mobile card mode stays intact at 390px. Browser checks covered 1366px, 1536px, 390px, and a 200% CSS viewport simulation; the full Review Gate A/COR-18 scenario matrix remains pending.
 
 ## #11: Can operators recover from critical form errors in Indonesian?
 

@@ -902,9 +902,30 @@ p {
 
 .orders-table {
   width: 100%;
-  min-width: 1120px;
+  min-width: 0;
+  table-layout: fixed;
   border-collapse: collapse;
   text-align: left;
+}
+
+.orders-table th:nth-child(1),
+.orders-table td:nth-child(1) {
+  width: 18%;
+}
+
+.orders-table th:nth-child(2),
+.orders-table td:nth-child(2) {
+  width: 11%;
+}
+
+.orders-table th:nth-child(3),
+.orders-table td:nth-child(3) {
+  width: 27%;
+}
+
+.orders-table th:nth-child(4),
+.orders-table td:nth-child(4) {
+  width: 44%;
 }
 
 .orders-table th {
@@ -936,7 +957,8 @@ p {
 
 .order-link {
   display: block;
-  min-width: 165px;
+  min-width: 0;
+  overflow-wrap: anywhere;
   text-decoration: none;
 }
 
@@ -961,7 +983,26 @@ p {
 }
 
 .orders-table__action {
-  min-width: 220px;
+  min-width: 0;
+}
+
+.orders-table__action a {
+  overflow-wrap: anywhere;
+}
+
+.orders-table__signals {
+  min-width: 0;
+  padding: 8px;
+}
+
+.orders-table__signals .order-state-summary {
+  margin-top: 0;
+}
+
+.orders-table__signals .status-chip {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .orders-table__action > * {
@@ -975,11 +1016,6 @@ p {
   font-size: 0.72rem;
   font-weight: 700;
   text-decoration: none;
-}
-
-.table-value {
-  color: #44514b;
-  white-space: nowrap;
 }
 
 .orders-mobile-list {
@@ -1094,6 +1130,33 @@ p {
   color: var(--muted);
   font-size: 0.66rem;
   font-weight: 700;
+}
+
+.order-state-summary__item .status-chip {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.order-state-summary--compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 0;
+  border: 0;
+}
+
+.order-state-summary--compact .order-state-summary__item {
+  gap: 5px;
+  padding: 6px 8px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.order-state-summary--compact .order-state-summary__item:nth-child(3n) {
+  border-right: 0;
+}
+
+.order-state-summary--compact .order-state-summary__item:nth-child(n + 4) {
+  border-bottom: 0;
 }
 
 .detail-list {
@@ -4054,13 +4117,12 @@ p {
 
 .pipeline-board {
   display: grid;
-  grid-auto-columns: minmax(238px, 1fr);
-  grid-auto-flow: column;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-auto-flow: row;
   gap: 12px;
   align-items: start;
-  overflow-x: auto;
+  overflow: visible;
   padding-bottom: 10px;
-  scroll-snap-type: x proximity;
 }
 
 .pipeline-column {
@@ -4245,11 +4307,11 @@ p {
 
   .pipeline-board {
     display: grid;
+    grid-template-columns: 1fr;
     grid-auto-columns: auto;
     grid-auto-flow: row;
     overflow: visible;
     padding-bottom: 0;
-    scroll-snap-type: none;
   }
 
   .pipeline-column__body {

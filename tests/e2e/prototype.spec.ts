@@ -81,6 +81,70 @@ test('Pipeline derives lifecycle columns, prioritizes actions, and keeps complet
   await expect(page.getByRole('heading', { name: 'SDN 65 Ambon' })).toBeVisible()
 })
 
+test('desktop Orders and Pipeline keep critical context visible without horizontal discovery', async ({ page }, testInfo) => {
+  const desktopViewports = [
+    { width: 1366, height: 768 },
+    { width: 1536, height: 864 },
+  ] as const
+  const pipelineStages = ['INTAKE', 'HET_REVIEW', 'SIPLAH', 'VENDOR', 'GOODS_ARRIVED', 'DISTRIBUTION', 'COMPLETION'] as const
+
+  for (const viewport of desktopViewports) {
+    await page.setViewportSize(viewport)
+    await page.goto('/orders')
+    await expect(page.locator('.orders-table-wrap')).toBeVisible()
+    await expect(page.locator('.orders-mobile-list')).toBeHidden()
+    await expect(page.getByRole('columnheader', { name: 'Sinyal order', exact: true })).toBeVisible()
+    await expect(page.locator('.orders-table__signals').first().getByText('Bayar', { exact: true })).toBeVisible()
+    await expect(page.locator('.orders-table__signals').first().getByText('Benefit', { exact: true })).toBeVisible()
+
+    const paidOrder = page.locator('.orders-table tbody tr').filter({ hasText: 'SDN 65 Ambon' })
+    await expect(paidOrder).toContainText('LUNAS')
+    await expect(paidOrder).toContainText('ELIGIBLE')
+
+    if (viewport.width === 1366) {
+      await page.locator('.orders-table tbody tr').first().locator('.order-link strong').evaluate((element) => {
+        element.textContent = 'Sekolah dengan nama yang sangat panjang untuk uji keterbacaan desktop'
+      })
+    }
+
+    const orderMetrics = await page.locator('.orders-table-wrap').evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      documentScrollWidth: document.documentElement.scrollWidth,
+    }))
+    expect(orderMetrics.scrollWidth).toBeLessThanOrEqual(orderMetrics.clientWidth)
+    expect(orderMetrics.documentScrollWidth).toBeLessThanOrEqual(viewport.width)
+
+    await page.goto('/pipeline')
+    for (const stage of pipelineStages) {
+      const column = page.locator(`.pipeline-column[data-stage="${stage}"]`)
+      await expect(column).toBeVisible()
+      await expect(column.locator('.pipeline-column__header h2')).toBeVisible()
+    }
+    const firstCard = page.locator('.pipeline-card').first()
+    if (viewport.width === 1366) {
+      await firstCard.locator('.pipeline-card__header strong').evaluate((element) => {
+        element.textContent = 'Sekolah dengan nama yang sangat panjang untuk uji kartu pipeline'
+      })
+    }
+    await firstCard.focus()
+    await expect(firstCard).toBeFocused()
+    const pipelineMetrics = await page.locator('.pipeline-board').evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      documentScrollWidth: document.documentElement.scrollWidth,
+    }))
+    expect(pipelineMetrics.scrollWidth).toBeLessThanOrEqual(pipelineMetrics.clientWidth)
+    expect(pipelineMetrics.documentScrollWidth).toBeLessThanOrEqual(viewport.width)
+  }
+
+  await page.setViewportSize({ width: 1366, height: 768 })
+  await page.goto('/orders')
+  await page.screenshot({ path: testInfo.outputPath('cor10-orders-1366.png'), fullPage: true })
+  await page.goto('/pipeline')
+  await page.screenshot({ path: testInfo.outputPath('cor10-pipeline-1366.png'), fullPage: true })
+})
+
 test('context recovery shows what happened, what is missing, and what comes next', async ({ page }) => {
   const actionableOrders = [
     ['ORD-2026-030', /Review 2 selisih HET/],
@@ -775,6 +839,7 @@ test.describe('mobile operations layout', () => {
     await expect(page.locator('.orders-mobile-list')).toBeVisible()
     await expect(page.locator('.orders-table-wrap')).toBeHidden()
     await expect(page.getByPlaceholder(/Cari sekolah/)).toBeVisible()
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
     await page.screenshot({ path: testInfo.outputPath('mobile-orders.png'), fullPage: true })
 
     await page.goto('/orders/ORD-2026-065?tab=distribution')
