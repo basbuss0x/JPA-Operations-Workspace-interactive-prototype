@@ -8,13 +8,30 @@ import type {
   Order,
   OrderItem,
   PrototypeData,
+  School,
   SchoolPaymentStatus,
   SiplahProcess,
   SupplierPaymentStatus,
   TimelineEvent,
 } from '../domain/types'
 
-export const DEMO_STATE_VERSION = 6
+export const DEMO_STATE_VERSION = 7
+
+const canonicalSchools: School[] = [
+  { id: 'SCH-030', name: 'SDN 30 Ambon', city: 'Ambon', status: 'ACTIVE' },
+  { id: 'SCH-071', name: 'SDN 71', city: 'Ambon', status: 'ACTIVE' },
+  { id: 'SCH-040', name: 'SDN 40 Ambon', city: 'Ambon', status: 'ACTIVE' },
+  { id: 'SCH-SLB', name: 'SLB Batu Merah', city: 'Ambon', status: 'ACTIVE' },
+  { id: 'SCH-049', name: 'SD Inpres 49 Ambon', city: 'Ambon', status: 'ACTIVE' },
+  { id: 'SCH-239', name: 'SDN 239 MT', city: 'Ambon', status: 'ACTIVE' },
+  { id: 'SCH-065', name: 'SDN 65 Ambon', city: 'Ambon', status: 'ACTIVE' },
+  { id: 'SCH-068', name: 'SDN 68 Ambon', city: 'Ambon', status: 'ACTIVE' },
+  { id: 'SCH-999', name: 'Demo Closed School', city: 'Ambon', status: 'INACTIVE' },
+]
+
+export function createCanonicalSchools(): Record<string, School> {
+  return Object.fromEntries(canonicalSchools.map((school) => [school.id, { ...school }]))
+}
 
 const DATE = {
   created: '2026-01-12T08:00:00.000Z',
@@ -486,6 +503,7 @@ export function createCanonicalDemoData(): PrototypeData {
   const orderEntries = canonicalOrders().map((order) => [order.id, order] as const)
   return {
     version: DEMO_STATE_VERSION,
+    schools: createCanonicalSchools(),
     orders: Object.fromEntries(orderEntries),
     vendorBatches: {
       'VB-2026-009': {

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { createCanonicalDemoData, DEMO_STATE_VERSION } from '../data/demo-data'
+import { findDuplicateSchool, isSchoolEligible, normalizeSchoolName } from '../domain/school'
 import {
   acceptSuggestedHetMatch,
   addTimelineNote,
@@ -22,6 +23,7 @@ import {
   recordSiplahOrder,
   refreshFulfillmentSummary,
   reopenHetReview,
+  reopenOrder,
   sendSiplahDocumentToSchool,
   setNextActionOverride,
   setPaymentFollowUpReminder,
@@ -42,16 +44,22 @@ import type {
   Order,
   ProductMasterItem,
   PrototypeData,
+  School,
   SchoolPaymentInput,
   SiplahDocumentKind,
 } from '../domain/types'
 import { migratePrototypeState } from './migrate-prototype-state'
 
+type CreateExtractedOrderInput = Omit<
+  CreateOrderFromExtractionInput,
+  'id' | 'schoolId' | 'schoolName'
+> & {
+  school: School
+}
+
 interface PrototypeStore extends PrototypeData {
   resetDemoData: () => void
-  createExtractedOrder: (
-    input: Omit<CreateOrderFromExtractionInput, 'id' | 'schoolId'>,
-  ) => string
+  createExtractedOrder: (input: CreateExtractedOrderInput) => string
   acceptHetSuggestion: (orderId: string, itemId: string) => void
   chooseHetProduct: (orderId: string, itemId: string, product: ProductMasterItem) => void
   manualOverrideHet: (
@@ -86,6 +94,7 @@ interface PrototypeStore extends PrototypeData {
   paySchoolBenefit: (orderId: string, input: BenefitPaymentInput) => void
   confirmBenefitReceipt: (orderId: string) => void
   closeSchoolOrder: (orderId: string) => void
+  reopenSchoolOrder: (orderId: string, reason: string) => void
   snoozeNextAction: (
     orderIds: string[],
     actionKind: NextActionKind,
@@ -106,8 +115,28 @@ function nextDemoOrderId(orders: Record<string, Order>): string {
   return `ORD-2026-${String(sequence + 1).padStart(3, '0')}`
 }
 
-function schoolIdFromName(schoolName: string): string {
-  return `SCH-${schoolName.toLocaleUpperCase('id').replace(/[^A-Z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`
+function resolveSchoolContext(
+  schools: Record<string, School>,
+  candidate: School,
+): School {
+  if (!isSchoolEligible(candidate)) {
+    throw new Error('Sekolah tidak aktif dan tidak dapat menjadi target order baru.')
+  }
+  const registered = schools[candidate.id]
+  if (registered) {
+    if (!isSchoolEligible(registered)) {
+      throw new Error('Sekolah tidak aktif dan tidak dapat menjadi target order baru.')
+    }
+    if (normalizeSchoolName(registered.name) !== normalizeSchoolName(candidate.name)) {
+      throw new Error('Identitas sekolah tidak cocok dengan registry sekolah.')
+    }
+    return registered
+  }
+  const duplicate = findDuplicateSchool(schools, candidate.name)
+  if (duplicate) {
+    throw new Error(`Sekolah kemungkinan duplikat: ${duplicate.name} (${duplicate.id}).`)
+  }
+  return candidate
 }
 
 function updateOrders(
@@ -133,13 +162,20 @@ export const usePrototypeStore = create<PrototypeStore>()(
       createExtractedOrder: (input) => {
         let createdOrderId = ''
         set((state) => {
+          const school = resolveSchoolContext(state.schools, input.school)
           createdOrderId = nextDemoOrderId(state.orders)
           const order = createOrderFromExtraction({
             ...input,
             id: createdOrderId,
-            schoolId: schoolIdFromName(input.schoolName),
+            schoolId: school.id,
+            schoolName: school.name,
           })
-          return { orders: { ...state.orders, [createdOrderId]: order } }
+          return {
+            schools: state.schools[school.id]
+              ? state.schools
+              : { ...state.schools, [school.id]: { ...school } },
+            orders: { ...state.orders, [createdOrderId]: order },
+          }
         })
         return createdOrderId
       },
@@ -271,6 +307,10 @@ export const usePrototypeStore = create<PrototypeStore>()(
         set((state) => ({
           orders: updateOrders(state.orders, [orderId], (order) => closeOrder(order)),
         })),
+      reopenSchoolOrder: (orderId, reason) =>
+        set((state) => ({
+          orders: updateOrders(state.orders, [orderId], (order) => reopenOrder(order, reason)),
+        })),
       snoozeNextAction: (orderIds, actionKind, until) =>
         set((state) => ({
           orders: updateOrders(state.orders, orderIds, (order) =>
@@ -294,6 +334,7 @@ export const usePrototypeStore = create<PrototypeStore>()(
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         version: state.version,
+        schools: state.schools,
         orders: state.orders,
         vendorBatches: state.vendorBatches,
       }),

@@ -1,11 +1,14 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent, type MouseEvent } from 'react'
 import { calculateBenefitAmount, isCompletionReady } from '../../domain/selectors'
 import type { BenefitPaymentMethod, BenefitRecipientType, Order } from '../../domain/types'
+import { ClosureChecklist } from '../../components/orders/closure-checklist'
 import { usePrototypeStore } from '../../store/use-prototype-store'
 import { formatCurrency, formatDate } from '../../utils/format'
 import {
   calendarDateToReminderTimestamp,
+  futureCalendarDate,
   reminderTimestampToCalendarDate,
+  validateReminderCalendarDate,
 } from '../../utils/reminder-date'
 import { Button } from '../../components/ui/button'
 import { FormField } from '../../components/ui/form-field'
@@ -34,8 +37,9 @@ export function FinanceWorkspace({ order }: { order: Order }) {
   const [paymentMethod, setPaymentMethod] = useState('SIPLah settlement')
   const [paymentEvidence, setPaymentEvidence] = useState(`Bukti-${order.id}.pdf`)
   const [followUpDate, setFollowUpDate] = useState(() =>
-    reminderTimestampToCalendarDate(order.schoolPayment.followUpDueAt),
+    reminderTimestampToCalendarDate(order.schoolPayment.followUpDueAt) || futureCalendarDate(3),
   )
+  const [reminderError, setReminderError] = useState<string | null>(null)
   const [benefitMethod, setBenefitMethod] = useState<BenefitPaymentMethod>('TRANSFER')
   const [recipientType, setRecipientType] = useState<BenefitRecipientType>('SCHOOL_OFFICIAL')
   const [recipient, setRecipient] = useState('Bendahara sekolah')
@@ -43,7 +47,13 @@ export function FinanceWorkspace({ order }: { order: Order }) {
   const [benefitProof, setBenefitProof] = useState(`Benefit-${order.id}.pdf`)
   const [error, setError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [closeOpen, setCloseOpen] = useState(false)
+  const closeTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const [closeConfirmed, setCloseConfirmed] = useState(false)
+  const [closeSubmitting, setCloseSubmitting] = useState(false)
+  const [closeError, setCloseError] = useState<string | null>(null)
   const benefitAmount = calculateBenefitAmount(order)
+  const closeReady = isCompletionReady(order)
   const derivedNet = Number(grossAmount || 0) - Number(deductionAmount || 0)
 
   const run = (action: () => void, message: string) => {
@@ -97,11 +107,51 @@ export function FinanceWorkspace({ order }: { order: Order }) {
 
   const saveReminder = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const dueAt = followUpDate ? calendarDateToReminderTimestamp(followUpDate) : null
+    const validationError = validateReminderCalendarDate(followUpDate)
+    if (validationError) {
+      setReminderError(validationError)
+      setError(null)
+      setFeedback(null)
+      return
+    }
+
+    const dueAt = calendarDateToReminderTimestamp(followUpDate)
+    setReminderError(null)
     run(
       () => setPaymentFollowUp(order.id, dueAt),
-      dueAt ? 'Reminder pembayaran disimpan.' : 'Reminder pembayaran dihapus.',
+      'Reminder pembayaran disimpan.',
     )
+  }
+
+  const openCloseReview = (event: MouseEvent<HTMLButtonElement>) => {
+    closeTriggerRef.current = event.currentTarget
+    setCloseConfirmed(false)
+    setCloseError(null)
+    setCloseOpen(true)
+  }
+
+  const closeReview = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!closeConfirmed || closeSubmitting) return
+    setCloseSubmitting(true)
+    setCloseError(null)
+    try {
+      closeSchoolOrder(order.id)
+      setCloseOpen(false)
+      setCloseConfirmed(false)
+      setCloseSubmitting(false)
+      setFeedback('Order ditutup setelah review checkpoint.')
+    } catch (caught) {
+      setCloseError(caught instanceof Error ? caught.message : 'Order gagal ditutup.')
+      setCloseSubmitting(false)
+    }
+  }
+
+  const cancelCloseReview = () => {
+    if (closeSubmitting) return
+    setCloseOpen(false)
+    setCloseConfirmed(false)
+    setCloseError(null)
   }
 
   return (
@@ -163,23 +213,118 @@ export function FinanceWorkspace({ order }: { order: Order }) {
 
       {order.schoolPayment.status === 'UNPAID' && order.stage !== 'CLOSED' ? (
         <section className="workspace-panel payment-reminder-panel">
-          <div><h2>Reminder pembayaran</h2><p>UNPAID tetap pasif sampai tanggal follow-up eksplisit tercapai.</p></div>
+          <div>
+            <h2>Reminder pembayaran</h2>
+            <p>UNPAID tetap pasif sampai tanggal follow-up eksplisit tercapai.</p>
+          </div>
+          {!reminderTimestampToCalendarDate(order.schoolPayment.followUpDueAt) ? (
+            <div className="callout callout--warning reminder-setup-callout">
+              <strong>Atur tindak lanjut pembayaran.</strong> Tanggal belum dikonfirmasi; kolom sudah diisi saran tiga hari dari hari ini. Simpan untuk mengaktifkan jadwal.
+            </div>
+          ) : (
+            <div className="callout callout--success reminder-setup-callout">
+              <strong>Reminder pembayaran tersimpan.</strong> Follow-up dijadwalkan pada {formatDate(order.schoolPayment.followUpDueAt)}.
+            </div>
+          )}
           <form className="inline-action-form" onSubmit={saveReminder}>
-            <FormField label="Tanggal follow-up" htmlFor={`payment-follow-up-${order.id}`}>
-              <input id={`payment-follow-up-${order.id}`} type="date" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} />
+            <FormField
+              label="Tanggal follow-up"
+              htmlFor={`payment-follow-up-${order.id}`}
+              hint="Tanggal hari ini atau sesudahnya; tetap klik Simpan reminder untuk konfirmasi."
+            >
+              <input
+                id={`payment-follow-up-${order.id}`}
+                type="date"
+                value={followUpDate}
+                aria-invalid={Boolean(reminderError)}
+                aria-describedby={reminderError ? `payment-follow-up-error-${order.id}` : undefined}
+                onChange={(event) => {
+                  setFollowUpDate(event.target.value)
+                  setReminderError(null)
+                  setError(null)
+                }}
+              />
+              {reminderError ? <span id={`payment-follow-up-error-${order.id}`} className="form-error" role="alert">{reminderError}</span> : null}
             </FormField>
-            <Button variant="secondary" type="submit" disabled={!followUpDate}>Simpan reminder</Button>
-            {order.schoolPayment.followUpDueAt ? <Button variant="ghost" type="button" onClick={() => { setFollowUpDate(''); run(() => setPaymentFollowUp(order.id, null), 'Reminder pembayaran dihapus.') }}>Clear reminder</Button> : null}
+            <div className="reminder-form-actions">
+              <Button variant="secondary" type="submit">Simpan reminder</Button>
+              {order.schoolPayment.followUpDueAt ? (
+                <Button
+                  variant="ghost"
+                  type="button"
+                  onClick={(event) => {
+                    if (event.detail > 1) return
+                    setFollowUpDate('')
+                    setReminderError(null)
+                    run(() => setPaymentFollowUp(order.id, null), 'Reminder pembayaran dihapus.')
+                  }}
+                >
+                  Clear reminder
+                </Button>
+              ) : null}
+            </div>
           </form>
         </section>
       ) : null}
 
-      {isCompletionReady(order) && order.stage !== 'CLOSED' ? (
-        <section className="workspace-panel closure-panel">
-          <div><h2>Siap ditutup</h2><p>Fulfillment, penerimaan, SIPLah admin, pembayaran, dan benefit lengkap. Supplier tidak menjadi blocker.</p></div>
-          <Button onClick={() => run(() => closeSchoolOrder(order.id), 'Order ditutup secara eksplisit.')}>Tutup order</Button>
+      {order.stage !== 'CLOSED' ? (
+        <section className={closeReady ? 'workspace-panel closure-panel' : 'workspace-panel closure-panel closure-panel--blocked'}>
+          <div>
+            <h2>{closeReady ? 'Siap ditutup' : 'Penutupan order belum siap'}</h2>
+            <p>{closeReady ? 'Review semua checkpoint sebelum mengubah order menjadi CLOSED. Supplier tidak menjadi blocker.' : 'Checkpoint yang belum selesai ditampilkan agar penutupan tidak dilakukan sebelum waktunya.'}</p>
+          </div>
+          <ClosureChecklist order={order} />
+          {closeReady ? (
+            <Button onClick={openCloseReview}>Review penutupan</Button>
+          ) : (
+            <div className="inline-clear-state inline-clear-state--neutral">Belum dapat ditutup. Lengkapi checkpoint wajib yang bertanda ○.</div>
+          )}
         </section>
-      ) : null}
+      ) : (
+        <section className="workspace-panel closure-panel closure-panel--readonly">
+          <div>
+            <h2>Order selesai</h2>
+            <p>Order sudah CLOSED dan workspace ini read-only. Riwayat tetap tersedia di Timeline.</p>
+          </div>
+          <ClosureChecklist order={order} />
+          <div className="readonly-workflow-note">Jika perlu koreksi operasional, gunakan aksi “Buka kembali order” di atas sebelum mengubah checkpoint.</div>
+        </section>
+      )}
+
+      <Modal
+        open={closeOpen}
+        title="Review penutupan order"
+        description="Pastikan semua checkpoint blocking selesai sebelum order diubah menjadi CLOSED."
+        onClose={cancelCloseReview}
+        restoreFocusRef={closeTriggerRef}
+        footer={
+          <>
+            <Button variant="ghost" onClick={cancelCloseReview}>Batal</Button>
+            <Button
+              type="submit"
+              form="close-review-form"
+              disabled={!closeConfirmed || closeSubmitting}
+            >
+              {closeSubmitting ? 'Menutup…' : 'Konfirmasi tutup order'}
+            </Button>
+          </>
+        }
+      >
+        <form id="close-review-form" className="form-stack" onSubmit={closeReview}>
+          <ClosureChecklist order={order} />
+          <label className="checkbox-field">
+            <input
+              type="checkbox"
+              autoFocus
+              data-autofocus="true"
+              checked={closeConfirmed}
+              onChange={(event) => setCloseConfirmed(event.target.checked)}
+            />
+            <span>Saya sudah meninjau checkpoint dan mengonfirmasi penutupan order ini.</span>
+          </label>
+          {closeError ? <div className="callout callout--danger" role="alert"><strong>Order belum ditutup.</strong> {closeError}</div> : null}
+        </form>
+      </Modal>
 
       <Modal
         open={paymentOpen}

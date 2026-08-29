@@ -1,9 +1,10 @@
 import { getHetExceptionCount, isCompletionReady, isSiplahReadyForVendor } from './order-state'
-import type {
-  ActionDerivationContext,
-  NextAction,
-  NextActionKind,
-  Order,
+import {
+  isActionSnoozable,
+  type ActionDerivationContext,
+  type NextAction,
+  type NextActionKind,
+  type Order,
 } from './types'
 
 function reached(dueAt: string | null, now: Date): boolean {
@@ -12,7 +13,12 @@ function reached(dueAt: string | null, now: Date): boolean {
   return Number.isFinite(dueTime) && dueTime <= now.getTime()
 }
 
+function hasValidReminderDate(value: string | null): boolean {
+  return value !== null && Number.isFinite(new Date(value).getTime())
+}
+
 export function getActionSnoozedUntil(order: Order, kind: NextActionKind): string | null {
+  if (!isActionSnoozable(kind)) return null
   return order.nextActionControl.controlsByActionKey[kind]?.snoozedUntil ?? null
 }
 
@@ -26,7 +32,7 @@ export function isActionSnoozed(order: Order, kind: NextActionKind, now: Date): 
 function action(
   order: Order,
   now: Date,
-  input: Omit<NextAction, 'id' | 'orderId' | 'snoozedUntil' | 'availability' | 'source'>,
+  input: Omit<NextAction, 'id' | 'orderId' | 'snoozedUntil' | 'availability' | 'source' | 'snoozable'>,
 ): NextAction {
   const snoozedUntil = getActionSnoozedUntil(order, input.kind)
   return {
@@ -34,7 +40,10 @@ function action(
     id: `${order.id}:${input.kind}`,
     orderId: order.id,
     snoozedUntil,
-    availability: isActionSnoozed(order, input.kind, now) ? 'SNOOZED' : 'ACTIVE',
+    snoozable: isActionSnoozable(input.kind),
+    availability: isActionSnoozable(input.kind) && isActionSnoozed(order, input.kind, now)
+      ? 'SNOOZED'
+      : 'ACTIVE',
     source: 'SYSTEM',
   }
 }
@@ -61,6 +70,7 @@ export function deriveActionCandidates(
       priority: 0,
       dueAt: override.dueAt,
       snoozedUntil,
+      snoozable: true,
       availability: isActionSnoozed(order, 'MANUAL', now) ? 'SNOOZED' : 'ACTIVE',
       source: 'MANUAL',
     })
@@ -155,18 +165,32 @@ export function deriveActionCandidates(
   }
 
   const paymentDueAt = order.schoolPayment.followUpDueAt
-  if (order.schoolPayment.status === 'UNPAID' && reached(paymentDueAt, now)) {
-    candidates.push(
-      action(order, now, {
-        kind: 'FOLLOW_UP_PAYMENT',
-        title: 'Follow-up pembayaran sekolah',
-        reason: 'Tanggal follow-up pembayaran sudah tercapai.',
-        href: `/orders/${order.id}?tab=finance`,
-        ctaLabel: 'Buka pembayaran',
-        priority: 60,
-        dueAt: paymentDueAt,
-      }),
-    )
+  if (order.schoolPayment.status === 'UNPAID') {
+    if (reached(paymentDueAt, now)) {
+      candidates.push(
+        action(order, now, {
+          kind: 'FOLLOW_UP_PAYMENT',
+          title: 'Follow-up pembayaran sekolah',
+          reason: 'Tanggal follow-up pembayaran sudah tercapai.',
+          href: `/orders/${order.id}?tab=finance`,
+          ctaLabel: 'Buka pembayaran',
+          priority: 60,
+          dueAt: paymentDueAt,
+        }),
+      )
+    } else if (!hasValidReminderDate(paymentDueAt)) {
+      candidates.push(
+        action(order, now, {
+          kind: 'SCHEDULE_PAYMENT_FOLLOW_UP',
+          title: 'Atur tindak lanjut pembayaran',
+          reason: 'Pembayaran sekolah masih UNPAID dan belum memiliki tanggal follow-up yang dikonfirmasi.',
+          href: `/orders/${order.id}?tab=finance`,
+          ctaLabel: 'Atur reminder',
+          priority: 60,
+          dueAt: null,
+        }),
+      )
+    }
   }
 
   if (order.schoolPayment.status === 'LUNAS' && order.benefit.status === 'ELIGIBLE') {
@@ -207,6 +231,22 @@ export function deriveActionCandidates(
 
   const batch = context.vendorBatch
   if (
+    batch &&
+    batch.status === 'PROCESSING' &&
+    !hasValidReminderDate(batch.followUpDueAt)
+  ) {
+    candidates.push(
+      action(order, now, {
+        kind: 'SCHEDULE_VENDOR_FOLLOW_UP',
+        title: 'Atur tindak lanjut vendor',
+        reason: `Vendor Batch ${batch.id} sedang PROCESSING tanpa tanggal follow-up yang dikonfirmasi.`,
+        href: `/vendor-batches/${batch.id}`,
+        ctaLabel: 'Atur reminder',
+        priority: 61,
+        dueAt: null,
+      }),
+    )
+  } else if (
     batch &&
     ['SENT_TO_VENDOR', 'VENDOR_CONFIRMED', 'PROCESSING', 'PARTIALLY_ARRIVED'].includes(batch.status) &&
     reached(batch.followUpDueAt, now)

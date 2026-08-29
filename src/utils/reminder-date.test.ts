@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   calendarDateToReminderTimestamp,
+  futureCalendarDate,
   reminderTimestampToCalendarDate,
+  validateReminderCalendarDate,
+  validateReminderTimestamp,
 } from './reminder-date'
 
 describe('local operator reminder dates', () => {
@@ -15,5 +18,24 @@ describe('local operator reminder dates', () => {
     expect(localDate.getHours()).toBe(0)
     expect(localDate.getMinutes()).toBe(0)
     expect(reminderTimestampToCalendarDate(timestamp)).toBe('2026-02-21')
+  })
+
+  it('rejects empty, malformed, impossible, and past calendar dates', () => {
+    const now = new Date('2026-02-21T08:00:00.000Z')
+
+    expect(validateReminderCalendarDate('', now)).toBe('Tanggal follow-up wajib diisi.')
+    expect(validateReminderCalendarDate('21-02-2026', now)).toBe('Tanggal follow-up tidak valid.')
+    expect(validateReminderCalendarDate('2026-02-30', now)).toBe('Tanggal follow-up tidak valid.')
+    expect(validateReminderTimestamp('2026-02-30T00:00:00.000Z', now)).toBe('Tanggal follow-up tidak valid.')
+    expect(validateReminderCalendarDate('2026-02-20', now)).toBe('Tanggal follow-up tidak boleh sebelum hari ini.')
+    expect(validateReminderCalendarDate('2026-02-21', now)).toBeNull()
+  })
+
+  it('suggests a future local calendar date without UTC drift', () => {
+    const now = new Date('2026-02-21T08:00:00.000Z')
+    const suggested = futureCalendarDate(3, now)
+
+    expect(suggested).toBe('2026-02-24')
+    expect(reminderTimestampToCalendarDate(calendarDateToReminderTimestamp(suggested))).toBe(suggested)
   })
 })

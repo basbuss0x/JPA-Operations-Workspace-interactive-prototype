@@ -100,13 +100,17 @@ describe('derived domain selectors', () => {
     expect(bahasa?.totalQuantity).toBe(21)
   })
 
-  it('groups vendor-ready orders and omits passive PROCESSING batches from Work Queue', () => {
+  it('groups vendor-ready orders and exposes one setup item for passive PROCESSING', () => {
     const data = createCanonicalDemoData()
     const queue = deriveWorkQueue(data, now)
     const vendorItem = queue.find((item) => item.kind === 'ADD_TO_VENDOR_BATCH')
+    const vendorSetup = queue.filter((item) => item.kind === 'SCHEDULE_VENDOR_FOLLOW_UP')
 
     expect(vendorItem?.orderIds).toEqual(['ORD-2026-040', 'ORD-2026-SLB'])
     expect(vendorItem?.title).toBe('2 pesanan siap masuk Vendor Batch')
+    expect(vendorSetup).toHaveLength(1)
+    expect(vendorSetup[0]?.orderIds).toEqual(['ORD-2026-049'])
+    expect(vendorSetup[0]?.title).toBe('Atur tindak lanjut vendor · VB-2026-009')
     expect(queue.some((item) => item.kind === 'FOLLOW_UP_VENDOR')).toBe(false)
   })
 

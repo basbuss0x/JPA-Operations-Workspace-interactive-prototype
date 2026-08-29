@@ -45,7 +45,7 @@ export function OutstandingActions({
             </div>
             <div className="outstanding-action-row__actions">
               <Link className="button button--secondary button--sm" to={action.href}>Buka</Link>
-              {action.availability === 'SNOOZED' ? (
+              {action.snoozable ? action.availability === 'SNOOZED' ? (
                 <Button variant="ghost" size="sm" onClick={() => onUnsnooze(action.kind)}>
                   Aktifkan lagi
                 </Button>
@@ -53,7 +53,7 @@ export function OutstandingActions({
                 <Button variant="ghost" size="sm" onClick={() => onSnooze(action.kind)}>
                   Snooze 3 hari
                 </Button>
-              )}
+              ) : <span className="action-required-label">Wajib diatur</span>}
             </div>
           </article>
         ))}

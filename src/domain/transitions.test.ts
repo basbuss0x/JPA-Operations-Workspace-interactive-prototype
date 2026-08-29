@@ -7,12 +7,15 @@ import {
   recordGoodsArrival,
   recordSchoolPayment,
   resolveHetException,
+  setPaymentFollowUpReminder,
+  setVendorFollowUpReminder,
   snoozeOrderAction,
   transitionVendorBatch,
 } from './transitions'
 import { deriveActionCandidates, derivePrimaryNextAction } from './next-action'
 import { calculateBenefitAmount } from './selectors'
 import type { Order, PrototypeData } from './types'
+import { calendarDateToReminderTimestamp } from '../utils/reminder-date'
 
 const now = new Date('2026-02-21T08:00:00.000Z')
 
@@ -56,6 +59,91 @@ describe('important transitions', () => {
     expect(batch?.followUpDueAt).toBeNull()
     expect(next.orders['ORD-2026-040']?.vendorBatchId).toBe('VB-2026-010')
     expect(() => transitionVendorBatch(next, 'VB-2026-010', 'SENT_TO_VENDOR', now)).toThrow()
+  })
+
+  it('validates, schedules, and idempotently reschedules payment reminders', () => {
+    const order = canonicalOrder('ORD-2026-068')
+    const future = calendarDateToReminderTimestamp('2026-02-25')
+
+    expect(() => setPaymentFollowUpReminder(
+      order,
+      calendarDateToReminderTimestamp('2026-02-20'),
+      now,
+    )).toThrow(/tidak boleh sebelum hari ini/)
+    expect(() => setPaymentFollowUpReminder(order, 'not-a-date', now)).toThrow(/tidak valid/)
+
+    const scheduled = setPaymentFollowUpReminder(order, future, now)
+    expect(scheduled.schoolPayment.followUpDueAt).toBe(future)
+    expect(scheduled.timeline).toHaveLength(order.timeline.length + 1)
+
+    const sameCalendarDate = new Date('2026-02-25T08:00:00.000Z').toISOString()
+    const repeated = setPaymentFollowUpReminder(scheduled, sameCalendarDate, now)
+    expect(repeated).toBe(scheduled)
+    expect(repeated.timeline).toHaveLength(scheduled.timeline.length)
+
+    const rescheduled = setPaymentFollowUpReminder(
+      scheduled,
+      calendarDateToReminderTimestamp('2026-02-26'),
+      now,
+    )
+    expect(rescheduled.timeline).toHaveLength(scheduled.timeline.length + 1)
+    expect(rescheduled.timeline[0]?.title).toBe('Reminder pembayaran diperbarui')
+
+    const paid = recordSchoolPayment(
+      rescheduled,
+      {
+        schoolPaidAmount: order.finalInvoiceAmount ?? 0,
+        deductionAmount: 0,
+        method: 'Transfer bank',
+        evidenceName: 'payment.pdf',
+      },
+      now,
+    )
+    expect(paid.schoolPayment.followUpDueAt).toBeNull()
+  })
+
+  it('keeps one vendor reminder per batch and clears it only after full arrival', () => {
+    const processing = createProcessingBatch()
+    const future = calendarDateToReminderTimestamp('2026-02-25')
+    const scheduled = setVendorFollowUpReminder(processing, 'VB-2026-010', future, now)
+    const batch = scheduled.vendorBatches['VB-2026-010']
+    if (!batch) throw new Error('Missing scheduled batch')
+    expect(batch.followUpDueAt).toBe(future)
+    expect(batch.timeline).toHaveLength((processing.vendorBatches['VB-2026-010']?.timeline.length ?? 0) + 1)
+
+    const repeated = setVendorFollowUpReminder(scheduled, 'VB-2026-010', future, now)
+    expect(repeated).toBe(scheduled)
+    expect(repeated.vendorBatches['VB-2026-010']?.timeline).toHaveLength(batch.timeline.length)
+
+    const partial = recordGoodsArrival(
+      scheduled,
+      'VB-2026-010',
+      [{ orderId: 'ORD-2026-040', arrivalType: 'PARTIAL' }],
+      now,
+    )
+    expect(partial.vendorBatches['VB-2026-010']?.followUpDueAt).toBe(future)
+
+    const full = recordGoodsArrival(
+      partial,
+      'VB-2026-010',
+      [
+        { orderId: 'ORD-2026-040', arrivalType: 'FULL' },
+        { orderId: 'ORD-2026-SLB', arrivalType: 'FULL' },
+      ],
+      now,
+    )
+    expect(full.vendorBatches['VB-2026-010']?.followUpDueAt).toBeNull()
+  })
+
+  it('does not allow setup obligations to be snoozed', () => {
+    const order = canonicalOrder('ORD-2026-068')
+    expect(() => snoozeOrderAction(
+      order,
+      'SCHEDULE_PAYMENT_FOLLOW_UP',
+      calendarDateToReminderTimestamp('2026-02-25'),
+      now,
+    )).toThrow(/tidak dapat di-snooze/)
+    expect(order.nextActionControl.controlsByActionKey).toEqual({})
   })
 
   it('targets goods arrival by order without mutating sibling batch members', () => {

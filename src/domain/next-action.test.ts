@@ -30,10 +30,10 @@ const expectedPrimaryKinds: Record<string, NextActionKind | null> = {
   'ORD-2026-071': 'COMPLETE_SIPLAH',
   'ORD-2026-040': 'ADD_TO_VENDOR_BATCH',
   'ORD-2026-SLB': 'ADD_TO_VENDOR_BATCH',
-  'ORD-2026-049': null,
+  'ORD-2026-049': 'SCHEDULE_PAYMENT_FOLLOW_UP',
   'ORD-2026-239': 'CHECK_GOODS',
   'ORD-2026-065': 'CONTINUE_FULFILLMENT',
-  'ORD-2026-068': null,
+  'ORD-2026-068': 'SCHEDULE_PAYMENT_FOLLOW_UP',
   'ORD-2025-999': null,
 }
 
@@ -89,7 +89,11 @@ describe('Next Action candidate engine', () => {
     }
 
     const candidates = candidatesFor(order)
-    expect(candidates.map((action) => action.kind)).toEqual(['MANUAL', 'REVIEW_HET'])
+    expect(candidates.map((action) => action.kind)).toEqual([
+      'MANUAL',
+      'REVIEW_HET',
+      'SCHEDULE_PAYMENT_FOLLOW_UP',
+    ])
     expect(derivePrimaryNextAction(candidates)?.kind).toBe('MANUAL')
     expect(order.het.status).toBe('NEEDS_REVIEW')
   })
@@ -119,8 +123,13 @@ describe('Next Action candidate engine', () => {
     expect(derivePrimaryNextAction(candidates)?.kind).toBe('PAY_BENEFIT')
   })
 
-  it('activates payment follow-up only when its due date is reached', () => {
-    const original = canonicalOrder('ORD-2026-040')
+  it('shows one payment setup obligation until a reminder is confirmed, then only when due', () => {
+    const original = canonicalOrder('ORD-2026-068')
+    const unscheduled = candidatesFor(original)
+    expect(unscheduled.filter((action) => action.kind === 'SCHEDULE_PAYMENT_FOLLOW_UP')).toHaveLength(1)
+    expect(unscheduled.find((action) => action.kind === 'SCHEDULE_PAYMENT_FOLLOW_UP')?.dueAt).toBeNull()
+    expect(unscheduled.find((action) => action.kind === 'SCHEDULE_PAYMENT_FOLLOW_UP')?.snoozable).toBe(false)
+
     const futureReminder: Order = {
       ...original,
       schoolPayment: {
@@ -128,6 +137,7 @@ describe('Next Action candidate engine', () => {
         followUpDueAt: '2026-02-25T08:00:00.000Z',
       },
     }
+    expect(candidatesFor(futureReminder).some((action) => action.kind === 'SCHEDULE_PAYMENT_FOLLOW_UP')).toBe(false)
     expect(candidatesFor(futureReminder).some((action) => action.kind === 'FOLLOW_UP_PAYMENT')).toBe(false)
 
     const reachedReminder: Order = {
@@ -137,29 +147,36 @@ describe('Next Action candidate engine', () => {
         followUpDueAt: '2026-02-21T08:00:00.000Z',
       },
     }
-    expect(candidatesFor(reachedReminder).some((action) => action.kind === 'FOLLOW_UP_PAYMENT')).toBe(true)
+    const reachedCandidates = candidatesFor(reachedReminder)
+    expect(reachedCandidates.some((action) => action.kind === 'SCHEDULE_PAYMENT_FOLLOW_UP')).toBe(false)
+    expect(reachedCandidates.filter((action) => action.kind === 'FOLLOW_UP_PAYMENT')).toHaveLength(1)
   })
 
-  it('keeps PROCESSING passive unless an explicit vendor reminder is reached', () => {
+  it('keeps PROCESSING passive while exposing setup before an explicit vendor reminder', () => {
     const data = createCanonicalDemoData()
     const order = canonicalOrder('ORD-2026-049')
     const batch = data.vendorBatches['VB-2026-009']
     if (!batch) throw new Error('Missing vendor batch')
 
-    expect(deriveActionCandidates(order, { vendorBatch: batch }, now)).toEqual([])
-    expect(
-      deriveActionCandidates(
-        order,
-        { vendorBatch: { ...batch, followUpDueAt: '2026-02-25T08:00:00.000Z' } },
-        now,
-      ).some((action) => action.kind === 'FOLLOW_UP_VENDOR'),
-    ).toBe(false)
-    expect(
-      deriveActionCandidates(
-        order,
-        { vendorBatch: { ...batch, followUpDueAt: '2026-02-21T08:00:00.000Z' } },
-        now,
-      ).some((action) => action.kind === 'FOLLOW_UP_VENDOR'),
-    ).toBe(true)
+    const unscheduled = deriveActionCandidates(order, { vendorBatch: batch }, now)
+    expect(unscheduled.filter((action) => action.kind === 'SCHEDULE_VENDOR_FOLLOW_UP')).toHaveLength(1)
+    expect(unscheduled.some((action) => action.kind === 'FOLLOW_UP_VENDOR')).toBe(false)
+    expect(unscheduled.find((action) => action.kind === 'SCHEDULE_VENDOR_FOLLOW_UP')?.snoozable).toBe(false)
+
+    const futureCandidates = deriveActionCandidates(
+      order,
+      { vendorBatch: { ...batch, followUpDueAt: '2026-02-25T08:00:00.000Z' } },
+      now,
+    )
+    expect(futureCandidates.some((action) => action.kind === 'SCHEDULE_VENDOR_FOLLOW_UP')).toBe(false)
+    expect(futureCandidates.some((action) => action.kind === 'FOLLOW_UP_VENDOR')).toBe(false)
+
+    const reachedCandidates = deriveActionCandidates(
+      order,
+      { vendorBatch: { ...batch, followUpDueAt: '2026-02-21T08:00:00.000Z' } },
+      now,
+    )
+    expect(reachedCandidates.some((action) => action.kind === 'SCHEDULE_VENDOR_FOLLOW_UP')).toBe(false)
+    expect(reachedCandidates.filter((action) => action.kind === 'FOLLOW_UP_VENDOR')).toHaveLength(1)
   })
 })

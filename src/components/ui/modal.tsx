@@ -6,6 +6,7 @@ interface ModalProps {
   description?: string
   footer?: ReactNode
   onClose: () => void
+  restoreFocusRef?: { current: HTMLElement | null }
 }
 
 export function Modal({
@@ -14,6 +15,7 @@ export function Modal({
   description,
   footer,
   onClose,
+  restoreFocusRef,
   children,
 }: PropsWithChildren<ModalProps>) {
   const dialogRef = useRef<HTMLElement | null>(null)
@@ -26,11 +28,12 @@ export function Modal({
   useEffect(() => {
     if (!open) return
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const restoreFocus = restoreFocusRef?.current ?? previousFocus
     const dialog = dialogRef.current
     const focusableSelector = 'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href]'
-    const focusable = dialog ? [...dialog.querySelectorAll<HTMLElement>(focusableSelector)] : []
-    const autoFocused = dialog?.querySelector<HTMLElement>('[autofocus]')
-    const initialFocus = autoFocused ?? focusable[0] ?? dialog
+    const getFocusable = () => dialog ? [...dialog.querySelectorAll<HTMLElement>(focusableSelector)] : []
+    const autoFocused = dialog?.querySelector<HTMLElement>('[data-autofocus], [autofocus]')
+    const initialFocus = autoFocused ?? getFocusable()[0] ?? dialog
     initialFocus?.focus()
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -38,7 +41,9 @@ export function Modal({
         onCloseRef.current()
         return
       }
-      if (event.key !== 'Tab' || focusable.length === 0) return
+      if (event.key !== 'Tab') return
+      const focusable = getFocusable()
+      if (focusable.length === 0) return
       const first = focusable[0]
       const last = focusable.at(-1)
       if (!first || !last) return
@@ -53,9 +58,9 @@ export function Modal({
     document.addEventListener('keydown', onKeyDown)
     return () => {
       document.removeEventListener('keydown', onKeyDown)
-      if (previousFocus?.isConnected) previousFocus.focus()
+      if (restoreFocus?.isConnected) restoreFocus.focus()
     }
-  }, [open])
+  }, [open, restoreFocusRef])
 
   if (!open) return null
 

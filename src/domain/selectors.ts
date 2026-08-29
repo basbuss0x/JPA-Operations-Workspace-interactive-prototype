@@ -211,6 +211,10 @@ export interface VendorBatchOperationalState {
   actionable: boolean
 }
 
+function hasValidDate(value: string | null): boolean {
+  return value !== null && Number.isFinite(new Date(value).getTime())
+}
+
 function dateReached(value: string | null, now: Date): boolean {
   if (!value) return false
   const time = new Date(value).getTime()
@@ -242,7 +246,14 @@ export function getVendorBatchOperationalState(
     case 'VENDOR_CONFIRMED':
       return { label: 'Mulai processing', detail: 'Konfirmasi vendor sudah tercatat.', priority: 30, actionable: true }
     case 'PROCESSING':
-      return { label: 'Menunggu vendor', detail: 'Pasif tanpa reminder follow-up.', priority: 70, actionable: false }
+      return !hasValidDate(batch.followUpDueAt)
+        ? {
+            label: 'Atur tindak lanjut vendor',
+            detail: 'Batch sedang diproses tanpa tanggal follow-up yang dikonfirmasi.',
+            priority: 61,
+            actionable: true,
+          }
+        : { label: 'Menunggu vendor', detail: 'Pasif sampai reminder follow-up tercapai.', priority: 70, actionable: false }
     case 'PARTIALLY_ARRIVED':
       return { label: 'Catat kedatangan berikutnya', detail: 'Sebagian sekolah/order sudah menerima alokasi.', priority: 50, actionable: true }
     case 'ARRIVED':
@@ -289,9 +300,13 @@ export function deriveWorkQueue(
   }
 
   const vendorItems = items.filter((item) => item.kind === 'ADD_TO_VENDOR_BATCH')
+  const vendorFollowUpSetups = items.filter((item) => item.kind === 'SCHEDULE_VENDOR_FOLLOW_UP')
   const vendorFollowUps = items.filter((item) => item.kind === 'FOLLOW_UP_VENDOR')
   const rest = items.filter(
-    (item) => item.kind !== 'ADD_TO_VENDOR_BATCH' && item.kind !== 'FOLLOW_UP_VENDOR',
+    (item) =>
+      item.kind !== 'ADD_TO_VENDOR_BATCH' &&
+      item.kind !== 'SCHEDULE_VENDOR_FOLLOW_UP' &&
+      item.kind !== 'FOLLOW_UP_VENDOR',
   )
   if (vendorItems.length > 0) {
     const first = vendorItems[0]
@@ -308,6 +323,34 @@ export function deriveWorkQueue(
         context: vendorItems.map((item) => item.schoolName).join(' · '),
       })
     }
+  }
+
+  const setupByBatch = new Map<string, WorkQueueItem[]>()
+  for (const item of vendorFollowUpSetups) {
+    const batchId = data.orders[item.orderId]?.vendorBatchId
+    if (!batchId) continue
+    setupByBatch.set(batchId, [...(setupByBatch.get(batchId) ?? []), item])
+  }
+  for (const [batchId, batchItems] of setupByBatch) {
+    const first = batchItems[0]
+    if (!first) continue
+    const batchOrderIds = data.vendorBatches[batchId]?.orderIds ?? batchItems.flatMap((item) => item.orderIds)
+    const orderIds = batchOrderIds.filter((orderId) => batchItems.some((item) => item.orderIds.includes(orderId)))
+    const schoolNames = orderIds.flatMap((orderId) => {
+      const order = data.orders[orderId]
+      return order ? [order.schoolName] : []
+    })
+    rest.push({
+      ...first,
+      id: `queue-schedule-vendor-${batchId}`,
+      title: `Atur tindak lanjut vendor · ${batchId}`,
+      reason: `Vendor Batch ${batchId} sedang PROCESSING tanpa tanggal follow-up; tetapkan satu reminder untuk seluruh order anggota.`,
+      href: `/vendor-batches/${batchId}`,
+      ctaLabel: 'Atur reminder',
+      schoolName: batchId,
+      orderIds,
+      context: `${batchId} · ${schoolNames.join(' · ')}`,
+    })
   }
 
   const followUpsByBatch = new Map<string, WorkQueueItem[]>()

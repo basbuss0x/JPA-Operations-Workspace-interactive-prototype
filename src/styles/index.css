@@ -1767,6 +1767,55 @@ p {
   font-size: 0.78rem;
 }
 
+.selected-school-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px;
+  background: var(--forest-50);
+  border: 1px solid #c5ddd2;
+  border-radius: 8px;
+}
+
+.selected-school-summary > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.selected-school-summary span,
+.selected-school-summary small,
+.selected-school-empty {
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.selected-school-summary strong {
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+}
+
+.selected-school-empty {
+  padding: 12px 13px;
+  background: var(--surface-muted);
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+}
+
+.intake-confirm small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.form-hint {
+  margin: -10px 0 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
 .callout--danger {
   color: #752f29;
   background: var(--danger-bg);
@@ -2085,6 +2134,18 @@ p {
   color: var(--danger);
   font-size: 0.7rem;
   font-weight: 700;
+}
+
+.form-field input[aria-invalid="true"] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-bg);
+}
+
+.action-required-label {
+  color: var(--warning);
+  font-size: 0.68rem;
+  font-weight: 750;
+  white-space: nowrap;
 }
 
 .product-search-results {
@@ -2528,6 +2589,7 @@ p {
   }
 
   .intake-confirm,
+  .selected-school-summary,
   .focused-route__header,
   .workflow-next-step,
   .het-review-footer__confirm,
@@ -3344,6 +3406,17 @@ p {
   gap: 22px;
 }
 
+.vendor-reminder-panel,
+.payment-reminder-panel {
+  flex-wrap: wrap;
+}
+
+.reminder-setup-callout {
+  flex: 1 1 100%;
+  order: 3;
+  margin-top: -4px;
+}
+
 .batch-actions-panel .panel-heading {
   margin-bottom: 0;
 }
@@ -3601,8 +3674,16 @@ p {
 
   .vendor-reminder-panel .inline-action-form,
   .vendor-reminder-panel .inline-action-form .form-field,
-  .vendor-reminder-panel .button {
+  .vendor-reminder-panel .button,
+  .vendor-reminder-panel .reminder-form-actions {
     width: 100%;
+  }
+
+  .reminder-setup-callout {
+    flex: 0 0 auto;
+    width: 100%;
+    order: initial;
+    margin-top: 0;
   }
 
   .batch-timestamps {
@@ -3725,6 +3806,13 @@ p {
   margin: 0;
 }
 
+.reminder-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
 .payment-operations-panel > .button,
 .benefit-operations-panel > .button,
 .distribution-arrival-panel > .button,
@@ -3747,9 +3835,130 @@ p {
 }
 
 .closure-panel {
+  display: grid;
+  gap: 16px;
   color: var(--forest-900);
   background: var(--success-bg);
   border-color: #bcdcc9;
+}
+
+.closure-panel--blocked {
+  color: var(--ink);
+  background: var(--warning-bg);
+  border-color: var(--warning-line);
+}
+
+.closure-panel--readonly {
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.closure-checklist {
+  display: grid;
+  gap: 14px;
+}
+
+.closure-checklist__group {
+  display: grid;
+  gap: 8px;
+}
+
+.closure-checklist__group h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.closure-checklist__group ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.closure-checklist__item {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 8px;
+  align-items: start;
+  padding: 10px 11px;
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid var(--warning-line);
+  border-radius: 7px;
+}
+
+.closure-checklist__item.is-complete {
+  border-color: #cde4d6;
+}
+
+.closure-checklist__mark {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  color: var(--warning);
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.closure-checklist__item.is-complete .closure-checklist__mark {
+  color: var(--success);
+}
+
+.closure-checklist__item strong,
+.closure-checklist__item span:last-child {
+  display: block;
+}
+
+.closure-checklist__item strong {
+  font-size: 0.76rem;
+}
+
+.closure-checklist__item span:last-child {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.closure-checklist__group--nonblocking .closure-checklist__item {
+  background: var(--surface-muted);
+  border-color: var(--line);
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 12px;
+  color: #3d4b45;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.checkbox-field input {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  margin: 1px 0 0;
+}
+
+.closed-order-recovery {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  background: var(--surface-muted);
+}
+
+.closed-order-recovery p {
+  margin-bottom: 0;
 }
 
 .timeline-note-form {
@@ -3770,6 +3979,7 @@ p {
   .school-acceptance-panel,
   .payment-reminder-panel,
   .closure-panel,
+  .closed-order-recovery,
   .timeline-note-form,
   .tracker-refresh-controls {
     align-items: stretch;
@@ -3787,14 +3997,21 @@ p {
   .payment-reminder-panel .inline-action-form,
   .payment-reminder-panel .inline-action-form .form-field,
   .payment-reminder-panel .button,
+  .payment-reminder-panel .reminder-form-actions,
   .closure-panel .button,
+  .closed-order-recovery .button,
   .timeline-note-form .button {
     width: 100%;
   }
 
-  .school-acceptance-panel__action {
+  .school-acceptance-panel__action,
+  .reminder-form-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .reminder-form-actions .button {
+    width: 100%;
   }
 
   .tracker-identity .button,

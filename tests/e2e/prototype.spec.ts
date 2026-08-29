@@ -1,5 +1,16 @@
 import { expect, test } from '@playwright/test'
 
+function localCalendarDateOffset(days: number): string {
+  const date = new Date()
+  date.setHours(12, 0, 0, 0)
+  date.setDate(date.getDate() + days)
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+
 const canonicalOrders = [
   ['ORD-2026-030', 'SDN 30 Ambon'],
   ['ORD-2026-071', 'SDN 71'],
@@ -87,7 +98,8 @@ test('context recovery shows what happened, what is missing, and what comes next
   }
 
   await page.goto('/orders/ORD-2026-049')
-  await expect(page.getByRole('heading', { name: 'Tidak ada tindakan aktif' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Atur tindak lanjut pembayaran' })).toBeVisible()
+  await expect(page.getByText('Atur tindak lanjut vendor')).toBeVisible()
   await expect(page.getByText('PROCESSING', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('Vendor memproses')).toBeVisible()
 
@@ -96,6 +108,64 @@ test('context recovery shows what happened, what is missing, and what comes next
   await expect(page.getByText('Belum dibayar', { exact: true })).toBeVisible()
   await expect(page.getByText('Menunggu pembayaran sekolah')).toBeVisible()
   await expect(page.getByText('Tidak ada exception operasional yang terbuka.')).toHaveCount(0)
+})
+
+test('COR-07 makes unscheduled waits explicit and keeps confirmed reminders durable', async ({ page }, testInfo) => {
+  const pastDate = localCalendarDateOffset(-1)
+  const futureDate = localCalendarDateOffset(5)
+
+  await page.goto('/orders/ORD-2026-068?tab=finance')
+  await expect(page.getByRole('heading', { name: 'Atur tindak lanjut pembayaran' })).toBeVisible()
+  const paymentDate = page.getByLabel('Tanggal follow-up')
+  const paymentSave = page.getByRole('button', { name: 'Simpan reminder' })
+  await expect(paymentDate).toHaveValue(localCalendarDateOffset(3))
+  await expect(paymentSave).toBeEnabled()
+
+  await paymentDate.fill(pastDate)
+  await paymentSave.click()
+  await expect(page.getByRole('alert')).toContainText('tidak boleh sebelum hari ini')
+  await expect(paymentDate).toHaveValue(pastDate)
+  await paymentDate.fill('')
+  await paymentSave.click()
+  await expect(page.getByRole('alert')).toContainText('wajib diisi')
+  await expect(paymentDate).toHaveValue('')
+
+  await paymentDate.fill(futureDate)
+  await paymentSave.dblclick()
+  await expect(page.getByRole('button', { name: 'Clear reminder' })).toBeVisible()
+  await expect(page.getByRole('status')).toContainText('Reminder pembayaran disimpan')
+  await page.reload()
+  await expect(paymentDate).toHaveValue(futureDate)
+
+  await page.getByRole('tab', { name: 'Timeline' }).click()
+  await expect(page.locator('.timeline-list').getByText('Reminder pembayaran diatur', { exact: true })).toHaveCount(1)
+
+  await page.goto('/')
+  const unscheduledVendorSetup = page.locator('.next-action').filter({ hasText: 'Atur tindak lanjut vendor · VB-2026-009' })
+  await expect(unscheduledVendorSetup).toHaveCount(1)
+  await expect(unscheduledVendorSetup.getByRole('button', { name: 'Snooze 3 hari' })).toHaveCount(0)
+
+  await page.goto('/vendor-batches/VB-2026-009')
+  await expect(page.getByText('Atur tindak lanjut vendor.', { exact: false })).toBeVisible()
+  const vendorDate = page.getByLabel('Tanggal follow-up')
+  const vendorSave = page.getByRole('button', { name: 'Simpan reminder' })
+  await vendorDate.fill(pastDate)
+  await vendorSave.click()
+  await expect(page.getByRole('alert')).toContainText('tidak boleh sebelum hari ini')
+  await expect(vendorDate).toHaveValue(pastDate)
+
+  await vendorDate.fill(futureDate)
+  await vendorSave.dblclick()
+  await expect(page.getByRole('button', { name: 'Clear reminder' })).toBeVisible()
+  await page.reload()
+  await expect(vendorDate).toHaveValue(futureDate)
+  await expect(page.locator('.mini-timeline').getByText('Reminder follow-up vendor diatur', { exact: true })).toHaveCount(1)
+
+  await page.goto('/')
+  const vendorSetup = page.locator('.next-action').filter({ hasText: 'Atur tindak lanjut vendor · VB-2026-009' })
+  await expect(vendorSetup).toHaveCount(0)
+
+  await page.screenshot({ path: testInfo.outputPath('desktop-reminders-persisted.png'), fullPage: true })
 })
 
 test('snooze, override, persistence, and reset mutate real local state', async ({ page }, testInfo) => {
@@ -163,7 +233,7 @@ test('snooze, override, persistence, and reset mutate real local state', async (
   await expect.poll(async () => page.evaluate(() => {
     const stored = JSON.parse(window.localStorage.getItem('jpa-operations-prototype') ?? '{}') as { version?: number }
     return stored.version
-  })).toBe(6)
+  })).toBe(7)
 
   await page.evaluate(() => {
     window.localStorage.setItem(
@@ -202,11 +272,45 @@ test('empty routes and invalid finance input stay inside accessible app feedback
   expect(browserDialogs).toEqual([])
 })
 
+test('COR-09 requires explicit eligible school context before ARKAS extraction', async ({ page }) => {
+  await page.goto('/orders/new')
+  const schoolSelect = page.getByLabel('Sekolah aktif')
+  const extractionButton = page.getByRole('button', { name: 'Simulasikan ekstraksi ARKAS' })
+
+  await expect(schoolSelect).toHaveValue('')
+  await expect(extractionButton).toBeDisabled()
+  await expect(page.getByText('Belum ada konteks sekolah yang dikonfirmasi.')).toBeVisible()
+  await expect(page.locator('#intake-school option[value="SCH-999"]')).toHaveAttribute('disabled', '')
+
+  await page.getByRole('button', { name: 'Sekolah demo baru' }).click()
+  await page.getByLabel('Nama sekolah demo').fill('SDN 30 Ambon')
+  await page.getByRole('button', { name: 'Konfirmasi sekolah baru' }).click()
+  await expect(page.getByRole('alert')).toContainText('duplikat')
+  await expect(extractionButton).toBeDisabled()
+
+  await page.getByRole('button', { name: 'Sekolah existing' }).click()
+  await expect(schoolSelect).toHaveValue('')
+  await expect(page.getByLabel('Nama sekolah demo')).toHaveCount(0)
+  await schoolSelect.selectOption('SCH-071')
+  await page.getByRole('button', { name: 'Konfirmasi sekolah' }).click()
+  await expect(page.getByText('SCH-071')).toBeVisible()
+  await expect(extractionButton).toBeEnabled()
+
+  await page.getByRole('button', { name: 'Sekolah demo baru' }).click()
+  await expect(page.getByLabel('Nama sekolah demo')).toHaveValue('')
+  await page.getByRole('button', { name: 'Sekolah existing' }).click()
+  await expect(schoolSelect).toHaveValue('')
+  await expect(page.getByText('Belum ada konteks sekolah yang dikonfirmasi.')).toBeVisible()
+  await expect(extractionButton).toBeDisabled()
+})
+
 test('Pass 2 journey reaches Vendor readiness while admin documents remain later', async ({ page }, testInfo) => {
   await page.goto('/orders/new')
   await expect(page.getByRole('heading', { name: 'Pesanan Baru' })).toBeVisible()
   await page.getByRole('button', { name: 'Sekolah demo baru' }).click()
   await page.getByLabel('Nama sekolah demo').fill('SD E2E Pass 2')
+  await page.getByRole('button', { name: 'Konfirmasi sekolah baru' }).click()
+  await expect(page.getByText('SCH-SD-E2E-PASS-2')).toBeVisible()
   await page.getByRole('button', { name: 'Upload PDF' }).click()
   await page.getByRole('button', { name: 'Simulasikan ekstraksi ARKAS' }).click()
   await expect(page.getByText('Pilih file sebelum menjalankan simulasi ekstraksi.')).toBeVisible()
@@ -219,6 +323,23 @@ test('Pass 2 journey reaches Vendor readiness while admin documents remain later
 
   await page.getByRole('button', { name: 'Buat order & review HET' }).click()
   await expect(page).toHaveURL(/\/orders\/ORD-2026-240\/arkas$/)
+  const createdSchool = await page.evaluate(() => {
+    const persisted = JSON.parse(window.localStorage.getItem('jpa-operations-prototype') ?? '{}') as {
+      state?: {
+        orders?: Record<string, { schoolId?: string }>
+        schools?: Record<string, { id: string; name: string; status: string }>
+      }
+    }
+    const order = persisted.state?.orders?.['ORD-2026-240']
+    const school = order?.schoolId ? persisted.state?.schools?.[order.schoolId] : undefined
+    return { schoolId: order?.schoolId, school }
+  })
+  expect(createdSchool.schoolId).toBe('SCH-SD-E2E-PASS-2')
+  expect(createdSchool.school).toMatchObject({
+    id: 'SCH-SD-E2E-PASS-2',
+    name: 'SD E2E Pass 2',
+    status: 'ACTIVE',
+  })
   await expect(page.getByRole('heading', { name: 'Review Selisih HET' })).toBeVisible()
   await expect(page.getByText('3 blocker sebelum SIPLah')).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('desktop-het-review.png'), fullPage: true })
@@ -328,7 +449,7 @@ test('Pass 3 Vendor Batch journey preserves recap, lifecycle, reminders, arrival
   await page.getByRole('button', { name: 'Start processing' }).click()
   await expect(page.getByText('PROCESSING', { exact: true }).first()).toBeVisible()
 
-  await page.getByLabel('Tanggal follow-up').fill('2026-03-10')
+  await page.getByLabel('Tanggal follow-up').fill(localCalendarDateOffset(14))
   await page.getByRole('button', { name: 'Simpan reminder' }).click()
   await expect(page.getByRole('button', { name: 'Clear reminder' })).toBeVisible()
   await page.getByRole('button', { name: 'Clear reminder' }).click()
@@ -438,7 +559,7 @@ test('Pass 4 payment and benefit use gross invoice despite settlement deduction'
   await expect(page.getByText('UNPAID', { exact: true }).first()).toBeVisible()
   await expect(page.getByText(/Rp\s?24\.350\.000/).first()).toBeVisible()
 
-  await page.getByLabel('Tanggal follow-up').fill('2026-12-10')
+  await page.getByLabel('Tanggal follow-up').fill(localCalendarDateOffset(14))
   await page.getByRole('button', { name: 'Simpan reminder' }).click()
   await expect(page.getByRole('button', { name: 'Clear reminder' })).toBeVisible()
   await page.getByRole('button', { name: 'Clear reminder' }).click()
@@ -487,27 +608,82 @@ test('Pass 4 preserves parallel fulfillment and benefit obligations', async ({ p
   await expect(page.getByText(/Snooze sampai/)).toBeVisible()
 })
 
-test('Pass 4 explicitly closes a ready order while supplier remains PARTIAL', async ({ page }) => {
+test('Pass 4 closes through review and recovers an order without losing audit context', async ({ page }) => {
   await page.goto('/orders/ORD-2026-068?tab=finance')
+  await expect(page.getByRole('heading', { name: 'Penutupan order belum siap' })).toBeVisible()
+  await expect(page.getByText('Pembayaran sekolah belum dikonfirmasi LUNAS.')).toBeVisible()
+  await expect(page.getByText('Benefit sekolah belum dibayar penuh.')).toBeVisible()
+  await expect(page.getByText('Belum dapat ditutup. Lengkapi checkpoint wajib yang bertanda ○.')).toBeVisible()
+
   await page.getByRole('button', { name: 'Confirm LUNAS' }).first().click()
   await page.getByRole('button', { name: 'Confirm LUNAS' }).last().click()
   await page.getByRole('button', { name: 'Bayar benefit penuh' }).click()
   await page.getByRole('button', { name: 'Catat benefit PAID' }).click()
 
   await expect(page.getByText('PARTIAL', { exact: true }).last()).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Tutup order' })).toBeVisible()
-  await expect(page.getByText('Siap ditutup')).toBeVisible()
-  await page.getByRole('button', { name: 'Tutup order' }).click()
-  await expect(page.getByText('Selesai', { exact: true }).first()).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Tidak ada tindakan aktif' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Siap ditutup' })).toBeVisible()
+  const reviewButton = page.getByRole('button', { name: 'Review penutupan' })
+  await reviewButton.click()
+  const closeDialog = page.getByRole('dialog')
+  await expect(closeDialog).toBeVisible()
+  await expect(closeDialog.getByText('Fulfillment seluruh order 100%', { exact: true })).toBeVisible()
+  await expect(closeDialog.getByText('Benefit sekolah PAID', { exact: true })).toBeVisible()
+  await expect(closeDialog.getByText(/tidak memblokir penutupan order/)).toBeVisible()
+  await expect(page.getByText('Penyelesaian', { exact: true }).first()).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(closeDialog).toHaveCount(0)
+  await expect(reviewButton).toBeFocused()
+
+  await reviewButton.click()
+  const closeCheckbox = page.getByRole('checkbox', { name: /Saya sudah meninjau checkpoint/ })
+  const confirmClose = page.getByRole('button', { name: 'Konfirmasi tutup order' })
+  await expect(confirmClose).toBeDisabled()
+  await expect(closeCheckbox).toBeFocused()
+  await closeCheckbox.check()
+  await expect(confirmClose).toBeEnabled()
+  await page.keyboard.press('Tab')
+  await page.keyboard.press('Tab')
+  await expect(confirmClose).toBeFocused()
+  await confirmClose.dblclick()
+  await expect(page.getByRole('heading', { name: 'Order selesai' })).toHaveCount(2)
+  await expect(page.getByRole('button', { name: 'Atur manual' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Review penutupan' })).toHaveCount(0)
+
   await page.reload()
   await expect(page.getByText('Selesai', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Order selesai' })).toHaveCount(2)
   await expect(page.getByRole('button', { name: 'Confirm LUNAS' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Bayar benefit penuh' })).toHaveCount(0)
+
   await page.getByRole('tab', { name: 'Barang & Distribusi' }).click()
   await expect(page.getByRole('button', { name: 'Refresh summary' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Cek barang selesai' })).toHaveCount(0)
   await expect(page.getByText(/Cache tracker ditampilkan sebagai konteks read-only/)).toBeVisible()
+  await page.goto('/orders/ORD-2026-068/siplah')
+  await expect(page.getByText(/Checkpoint SIPLah ditampilkan sebagai konteks read-only/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Tandai belum tersedia' })).toBeDisabled()
+  await page.goto('/orders/ORD-2026-068?tab=timeline')
   await page.getByRole('tab', { name: 'Timeline' }).click()
   await expect(page.getByLabel('Add Note')).toHaveCount(0)
+  await expect(page.locator('.timeline-list').getByText('Order ditutup', { exact: true })).toHaveCount(1)
+  await expect(page.getByText('Pembayaran sekolah LUNAS', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Buka kembali order' }).click()
+  const reopenDialog = page.getByRole('dialog')
+  const confirmReopen = page.getByRole('button', { name: 'Konfirmasi buka kembali' })
+  await expect(reopenDialog).toBeVisible()
+  await confirmReopen.click()
+  await expect(reopenDialog.getByRole('alert')).toContainText('Alasan membuka kembali order wajib diisi.')
+  await expect(page.getByText('Selesai', { exact: true }).first()).toBeVisible()
+  await page.getByLabel('Alasan membuka kembali order (wajib)').fill('Koreksi bukti pembayaran sebelum audit.')
+  await confirmReopen.dblclick()
+  await expect(page.getByText('Penyelesaian', { exact: true }).first()).toBeVisible()
+  await page.getByRole('tab', { name: 'Pembayaran' }).click()
+  await expect(page.getByRole('button', { name: 'Review penutupan' })).toBeVisible()
+
+  await page.getByRole('tab', { name: 'Timeline' }).click()
+  await expect(page.locator('.timeline-list').getByText('Order dibuka kembali', { exact: true })).toHaveCount(1)
+  await expect(page.getByText('Koreksi bukti pembayaran sebelum audit.')).toBeVisible()
 })
 
 test.describe('mobile operations layout', () => {
@@ -534,6 +710,73 @@ test.describe('mobile operations layout', () => {
     await expect(page.locator('.pipeline-column[data-stage="DISTRIBUTION"]')).toContainText('SDN 65 Ambon')
     await expect(page.locator('.pipeline-board')).toHaveCSS('overflow-x', 'visible')
     await page.screenshot({ path: testInfo.outputPath('mobile-pipeline.png'), fullPage: true })
+  })
+
+  test('keeps reminder setup, validation, and persistence usable on mobile', async ({ page }, testInfo) => {
+    const pastDate = localCalendarDateOffset(-1)
+    const futureDate = localCalendarDateOffset(5)
+
+    await page.goto('/orders/ORD-2026-068?tab=finance')
+    await expect(page.getByRole('heading', { name: 'Atur tindak lanjut pembayaran' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Simpan reminder' })).toBeEnabled()
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
+
+    const paymentDate = page.getByLabel('Tanggal follow-up')
+    await paymentDate.fill(pastDate)
+    await page.getByRole('button', { name: 'Simpan reminder' }).click()
+    await expect(page.getByRole('alert')).toContainText('tidak boleh sebelum hari ini')
+    await expect(paymentDate).toHaveValue(pastDate)
+    await paymentDate.fill('')
+    await page.getByRole('button', { name: 'Simpan reminder' }).click()
+    await expect(page.getByRole('alert')).toContainText('wajib diisi')
+    await expect(paymentDate).toHaveValue('')
+
+    await paymentDate.fill(futureDate)
+    await page.getByRole('button', { name: 'Simpan reminder' }).click()
+    await expect(page.getByRole('button', { name: 'Clear reminder' })).toBeVisible()
+    await page.reload()
+    await expect(paymentDate).toHaveValue(futureDate)
+    await page.screenshot({ path: testInfo.outputPath('mobile-reminders.png'), fullPage: true })
+  })
+
+  test('reviews and recovers closure without hiding controls on mobile', async ({ page }, testInfo) => {
+    await page.goto('/orders/ORD-2026-068?tab=finance')
+    await expect(page.getByRole('heading', { name: 'Penutupan order belum siap' })).toBeVisible()
+    await expect(page.getByText('Pembayaran sekolah belum dikonfirmasi LUNAS.')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Confirm LUNAS' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Confirm LUNAS' }).click()
+    await page.getByRole('button', { name: 'Bayar benefit penuh' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Catat benefit PAID' }).click()
+
+    await page.getByRole('button', { name: 'Review penutupan' }).click()
+    const closeDialog = page.getByRole('dialog')
+    await expect(closeDialog.getByText(/Status supplier PARTIAL/)).toBeVisible()
+    const dialogBox = await closeDialog.boundingBox()
+    expect(dialogBox).not.toBeNull()
+    if (dialogBox) {
+      expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(844)
+    }
+    await page.screenshot({ path: testInfo.outputPath('mobile-close-review.png'), fullPage: true })
+
+    const confirmClose = page.getByRole('button', { name: 'Konfirmasi tutup order' })
+    await expect(confirmClose).toBeDisabled()
+    await page.getByRole('checkbox', { name: /Saya sudah meninjau checkpoint/ }).check()
+    await confirmClose.click()
+    await expect(page.getByRole('heading', { name: 'Order selesai' })).toHaveCount(2)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
+
+    await page.getByRole('tab', { name: 'Barang & Distribusi' }).click()
+    await expect(page.getByRole('button', { name: 'Refresh summary' })).toHaveCount(0)
+    await page.getByRole('tab', { name: 'Timeline' }).click()
+    await expect(page.getByLabel('Add Note')).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Buka kembali order' }).click()
+    await page.getByLabel('Alasan membuka kembali order (wajib)').fill('Koreksi dokumen pada kunjungan sekolah.')
+    await page.getByRole('button', { name: 'Konfirmasi buka kembali' }).click()
+    await expect(page.getByText('Penyelesaian', { exact: true }).first()).toBeVisible()
+    await page.getByRole('tab', { name: 'Pembayaran' }).click()
+    await expect(page.getByRole('button', { name: 'Review penutupan' })).toBeVisible()
   })
 
   test('stacks Vendor selection, aggregate breakdown, and Batch detail', async ({ page }, testInfo) => {
@@ -577,8 +820,18 @@ test.describe('mobile operations layout', () => {
   test('renders Pass 2 workflows as stacked mobile operations', async ({ page }, testInfo) => {
     await page.goto('/orders/new')
     await expect(page.getByRole('heading', { name: 'Pesanan Baru' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Simulasikan ekstraksi ARKAS' })).toBeVisible()
+    await expect(page.getByLabel('Sekolah aktif')).toHaveValue('')
+    await expect(page.locator('#intake-school option[value="SCH-999"]')).toHaveAttribute('disabled', '')
+    await expect(page.getByRole('button', { name: 'Simulasikan ekstraksi ARKAS' })).toBeDisabled()
     await page.screenshot({ path: testInfo.outputPath('mobile-new-order.png'), fullPage: true })
+    await page.getByLabel('Sekolah aktif').selectOption('SCH-071')
+    await page.getByRole('button', { name: 'Konfirmasi sekolah' }).click()
+    await page.getByRole('button', { name: 'Simulasikan ekstraksi ARKAS' }).click()
+    await expect(page.getByRole('button', { name: 'Mengekstrak & mencocokkan HET…' })).toBeVisible()
+    await expect(page.getByText('5 item tidak perlu dicek ulang.')).toBeVisible()
+    await page.getByRole('button', { name: 'Buat order & review HET' }).click()
+    await expect(page).toHaveURL(/\/orders\/ORD-2026-240\/arkas$/)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
 
     await page.goto('/orders/ORD-2026-030/arkas')
     await expect(page.getByRole('heading', { name: 'Review Selisih HET' })).toBeVisible()

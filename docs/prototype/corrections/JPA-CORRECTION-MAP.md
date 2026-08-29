@@ -1,6 +1,6 @@
 # JPA Post-Audit Correction Map
 
-Status: backlog proposed - implementation not started  
+Status: JPA-COR-07–09 implemented; Review Gate A pending
 Baseline: `00a747e` on `prototype/pass-5-final-integration`  
 Audit source: `outputs/jpa-ui-ux-audit/JPA-Operations-Workspace-UI-UX-Audit.md`  
 Design plan: `outputs/jpa-ui-ux-audit/JPA-Graph-First-Correction-Plan.md`
@@ -79,7 +79,7 @@ When school payment is `UNPAID`, or a Vendor Batch is `PROCESSING`, should missi
 
 ### Answer
 
-Pending user confirmation. Recommended: keep `PROCESSING` itself passive, but create one non-snoozable **Atur tindak lanjut** obligation when no date exists. Suggest a date, require explicit operator confirmation, then expose the actual follow-up action only when due. This reconciles the old Review Gate 1 rule with audit UX-001, UX-002, and UX-014 without inventing a stale threshold or notification integration.
+Confirmed: keep `PROCESSING` itself passive, but create one non-snoozable **Atur tindak lanjut** obligation when no date exists. Suggest a date, require explicit operator confirmation, then expose the actual follow-up action only when due. This reconciles the old Review Gate 1 rule with audit UX-001, UX-002, and UX-014 without inventing a stale threshold or notification integration.
 
 ## #2: What is the prototype closure and reopen policy?
 
@@ -93,7 +93,7 @@ Who may close/reopen an order, what reason is required, and how should recovery 
 
 ### Answer
 
-Pending user confirmation. Recommended: closing uses a mandatory review and explicit confirmation; reopening is available only through an explicit prototype capability, requires a reason, and appends a Timeline event. Do not build authentication or a role-management system.
+Confirmed: closing uses a mandatory review and explicit confirmation; reopening is available through an explicit prototype capability, requires a reason, and appends a Timeline event. No authentication or role-management system is needed in the prototype.
 
 ## #3: What makes a school eligible for a new order?
 
@@ -107,7 +107,7 @@ Is **Demo Closed School** an inactive institution or merely a school with a hist
 
 ### Answer
 
-Pending user confirmation. Recommended: model school eligibility explicitly rather than inferring it from an order's `CLOSED` stage. New Order always starts unselected; inactive schools are shown only as historical, non-selectable context.
+Confirmed: model school eligibility explicitly rather than inferring it from an order's `CLOSED` stage. New Order always starts unselected; inactive schools are shown only as historical, non-selectable context.
 
 ## #4: Which operator-facing terms are canonical?
 
@@ -164,7 +164,7 @@ Can valid reminders be saved and can every unscheduled `UNPAID`/`PROCESSING` wai
 
 ### Answer
 
-Pending implementation and interactive browser proof.
+Implemented and verified: unscheduled active `UNPAID` payment waits expose one non-snoozable **Atur tindak lanjut pembayaran** obligation; `PROCESSING` vendor waits expose one grouped, non-snoozable **Atur tindak lanjut vendor** obligation per batch. Confirmed dates are persisted as local calendar days, become due actions only when reached, and are removed when payment is confirmed or the batch fully arrives. Partial arrival preserves an existing batch reminder. Automated checks and interactive desktop/390 px browser verification passed.
 
 ## #8: Can order closure be deliberate and recoverable?
 
@@ -179,7 +179,7 @@ Can closure require review, remain idempotent, explain non-blocking supplier pay
 
 ### Answer
 
-Pending implementation and interactive browser proof.
+Implemented and verified: closure now uses a domain-derived blocking checklist for fulfillment, school acceptance, SIPLah administration, school payment, and benefit; supplier payment is shown separately as non-blocking. Eligible orders open a review modal before closing, confirmation is explicit and idempotent, closed workspaces expose accurate read-only guidance, and approved reopen requires a non-empty reason, restores a derived active stage, and appends a Timeline event. Automated checks and interactive desktop/390 px browser verification passed.
 
 ## #9: Can New Order guarantee an explicit eligible school context?
 
@@ -194,7 +194,7 @@ Can no browser path reach ARKAS intake with an implicit, inactive, duplicate, or
 
 ### Answer
 
-Pending implementation and interactive browser proof.
+Implemented and verified: New Order now starts with no school context, uses a persisted explicit `ACTIVE`/`INACTIVE` school registry, keeps historical schools visible but non-selectable, requires explicit identity confirmation before extraction, detects normalized duplicate names, clears stale mode state, and stores a stable school ID on created orders. State v6 migrates deterministically to the new registry. Automated checks and interactive desktop/390 px browser verification passed.
 
 ## #10: Are critical obligations visible at normal desktop width?
 

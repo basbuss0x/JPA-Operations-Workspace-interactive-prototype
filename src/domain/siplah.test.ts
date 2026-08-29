@@ -5,6 +5,7 @@ import { isSiplahAdminComplete, isSiplahReadyForVendor } from './order-state'
 import { createSiplahDocuments } from './siplah'
 import {
   attachSiplahDocument,
+  markSiplahDocumentAvailable,
   recordSiplahOrder,
   sendSiplahDocumentToSchool,
   setSiplahAccessAvailable,
@@ -115,6 +116,21 @@ describe('SIPLah lifecycle-aware document requirements', () => {
     expect(recorded.finalInvoiceAmount).toBe(17_125_000)
     expect(recorded.finalInvoiceAmount).not.toBe(recorded.hetReviewedAmount)
     expect(recorded.timeline[0]?.title).toBe('Transaksi SIPLah dikonfirmasi')
+  })
+
+  it('guards direct SIPLah mutations after an order is CLOSED', () => {
+    const closed = canonicalOrder('ORD-2025-999')
+
+    expect(() => setSiplahAccessAvailable(closed, false)).toThrow(/CLOSED/)
+    expect(() => setSiplahOrderPlaced(closed)).toThrow(/CLOSED/)
+    expect(() => recordSiplahOrder(closed, {
+      orderNumber: 'SPL-CLOSED-999',
+      finalInvoiceAmount: 20_000_000,
+    })).toThrow(/CLOSED/)
+    expect(() => markSiplahDocumentAvailable(closed, 'INVOICE')).toThrow(/CLOSED/)
+    expect(() => attachSiplahDocument(closed, 'INVOICE', 'invoice.pdf')).toThrow(/CLOSED/)
+    expect(() => verifySiplahDocument(closed, 'INVOICE')).toThrow(/CLOSED/)
+    expect(() => sendSiplahDocumentToSchool(closed, 'SURAT_PESANAN')).toThrow(/CLOSED/)
   })
 
   it('completing only Surat Pesanan unlocks the ADD_TO_VENDOR_BATCH action', () => {

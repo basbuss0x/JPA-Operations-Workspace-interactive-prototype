@@ -188,6 +188,19 @@ describe('Vendor Batch domain', () => {
     expect(reminders[0]?.orderIds).toEqual(['ORD-2026-040', 'ORD-2026-SLB'])
   })
 
+  it('exposes one non-snoozable setup obligation for an unscheduled processing batch', () => {
+    const processing = processingBatch()
+    const setup = deriveWorkQueue(processing, now).filter(
+      (item) => item.kind === 'SCHEDULE_VENDOR_FOLLOW_UP' && item.id.includes('VB-2026-010'),
+    )
+
+    expect(setup).toHaveLength(1)
+    expect(setup[0]?.id).toBe('queue-schedule-vendor-VB-2026-010')
+    expect(setup[0]?.orderIds).toEqual(['ORD-2026-040', 'ORD-2026-SLB'])
+    expect(setup[0]?.snoozable).toBe(false)
+    expect(setup[0]?.dueAt).toBeNull()
+  })
+
   it('targets partial arrival and derives ARRIVED only after every member order is FULL', () => {
     const processing = processingBatch()
     const siblingBefore = order(processing, 'ORD-2026-SLB')

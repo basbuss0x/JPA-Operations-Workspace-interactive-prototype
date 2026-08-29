@@ -139,7 +139,7 @@ export function OrdersPage() {
                       <td className="orders-table__action">
                         {exceptions > 0 ? <ExceptionIndicator label={`${exceptions} selisih HET`} level="danger" /> : null}
                         <Link to={action?.href ?? `/orders/${order.id}`}>
-                          {action?.title ?? 'Tidak ada tindakan aktif'}
+                          {action?.title ?? (order.stage === 'CLOSED' ? 'Order selesai' : 'Tidak ada tindakan aktif')}
                         </Link>
                         {otherActionCount > 0 ? <span className="other-action-count">+{otherActionCount} aksi lain</span> : null}
                       </td>
@@ -179,7 +179,7 @@ export function OrdersPage() {
                   <Link className="order-mobile-card__action" to={action?.href ?? `/orders/${order.id}`}>
                     <span>
                       <small>Next Action</small>
-                      <strong>{action?.title ?? 'Tidak ada tindakan aktif'}</strong>
+                      <strong>{action?.title ?? (order.stage === 'CLOSED' ? 'Order selesai' : 'Tidak ada tindakan aktif')}</strong>
                       {otherActionCount > 0 ? <small>+{otherActionCount} aksi lain</small> : null}
                     </span>
                     <span aria-hidden="true">→</span>

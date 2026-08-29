@@ -1,4 +1,5 @@
-import { createCanonicalDemoData, DEMO_STATE_VERSION } from '../data/demo-data'
+import { createCanonicalDemoData, createCanonicalSchools, DEMO_STATE_VERSION } from '../data/demo-data'
+import { normalizeSchoolName } from '../domain/school'
 import { createSiplahDocuments } from '../domain/siplah'
 import type {
   HetReview,
@@ -6,6 +7,7 @@ import type {
   Order,
   OrderItem,
   PrototypeData,
+  School,
   SchoolBenefit,
   SchoolPayment,
   SiplahDocumentKind,
@@ -340,6 +342,52 @@ function migrateOrders(
   )
 }
 
+function isPersistedSchool(value: unknown, key: string): value is School {
+  return (
+    isRecord(value) &&
+    typeof value.name === 'string' &&
+    typeof value.city === 'string' &&
+    (value.status === 'ACTIVE' || value.status === 'INACTIVE') &&
+    (typeof value.id === 'string' ? value.id === key : true)
+  )
+}
+
+function migrateSchools(
+  orders: Record<string, Order>,
+  persistedSchools?: unknown,
+): Record<string, School> {
+  const schools = createCanonicalSchools()
+  if (isRecord(persistedSchools)) {
+    for (const [schoolId, value] of Object.entries(persistedSchools)) {
+      if (isPersistedSchool(value, schoolId)) schools[schoolId] = { ...value, id: schoolId }
+    }
+  }
+
+  for (const order of Object.values(orders)) {
+    if (schools[order.schoolId]) continue
+    const duplicate = Object.values(schools).find(
+      (school) => normalizeSchoolName(school.name) === normalizeSchoolName(order.schoolName),
+    )
+    if (duplicate) {
+      schools[order.schoolId] = {
+        ...duplicate,
+        id: order.schoolId,
+        name: order.schoolName,
+      }
+      continue
+    }
+    // Historical state did not have an eligibility source. Preserve unknown schools as active
+    // rather than inferring inactivity from an order's CLOSED lifecycle stage.
+    schools[order.schoolId] = {
+      id: order.schoolId,
+      name: order.schoolName,
+      city: 'Lokasi belum diisi',
+      status: 'ACTIVE',
+    }
+  }
+  return schools
+}
+
 export function migratePrototypeState(
   persistedState: unknown,
   persistedVersion: number,
@@ -354,22 +402,25 @@ export function migratePrototypeState(
     persistedVersion === 2 ||
     persistedVersion === 3 ||
     persistedVersion === 4 ||
-    persistedVersion === 5
+    persistedVersion === 5 ||
+    persistedVersion === 6
   ) {
     try {
+      const orders = persistedVersion === 4 || persistedVersion === 5 || persistedVersion === 6
+        ? Object.fromEntries(
+            Object.entries(persistedState.orders as Record<string, Order>).map(([orderId, order]) => [
+              orderId,
+              normalizeCurrentOrder(order),
+            ]),
+          )
+        : migrateOrders(
+            persistedState.orders as Record<string, LegacyOrderV1 | LegacyOrderV2 | LegacyOrderV3>,
+            persistedVersion,
+          )
       return {
         version: DEMO_STATE_VERSION,
-        orders: persistedVersion === 4 || persistedVersion === 5
-          ? Object.fromEntries(
-              Object.entries(persistedState.orders as Record<string, Order>).map(([orderId, order]) => [
-                orderId,
-                normalizeCurrentOrder(order),
-              ]),
-            )
-          : migrateOrders(
-              persistedState.orders as Record<string, LegacyOrderV1 | LegacyOrderV2 | LegacyOrderV3>,
-              persistedVersion,
-            ),
+        schools: migrateSchools(orders),
+        orders,
         vendorBatches: migrateVendorBatches(
           persistedState.vendorBatches as Record<string, LegacyVendorBatch | VendorBatch>,
         ),
@@ -379,9 +430,13 @@ export function migratePrototypeState(
     }
   }
 
-  if (persistedVersion === DEMO_STATE_VERSION) {
+  if (persistedVersion === DEMO_STATE_VERSION && isRecord(persistedState.schools)) {
     return {
       version: DEMO_STATE_VERSION,
+      schools: migrateSchools(
+        persistedState.orders as Record<string, Order>,
+        persistedState.schools,
+      ),
       orders: persistedState.orders as Record<string, Order>,
       vendorBatches: persistedState.vendorBatches as Record<string, VendorBatch>,
     }

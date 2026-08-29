@@ -1,7 +1,16 @@
 import { calculateArkasBudgetAmount } from './intake'
-import { getHetExceptionCount, isCompletionReady } from './order-state'
+import {
+  deriveActiveLifecycleStage,
+  getHetExceptionCount,
+  isCompletionReady,
+} from './order-state'
 import { buildVendorRecap, calculateBenefitAmount, isVendorBatchEligible } from './selectors'
 import { createSiplahDocuments, getSiplahDocument } from './siplah'
+import {
+  reminderTimestampToCalendarDate,
+  validateReminderTimestamp,
+} from '../utils/reminder-date'
+import { isActionSnoozable } from './types'
 import type {
   ArkasExtractionResult,
   BenefitPaymentInput,
@@ -22,6 +31,14 @@ import type {
 
 function timestamp(now?: Date): string {
   return (now ?? new Date()).toISOString()
+}
+
+function sameReminderDate(left: string | null, right: string | null): boolean {
+  if (left === right) return true
+  if (!left || !right) return false
+  const leftDate = reminderTimestampToCalendarDate(left)
+  const rightDate = reminderTimestampToCalendarDate(right)
+  return leftDate !== '' && leftDate === rightDate
 }
 
 function timelineEvent(order: Order, title: string, detail: string, now?: Date): TimelineEvent {
@@ -349,6 +366,7 @@ export function setSiplahAccessAvailable(
   available: boolean,
   now?: Date,
 ): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
   return withEvent(
     { ...order, siplah: { ...order.siplah, accessAvailable: available } },
     'Akses SIPLah diperbarui',
@@ -360,6 +378,7 @@ export function setSiplahAccessAvailable(
 }
 
 export function setSiplahOrderPlaced(order: Order, now?: Date): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
   if (order.het.status !== 'APPROVED') {
     throw new Error('HET harus disetujui sebelum mencatat pesanan SIPLah.')
   }
@@ -387,6 +406,7 @@ export function recordSiplahOrder(
   input: SiplahOrderRecordInput,
   now?: Date,
 ): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
   if (!order.siplah.orderPlaced) {
     throw new Error('Pesanan harus ditandai dibuat sebelum mencatat nomor order.')
   }
@@ -413,6 +433,7 @@ export function recordSiplahOrder(
 }
 
 export function reopenHetReview(order: Order, reason: string, now?: Date): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
   if (order.het.status !== 'APPROVED') {
     throw new Error('HET review hanya dapat dibuka kembali dari status APPROVED.')
   }
@@ -439,6 +460,7 @@ export function markSiplahDocumentAvailable(
   kind: SiplahDocumentKind,
   now?: Date,
 ): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
   if (!order.siplah.orderPlaced) {
     throw new Error('Pesanan SIPLah harus dibuat sebelum dokumen tersedia.')
   }
@@ -465,6 +487,7 @@ export function attachSiplahDocument(
   fileName: string,
   now?: Date,
 ): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
   if (!order.siplah.orderPlaced) {
     throw new Error('Pesanan SIPLah harus dibuat sebelum dokumen dilampirkan.')
   }
@@ -499,6 +522,7 @@ export function verifySiplahDocument(
   kind: SiplahDocumentKind,
   now?: Date,
 ): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
   const target = getSiplahDocument(order.siplah.documents, kind)
   if (!target.available || !target.fileName) {
     throw new Error(`${target.label} belum tersedia atau terlampir.`)
@@ -524,6 +548,7 @@ export function sendSiplahDocumentToSchool(
   kind: SiplahDocumentKind,
   now?: Date,
 ): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
   const target = getSiplahDocument(order.siplah.documents, kind)
   if (!target.sendToSchoolRequired) {
     throw new Error(`${target.label} tidak memerlukan pengiriman ke sekolah.`)
@@ -742,12 +767,21 @@ export function setVendorFollowUpReminder(
   if (!['SENT_TO_VENDOR', 'VENDOR_CONFIRMED', 'PROCESSING', 'PARTIALLY_ARRIVED'].includes(batch.status)) {
     throw new Error(`Reminder vendor tidak relevan untuk status ${batch.status}.`)
   }
-  if (followUpDueAt !== null && !Number.isFinite(new Date(followUpDueAt).getTime())) {
-    throw new Error('Tanggal reminder vendor tidak valid.')
+  if (followUpDueAt !== null) {
+    const validationError = validateReminderTimestamp(
+      followUpDueAt,
+      now ?? new Date(),
+      'Tanggal follow-up vendor',
+    )
+    if (validationError) throw new Error(validationError)
   }
-  const title = followUpDueAt ? 'Reminder follow-up vendor diatur' : 'Reminder follow-up vendor dihapus'
+  if (sameReminderDate(batch.followUpDueAt, followUpDueAt)) return data
+
+  const title = followUpDueAt
+    ? batch.followUpDueAt ? 'Reminder follow-up vendor diperbarui' : 'Reminder follow-up vendor diatur'
+    : 'Reminder follow-up vendor dihapus'
   const detail = followUpDueAt
-    ? `Follow-up dijadwalkan pada ${followUpDueAt}.`
+    ? `Follow-up dijadwalkan pada ${reminderTimestampToCalendarDate(followUpDueAt)}.`
     : 'Batch kembali pasif tanpa reminder vendor.'
   const nextBatch: VendorBatch = {
     ...batch,
@@ -978,13 +1012,26 @@ export function setPaymentFollowUpReminder(
   if (order.schoolPayment.status === 'LUNAS') {
     throw new Error('Reminder pembayaran tidak relevan setelah LUNAS.')
   }
-  if (followUpDueAt !== null && !Number.isFinite(new Date(followUpDueAt).getTime())) {
-    throw new Error('Tanggal follow-up pembayaran tidak valid.')
+  if (followUpDueAt !== null) {
+    const validationError = validateReminderTimestamp(
+      followUpDueAt,
+      now ?? new Date(),
+      'Tanggal follow-up pembayaran',
+    )
+    if (validationError) throw new Error(validationError)
   }
+  if (sameReminderDate(order.schoolPayment.followUpDueAt, followUpDueAt)) return order
+
+  const title = followUpDueAt
+    ? order.schoolPayment.followUpDueAt ? 'Reminder pembayaran diperbarui' : 'Reminder pembayaran diatur'
+    : 'Reminder pembayaran dihapus'
+  const detail = followUpDueAt
+    ? `Follow-up pembayaran dijadwalkan pada ${reminderTimestampToCalendarDate(followUpDueAt)}.`
+    : 'Tidak ada reminder pembayaran aktif.'
   return withEvent(
     { ...order, schoolPayment: { ...order.schoolPayment, followUpDueAt } },
-    followUpDueAt ? 'Reminder pembayaran diatur' : 'Reminder pembayaran dihapus',
-    followUpDueAt ? `Follow-up pembayaran dijadwalkan pada ${followUpDueAt}.` : 'Tidak ada reminder pembayaran aktif.',
+    title,
+    detail,
     now,
   )
 }
@@ -1112,9 +1159,27 @@ export function recordBenefitSchoolConfirmation(order: Order, now?: Date): Order
 }
 
 export function closeOrder(order: Order, now?: Date): Order {
-  if (order.stage === 'CLOSED') throw new Error('Order sudah CLOSED.')
+  if (order.stage === 'CLOSED') return order
   if (!isCompletionReady(order)) throw new Error('Order belum memenuhi syarat penutupan.')
-  return withEvent({ ...order, stage: 'CLOSED' }, 'Order ditutup', 'Semua checkpoint sisi JPA selesai.', now)
+  return withEvent(
+    { ...order, stage: 'CLOSED' },
+    'Order ditutup',
+    'Semua checkpoint blocking sisi JPA selesai; pembayaran supplier tidak memblokir penutupan.',
+    now,
+  )
+}
+
+export function reopenOrder(order: Order, reason: string, now?: Date): Order {
+  if (order.stage !== 'CLOSED') throw new Error('Hanya order CLOSED yang dapat dibuka kembali.')
+  const trimmedReason = reason.trim()
+  if (!trimmedReason) throw new Error('Alasan membuka kembali order wajib diisi.')
+  const stage = deriveActiveLifecycleStage(order)
+  return withEvent(
+    { ...order, stage },
+    'Order dibuka kembali',
+    `Order dipulihkan ke tahap ${stage}. Alasan operator: ${trimmedReason}.`,
+    now,
+  )
 }
 
 export function setNextActionOverride(
@@ -1122,6 +1187,7 @@ export function setNextActionOverride(
   override: Omit<NextActionOverride, 'createdAt'> | null,
   now?: Date,
 ): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
   const createdAt = timestamp(now)
   const controlsByActionKey = { ...order.nextActionControl.controlsByActionKey }
   delete controlsByActionKey.MANUAL
@@ -1142,6 +1208,10 @@ export function snoozeOrderAction(
   until: string | null,
   now?: Date,
 ): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
+  if (!isActionSnoozable(actionKind)) {
+    throw new Error('Kewajiban Atur tindak lanjut tidak dapat di-snooze.')
+  }
   const controlsByActionKey = { ...order.nextActionControl.controlsByActionKey }
   if (until === null) delete controlsByActionKey[actionKind]
   else controlsByActionKey[actionKind] = { snoozedUntil: until }
@@ -1153,6 +1223,7 @@ export function snoozeOrderAction(
 }
 
 export function addTimelineNote(order: Order, note: string, now?: Date): Order {
+  if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
   if (!note.trim()) throw new Error('Catatan tidak boleh kosong.')
   const occurredAt = timestamp(now)
   return {

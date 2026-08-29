@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { createCanonicalDemoData } from '../data/demo-data'
 import { deriveActionCandidates } from './next-action'
-import { isCompletionReady } from './order-state'
 import {
+  deriveActiveLifecycleStage,
+  getClosureChecklist,
+  isCompletionReady,
+} from './order-state'
+import {
+  addTimelineNote,
   closeOrder,
   completePreDeliveryCheck,
   recordBenefitPayment,
@@ -10,6 +15,9 @@ import {
   recordSchoolAcceptance,
   recordSchoolPayment,
   refreshFulfillmentSummary,
+  reopenOrder,
+  setNextActionOverride,
+  snoozeOrderAction,
 } from './transitions'
 import type { Order } from './types'
 
@@ -391,6 +399,24 @@ describe('parallel actions and explicit company closure', () => {
     expect(isCompletionReady(confirmed)).toBe(true)
   })
 
+  it('derives blocking and non-blocking closure checklist items from domain state', () => {
+    const blocked = canonicalOrder('ORD-2026-068')
+    const blockedItems = getClosureChecklist(blocked)
+    expect(blockedItems.filter((item) => item.blocking && !item.complete).map((item) => item.key))
+      .toEqual(['SCHOOL_PAYMENT', 'BENEFIT'])
+    expect(blockedItems.find((item) => item.key === 'SCHOOL_PAYMENT')?.detail)
+      .toContain('belum dikonfirmasi LUNAS')
+    expect(blockedItems.find((item) => item.key === 'BENEFIT')?.detail)
+      .toContain('belum dibayar penuh')
+
+    const ready = payBenefit(payCanonical68())
+    expect(getClosureChecklist(ready).filter((item) => item.blocking && !item.complete)).toEqual([])
+    expect(getClosureChecklist(ready).find((item) => item.key === 'SUPPLIER_PAYMENT')).toMatchObject({
+      complete: false,
+      blocking: false,
+    })
+  })
+
   it('blocks closure when each locked requirement is missing', () => {
     const ready = payBenefit(payCanonical68())
     const variants: Order[] = [
@@ -414,7 +440,7 @@ describe('parallel actions and explicit company closure', () => {
     }
   })
 
-  it('requires an explicit close transition and suppresses actions after CLOSED', () => {
+  it('requires an explicit close transition, is idempotent, and supports reasoned recovery', () => {
     const ready = payBenefit(payCanonical68())
     expect(ready.stage).toBe('COMPLETION')
     expect(deriveActionCandidates(ready, { vendorBatch: null }, now).map((action) => action.kind))
@@ -424,6 +450,31 @@ describe('parallel actions and explicit company closure', () => {
     expect(closed.stage).toBe('CLOSED')
     expect(closed.timeline[0]?.title).toBe('Order ditutup')
     expect(deriveActionCandidates(closed, { vendorBatch: null }, now)).toEqual([])
+
+    const duplicateClose = closeOrder(closed, new Date('2026-02-22T08:00:00.000Z'))
+    expect(duplicateClose).toEqual(closed)
+    expect(duplicateClose.timeline).toHaveLength(closed.timeline.length)
+
+    expect(deriveActiveLifecycleStage(closed)).toBe('COMPLETION')
+    expect(() => reopenOrder(closed, '   ', now)).toThrow(/Alasan membuka kembali/)
+    const reopened = reopenOrder(closed, 'Koreksi bukti pembayaran sebelum audit.', now)
+    expect(reopened.stage).toBe('COMPLETION')
+    expect(reopened.timeline).toHaveLength(closed.timeline.length + 1)
+    expect(reopened.timeline[0]?.title).toBe('Order dibuka kembali')
+    expect(reopened.timeline[0]?.detail).toContain('Koreksi bukti pembayaran sebelum audit.')
+  })
+
+  it('guards closed workspace mutations at the domain boundary', () => {
+    const ready = payBenefit(payCanonical68())
+    const closed = closeOrder(ready, now)
+
+    expect(() => addTimelineNote(closed, 'Harus gagal.', now)).toThrow(/CLOSED/)
+    expect(() => setNextActionOverride(closed, {
+      title: 'Harus gagal',
+      reason: 'Tidak boleh mengubah order tertutup.',
+      dueAt: null,
+    }, now)).toThrow(/CLOSED/)
+    expect(() => snoozeOrderAction(closed, 'CLOSE_ORDER', '2026-02-25T08:00:00.000Z', now)).toThrow(/CLOSED/)
   })
 
   it('rejects optional benefit school confirmation after the order is CLOSED', () => {

@@ -8,6 +8,7 @@ interface NextActionPanelProps {
   action: NextAction | null
   schoolName?: string
   compact?: boolean
+  emptyState?: { title: string; description: string } | undefined
   onSnooze?: (() => void) | undefined
   onCustomize?: (() => void) | undefined
 }
@@ -16,6 +17,7 @@ export function NextActionPanel({
   action,
   schoolName,
   compact = false,
+  emptyState,
   onSnooze,
   onCustomize,
 }: NextActionPanelProps) {
@@ -25,8 +27,8 @@ export function NextActionPanel({
         <div className="next-action__icon" aria-hidden="true">✓</div>
         <div className="next-action__main">
           <p className="eyebrow">Primary Next Action</p>
-          <h2>Tidak ada tindakan aktif</h2>
-          <p>Periksa aksi yang disnooze atau pin tindakan manual bila konteks lapangan membutuhkannya.</p>
+          <h2>{emptyState?.title ?? 'Tidak ada tindakan aktif'}</h2>
+          <p>{emptyState?.description ?? 'Periksa aksi yang disnooze atau pin tindakan manual bila konteks lapangan membutuhkannya.'}</p>
         </div>
         {onCustomize ? (
           <div className="next-action__actions">
@@ -52,7 +54,7 @@ export function NextActionPanel({
       </div>
       <div className="next-action__actions">
         <Link className="button button--primary button--md" to={action.href}>{action.ctaLabel}</Link>
-        {onSnooze ? (
+        {onSnooze && action.snoozable ? (
           <Button variant="ghost" size="sm" onClick={onSnooze}>Snooze 3 hari</Button>
         ) : null}
         {onCustomize ? (

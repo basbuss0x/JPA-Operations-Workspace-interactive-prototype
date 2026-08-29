@@ -6,7 +6,9 @@ import { usePrototypeStore } from '../store/use-prototype-store'
 import { formatDate, formatDateTime } from '../utils/format'
 import {
   calendarDateToReminderTimestamp,
+  futureCalendarDate,
   reminderTimestampToCalendarDate,
+  validateReminderCalendarDate,
 } from '../utils/reminder-date'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
@@ -38,8 +40,9 @@ export function VendorBatchDetailPage() {
   const [feedback, setFeedback] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [reminderDate, setReminderDate] = useState(() =>
-    reminderTimestampToCalendarDate(batch?.followUpDueAt ?? null),
+    reminderTimestampToCalendarDate(batch?.followUpDueAt ?? null) || futureCalendarDate(3),
   )
+  const [reminderError, setReminderError] = useState<string | null>(null)
   const [arrivalOpen, setArrivalOpen] = useState(false)
   const [arrivalChoices, setArrivalChoices] = useState<Record<string, ArrivalChoice>>({})
 
@@ -99,10 +102,19 @@ export function VendorBatchDetailPage() {
 
   const saveReminder = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const dueAt = reminderDate ? calendarDateToReminderTimestamp(reminderDate) : null
+    const validationError = validateReminderCalendarDate(reminderDate)
+    if (validationError) {
+      setReminderError(validationError)
+      setActionError(null)
+      setFeedback(null)
+      return
+    }
+
+    const dueAt = calendarDateToReminderTimestamp(reminderDate)
+    setReminderError(null)
     runAction(
       () => setVendorFollowUp(batch.id, dueAt),
-      dueAt ? 'Reminder follow-up vendor disimpan.' : 'Reminder follow-up vendor dihapus.',
+      'Reminder follow-up vendor disimpan.',
     )
   }
 
@@ -174,12 +186,52 @@ export function VendorBatchDetailPage() {
             <h2 id="vendor-reminder-title">Vendor follow-up reminder</h2>
             <p>PROCESSING tetap pasif sampai tanggal eksplisit ini tercapai. Tidak ada stale threshold otomatis.</p>
           </div>
+          {batch.status === 'PROCESSING' && !reminderTimestampToCalendarDate(batch.followUpDueAt) ? (
+            <div className="callout callout--warning reminder-setup-callout">
+              <strong>Atur tindak lanjut vendor.</strong> Jadwal batch belum dikonfirmasi; kolom sudah diisi saran tiga hari dari hari ini. Satu reminder berlaku untuk seluruh order anggota.
+            </div>
+          ) : batch.followUpDueAt ? (
+            <div className="callout callout--success reminder-setup-callout">
+              <strong>Reminder vendor tersimpan.</strong> Follow-up dijadwalkan pada {formatDate(batch.followUpDueAt)} untuk seluruh order anggota.
+            </div>
+          ) : null}
           <form className="inline-action-form" onSubmit={saveReminder}>
-            <FormField label="Tanggal follow-up" htmlFor="vendor-follow-up-date">
-              <input id="vendor-follow-up-date" type="date" value={reminderDate} onChange={(event) => setReminderDate(event.target.value)} />
+            <FormField
+              label="Tanggal follow-up"
+              htmlFor="vendor-follow-up-date"
+              hint="Tanggal hari ini atau sesudahnya; tetap klik Simpan reminder untuk konfirmasi."
+            >
+              <input
+                id="vendor-follow-up-date"
+                type="date"
+                value={reminderDate}
+                aria-invalid={Boolean(reminderError)}
+                aria-describedby={reminderError ? 'vendor-follow-up-error' : undefined}
+                onChange={(event) => {
+                  setReminderDate(event.target.value)
+                  setReminderError(null)
+                  setActionError(null)
+                }}
+              />
+              {reminderError ? <span id="vendor-follow-up-error" className="form-error" role="alert">{reminderError}</span> : null}
             </FormField>
-            <Button type="submit" variant="secondary" disabled={!reminderDate}>Simpan reminder</Button>
-            {batch.followUpDueAt ? <Button type="button" variant="ghost" onClick={() => { setReminderDate(''); runAction(() => setVendorFollowUp(batch.id, null), 'Reminder follow-up vendor dihapus.') }}>Clear reminder</Button> : null}
+            <div className="reminder-form-actions">
+              <Button type="submit" variant="secondary">Simpan reminder</Button>
+              {batch.followUpDueAt ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={(event) => {
+                    if (event.detail > 1) return
+                    setReminderDate('')
+                    setReminderError(null)
+                    runAction(() => setVendorFollowUp(batch.id, null), 'Reminder follow-up vendor dihapus.')
+                  }}
+                >
+                  Clear reminder
+                </Button>
+              ) : null}
+            </div>
           </form>
         </section>
       ) : null}

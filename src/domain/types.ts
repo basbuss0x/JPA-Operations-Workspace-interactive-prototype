@@ -25,6 +25,7 @@ export type VendorBatchStatus =
   | 'PARTIALLY_ARRIVED'
   | 'ARRIVED'
 
+export type SchoolStatus = 'ACTIVE' | 'INACTIVE'
 export type SchoolPaymentStatus = 'UNPAID' | 'LUNAS'
 export type BenefitStatus = 'NOT_ELIGIBLE' | 'ELIGIBLE' | 'PAID'
 export type SupplierPaymentStatus = 'NOT_SET' | 'UNPAID' | 'PARTIAL' | 'PAID'
@@ -36,6 +37,7 @@ export interface School {
   id: string
   name: string
   city: string
+  status: SchoolStatus
 }
 
 export type HetResolutionType =
@@ -259,6 +261,7 @@ export interface VendorBatch {
 
 export interface PrototypeData {
   version: number
+  schools: Record<string, School>
   orders: Record<string, Order>
   vendorBatches: Record<string, VendorBatch>
 }
@@ -267,13 +270,19 @@ export type NextActionKind =
   | 'REVIEW_HET'
   | 'COMPLETE_SIPLAH'
   | 'ADD_TO_VENDOR_BATCH'
+  | 'SCHEDULE_VENDOR_FOLLOW_UP'
   | 'FOLLOW_UP_VENDOR'
+  | 'SCHEDULE_PAYMENT_FOLLOW_UP'
   | 'CHECK_GOODS'
   | 'CONTINUE_FULFILLMENT'
   | 'FOLLOW_UP_PAYMENT'
   | 'PAY_BENEFIT'
   | 'CLOSE_ORDER'
   | 'MANUAL'
+
+export function isActionSnoozable(kind: NextActionKind): boolean {
+  return kind !== 'SCHEDULE_PAYMENT_FOLLOW_UP' && kind !== 'SCHEDULE_VENDOR_FOLLOW_UP'
+}
 
 export interface NextAction {
   id: string
@@ -286,6 +295,7 @@ export interface NextAction {
   priority: number
   dueAt: string | null
   snoozedUntil: string | null
+  snoozable: boolean
   availability: 'ACTIVE' | 'SNOOZED'
   source: 'SYSTEM' | 'MANUAL'
 }

@@ -83,6 +83,7 @@ describe('prototype local state migration', () => {
     expect(order?.nextActionControl.controlsByActionKey).toEqual({})
     expect(order?.siplah).not.toHaveProperty('adminCompleted')
     expect(order?.siplah.documents).toHaveLength(5)
+    expect(migrated.schools['SCH-999']?.status).toBe('INACTIVE')
   })
 
   it('migrates Gate 1.1 v2 SIPLah booleans and items into the current lifecycle-aware document schema', () => {
@@ -196,6 +197,25 @@ describe('prototype local state migration', () => {
     expect(order?.schoolPayment.netReceivedAmount).toBe(27_640_000)
     expect(order?.benefit.recipientType).toBeNull()
     expect(order?.benefit.schoolConfirmedAt).toBeNull()
+  })
+
+  it('migrates v6 state into an explicit school registry without inferring CLOSED as inactive', () => {
+    const canonical = createCanonicalDemoData()
+    const source = canonical.orders['ORD-2025-999']
+    if (!source) throw new Error('Missing closed source order')
+
+    const migrated = migratePrototypeState(
+      { version: 6, orders: { [source.id]: source }, vendorBatches: {} },
+      6,
+    )
+
+    expect(migrated.version).toBe(DEMO_STATE_VERSION)
+    expect(migrated.schools[source.schoolId]).toMatchObject({
+      id: source.schoolId,
+      name: source.schoolName,
+      status: 'INACTIVE',
+    })
+    expect(migrated.orders[source.id]?.schoolId).toBe(source.schoolId)
   })
 
   it('resets unknown or malformed schema versions to canonical demo data', () => {

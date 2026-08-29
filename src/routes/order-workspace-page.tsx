@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useRef, useState, type FormEvent, type MouseEvent } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { derivePrimaryNextAction } from '../domain/next-action'
 import { getHetExceptionCount, getOrderActionCandidates, getOrderBatch } from '../domain/selectors'
@@ -40,6 +40,7 @@ export function OrderWorkspacePage() {
   const vendorBatches = usePrototypeStore((state) => state.vendorBatches)
   const snoozeNextAction = usePrototypeStore((state) => state.snoozeNextAction)
   const saveNextActionOverride = usePrototypeStore((state) => state.saveNextActionOverride)
+  const reopenSchoolOrder = usePrototypeStore((state) => state.reopenSchoolOrder)
   const [searchParams, setSearchParams] = useSearchParams()
   const [renderedAt] = useState(() => new Date())
   const requestedTab = searchParams.get('tab')
@@ -48,6 +49,11 @@ export function OrderWorkspacePage() {
   const [overrideTitle, setOverrideTitle] = useState('')
   const [overrideReason, setOverrideReason] = useState('')
   const [overrideDue, setOverrideDue] = useState('')
+  const [reopenOpen, setReopenOpen] = useState(false)
+  const reopenTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const [reopenReason, setReopenReason] = useState('')
+  const [reopenError, setReopenError] = useState<string | null>(null)
+  const [reopenSubmitting, setReopenSubmitting] = useState(false)
 
   const batch = order ? getOrderBatch(order, vendorBatches) : null
   const actionCandidates = useMemo(
@@ -98,6 +104,40 @@ export function OrderWorkspacePage() {
     setOverrideOpen(false)
   }
 
+  const openReopen = (event: MouseEvent<HTMLButtonElement>) => {
+    reopenTriggerRef.current = event.currentTarget
+    setReopenReason('')
+    setReopenError(null)
+    setReopenOpen(true)
+  }
+
+  const submitReopen = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const trimmedReason = reopenReason.trim()
+    if (!trimmedReason) {
+      setReopenError('Alasan membuka kembali order wajib diisi.')
+      return
+    }
+    if (reopenSubmitting) return
+    setReopenSubmitting(true)
+    setReopenError(null)
+    try {
+      reopenSchoolOrder(order.id, trimmedReason)
+      setReopenOpen(false)
+      setReopenReason('')
+      setReopenSubmitting(false)
+    } catch (caught) {
+      setReopenError(caught instanceof Error ? caught.message : 'Order gagal dibuka kembali.')
+      setReopenSubmitting(false)
+    }
+  }
+
+  const cancelReopen = () => {
+    if (reopenSubmitting) return
+    setReopenOpen(false)
+    setReopenError(null)
+  }
+
   return (
     <div className="page-stack order-workspace">
       <Link className="back-link" to="/orders">← Semua Pesanan</Link>
@@ -118,11 +158,25 @@ export function OrderWorkspacePage() {
 
       <NextActionPanel
         action={nextAction}
+        emptyState={order.stage === 'CLOSED' ? {
+          title: 'Order selesai',
+          description: 'Order sudah CLOSED dan tidak memiliki tindakan aktif. Buka Timeline untuk melihat riwayat lengkap.',
+        } : undefined}
         onSnooze={nextAction
           ? () => snoozeNextAction([order.id], nextAction.kind, futureIsoDate(3))
           : undefined}
         onCustomize={order.stage !== 'CLOSED' ? openOverride : undefined}
       />
+
+      {order.stage === 'CLOSED' ? (
+        <section className="workspace-panel closed-order-recovery" aria-labelledby="closed-order-recovery-title">
+          <div>
+            <h2 id="closed-order-recovery-title">Pemulihan order</h2>
+            <p>Workspace tetap read-only. Jika ada koreksi operasional yang disetujui, buka kembali dengan alasan yang tercatat di Timeline.</p>
+          </div>
+          <Button variant="secondary" onClick={openReopen}>Buka kembali order</Button>
+        </section>
+      ) : null}
 
       <OutstandingActions
         actions={otherActions}
@@ -132,6 +186,45 @@ export function OrderWorkspacePage() {
 
       <Tabs items={tabs} active={activeTab} onChange={selectTab} label="Bagian order workspace" />
       <OrderTabContent tab={activeTab} order={order} batch={batch} />
+
+      <Modal
+        open={reopenOpen}
+        title="Buka kembali order"
+        description="Order akan kembali ke tahap aktif yang diturunkan dari checkpoint saat ini; riwayat penutupan tidak dihapus."
+        onClose={cancelReopen}
+        restoreFocusRef={reopenTriggerRef}
+        footer={
+          <>
+            <Button variant="ghost" onClick={cancelReopen}>Batal</Button>
+            <Button type="submit" form="reopen-order-form" disabled={reopenSubmitting}>
+              {reopenSubmitting ? 'Membuka…' : 'Konfirmasi buka kembali'}
+            </Button>
+          </>
+        }
+      >
+        <form id="reopen-order-form" className="form-stack" onSubmit={submitReopen}>
+          <FormField
+            label="Alasan membuka kembali order (wajib)"
+            htmlFor="reopen-order-reason"
+            hint="Contoh: koreksi bukti pembayaran sebelum audit internal."
+          >
+            <textarea
+              id="reopen-order-reason"
+              value={reopenReason}
+              onChange={(event) => {
+                setReopenReason(event.target.value)
+                setReopenError(null)
+              }}
+              aria-invalid={Boolean(reopenError)}
+              aria-describedby={reopenError ? 'reopen-order-error' : undefined}
+              rows={4}
+              autoFocus
+              data-autofocus="true"
+            />
+            {reopenError ? <span id="reopen-order-error" className="form-error" role="alert">{reopenError}</span> : null}
+          </FormField>
+        </form>
+      </Modal>
 
       <Modal
         open={overrideOpen}

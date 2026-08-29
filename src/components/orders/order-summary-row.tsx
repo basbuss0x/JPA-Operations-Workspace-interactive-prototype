@@ -33,7 +33,7 @@ export function OrderSummaryRow({ order, batch, now }: OrderSummaryRowProps) {
         {exceptions > 0 && action?.kind !== 'REVIEW_HET' ? (
           <ExceptionIndicator label={`${exceptions} selisih HET`} level="danger" />
         ) : null}
-        {action ? <span>{action.title}</span> : <span className="muted">Tidak ada tindakan aktif</span>}
+        {action ? <span>{action.title}</span> : <span className="muted">{order.stage === 'CLOSED' ? 'Order selesai' : 'Tidak ada tindakan aktif'}</span>}
         {otherActionCount > 0 ? <span className="other-action-count">+{otherActionCount} aksi lain</span> : null}
       </div>
       <span className="order-summary-row__arrow" aria-hidden="true">→</span>

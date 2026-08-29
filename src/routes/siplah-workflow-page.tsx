@@ -45,6 +45,8 @@ export function SiplahWorkflowPage() {
     return <EmptyState title="Order tidak ditemukan" description="Order SIPLah tidak tersedia pada demo state." action={<Link className="button button--secondary button--md" to="/orders">Kembali ke Pesanan</Link>} />
   }
 
+  const isClosed = order.stage === 'CLOSED'
+
   const submitOrder = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     try {
@@ -92,10 +94,16 @@ export function SiplahWorkflowPage() {
           <h1>Workflow SIPLah</h1>
           <p>{order.schoolName} · {order.id}</p>
         </div>
-        <StatusChip tone={readyForVendor ? 'success' : 'warning'}>
-          {readyForVendor ? 'Siap masuk Vendor Batch' : 'Checkpoint belum lengkap'}
+        <StatusChip tone={isClosed ? 'success' : readyForVendor ? 'success' : 'warning'}>
+          {isClosed ? 'Order CLOSED · read-only' : readyForVendor ? 'Siap masuk Vendor Batch' : 'Checkpoint belum lengkap'}
         </StatusChip>
       </header>
+
+      {isClosed ? (
+        <div className="callout callout--info">
+          <strong>Order sudah CLOSED.</strong> Checkpoint SIPLah ditampilkan sebagai konteks read-only. Gunakan “Buka kembali order” dari workspace bila koreksi disetujui.
+        </div>
+      ) : null}
 
       {order.het.status !== 'APPROVED' ? (
         <section className="callout callout--danger">
@@ -122,7 +130,7 @@ export function SiplahWorkflowPage() {
             variant={order.siplah.accessAvailable ? 'secondary' : 'primary'}
             size="sm"
             onClick={() => setAccess(order.id, !order.siplah.accessAvailable)}
-            disabled={order.het.status !== 'APPROVED'}
+            disabled={isClosed || order.het.status !== 'APPROVED'}
           >
             {order.siplah.accessAvailable ? 'Tandai belum tersedia' : 'Tandai akses tersedia'}
           </Button>
@@ -137,7 +145,7 @@ export function SiplahWorkflowPage() {
             <StatusChip tone={order.siplah.orderPlaced ? 'success' : 'neutral'}>{order.siplah.orderPlaced ? 'Sudah dibuat' : 'Belum dibuat'}</StatusChip>
           </div>
           {!order.siplah.orderPlaced ? (
-            <Button onClick={() => markOrderPlaced(order.id)} disabled={!order.siplah.accessAvailable || order.het.status !== 'APPROVED'}>
+            <Button onClick={() => markOrderPlaced(order.id)} disabled={isClosed || !order.siplah.accessAvailable || order.het.status !== 'APPROVED'}>
               Tandai pesanan dibuat
             </Button>
           ) : order.siplah.orderNumber ? (
@@ -157,6 +165,7 @@ export function SiplahWorkflowPage() {
                     type="number"
                     min="1"
                     value={finalAmount}
+                    readOnly={isClosed}
                     onChange={(event) => {
                       setFinalAmount(event.target.value)
                       setAmountConfirmed(false)
@@ -165,14 +174,14 @@ export function SiplahWorkflowPage() {
                   />
                 </FormField>
                 <FormField label="Nomor order SIPLah" htmlFor="siplah-order-number">
-                  <input id="siplah-order-number" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} placeholder="SPL-2026-…" required />
+                  <input id="siplah-order-number" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} placeholder="SPL-2026-…" readOnly={isClosed} required />
                 </FormField>
               </div>
               <label className="confirmation-checkbox">
-                <input type="checkbox" checked={amountConfirmed} onChange={(event) => setAmountConfirmed(event.target.checked)} required />
+                <input type="checkbox" checked={amountConfirmed} onChange={(event) => setAmountConfirmed(event.target.checked)} disabled={isClosed} required />
                 <span>Saya mengonfirmasi nominal final sesuai transaksi SIPLah aktual.</span>
               </label>
-              <Button type="submit" disabled={!amountConfirmed}>Konfirmasi nominal & catat order</Button>
+              <Button type="submit" disabled={isClosed || !amountConfirmed}>Konfirmasi nominal & catat order</Button>
             </form>
           )}
         </div>
@@ -198,7 +207,7 @@ export function SiplahWorkflowPage() {
             <h2>Dokumen SIPLah</h2>
             <p>{completedVendorDocuments} dari {vendorDocuments.length} dokumen untuk Vendor lengkap · {completedAdminDocuments} dari {adminDocuments.length} dokumen administrasi lengkap. Invoice, Kwitansi, dan BAST dapat dilengkapi setelah order masuk Vendor.</p>
           </div>
-          <Button variant="secondary" size="sm" onClick={attachRequiredDemoPackage} disabled={!order.siplah.orderPlaced}>
+          <Button variant="secondary" size="sm" onClick={attachRequiredDemoPackage} disabled={isClosed || !order.siplah.orderPlaced}>
             Lampirkan paket administrasi demo
           </Button>
         </div>
@@ -223,16 +232,16 @@ export function SiplahWorkflowPage() {
                 {document.fileName ? <span className="document-file-name">{document.fileName}</span> : null}
                 <div className="siplah-document-row__actions">
                   {!document.available ? (
-                    <Button size="sm" variant="secondary" onClick={() => markDocumentAvailable(order.id, document.kind)} disabled={!order.siplah.orderPlaced}>Tandai tersedia</Button>
+                    <Button size="sm" variant="secondary" onClick={() => markDocumentAvailable(order.id, document.kind)} disabled={isClosed || !order.siplah.orderPlaced}>Tandai tersedia</Button>
                   ) : null}
                   {!document.fileName ? (
-                    <Button size="sm" variant="secondary" onClick={() => attachDocument(order.id, document.kind, `${document.kind}-${order.id}.pdf`)} disabled={!order.siplah.orderPlaced}>Lampirkan demo</Button>
+                    <Button size="sm" variant="secondary" onClick={() => attachDocument(order.id, document.kind, `${document.kind}-${order.id}.pdf`)} disabled={isClosed || !order.siplah.orderPlaced}>Lampirkan demo</Button>
                   ) : null}
                   {document.fileName && !document.verified ? (
-                    <Button size="sm" onClick={() => verifyDocument(order.id, document.kind)}>Verifikasi</Button>
+                    <Button size="sm" onClick={() => verifyDocument(order.id, document.kind)} disabled={isClosed}>Verifikasi</Button>
                   ) : null}
                   {document.sendToSchoolRequired && document.verified && !document.sentToSchool ? (
-                    <Button size="sm" onClick={() => sendDocument(order.id, document.kind)}>Tandai dikirim</Button>
+                    <Button size="sm" onClick={() => sendDocument(order.id, document.kind)} disabled={isClosed}>Tandai dikirim</Button>
                   ) : null}
                   {completeDocument ? <span className="document-done">Selesai</span> : null}
                 </div>
