@@ -1,4 +1,5 @@
 import { createSiplahDocuments } from '../domain/siplah'
+import { lifecycleLabels } from '../domain/presentation-labels'
 import type {
   BenefitStatus,
   GoodsState,
@@ -239,7 +240,7 @@ function makeOrder(options: MakeOrderOptions): Order {
       options.timeline ??
       [
         event(`${options.id}-1`, 'ARKAS diterima', 'Dokumen ARKAS diunggah dan diekstrak.'),
-        event(`${options.id}-2`, 'Order diperbarui', `Posisi operasional: ${options.stage}.`, DATE.today),
+        event(`${options.id}-2`, 'Order diperbarui', `Tahap proses: ${lifecycleLabels[options.stage]}.`, DATE.today),
       ],
   }
 }

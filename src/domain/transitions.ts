@@ -6,7 +6,7 @@ import {
 } from './order-state'
 import { buildVendorRecap, calculateBenefitAmount, isVendorBatchEligible } from './selectors'
 import { createSiplahDocuments, getSiplahDocument } from './siplah'
-import { hetReviewStatusLabels, vendorBatchStatusLabels } from './presentation-labels'
+import { hetReviewStatusLabels, lifecycleLabels, vendorBatchStatusLabels } from './presentation-labels'
 import {
   reminderTimestampToCalendarDate,
   validateReminderTimestamp,
@@ -1182,7 +1182,7 @@ export function reopenOrder(order: Order, reason: string, now?: Date): Order {
   return withEvent(
     { ...order, stage },
     'Order dibuka kembali',
-    `Order dipulihkan ke tahap ${stage}. Alasan operator: ${trimmedReason}.`,
+    `Order dipulihkan ke tahap ${lifecycleLabels[stage]}. Alasan operator: ${trimmedReason}.`,
     now,
   )
 }
