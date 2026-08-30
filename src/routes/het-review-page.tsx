@@ -1,12 +1,12 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { PRODUCT_MASTER } from '../data/product-master'
-import { searchProductMaster } from '../domain/intake'
+import { rankProductAlternatives, searchProductMaster } from '../domain/intake'
 import { deriveActionCandidates, derivePrimaryNextAction } from '../domain/next-action'
 import { getHetExceptionCount } from '../domain/order-state'
 import { hetItemStatusLabels, hetResolutionTypeLabels } from '../domain/presentation'
 import { calculateReviewedHetAmount } from '../domain/transitions'
-import type { OrderItem } from '../domain/types'
+import type { OrderItem, ProductMasterItem } from '../domain/types'
 import { usePrototypeStore } from '../store/use-prototype-store'
 import { formatCurrency, formatDateTime } from '../utils/format'
 import { Button } from '../components/ui/button'
@@ -22,8 +22,80 @@ interface ManualFieldErrors {
   reason?: string
 }
 
+interface HetProductPickerProps {
+  item: OrderItem
+  inputId: string
+  query: string
+  hint: string
+  onQueryChange: (query: string) => void
+  onChoose: (product: ProductMasterItem) => void
+}
+
 function exceptionLabel(status: OrderItem['matchStatus']): string {
   return hetItemStatusLabels[status]
+}
+
+function HetProductPicker({
+  item,
+  inputId,
+  query,
+  hint,
+  onQueryChange,
+  onChoose,
+}: HetProductPickerProps) {
+  const hasQuery = query.trim().length > 0
+  const currentCode = item.productCode
+  const currentLabel = item.resolutionType === null ? 'Saran saat ini' : 'Produk saat ini'
+  const hasCurrentProduct = Boolean(item.masterProductTitle && currentCode && item.hetUnitPrice !== null)
+  const products = hasQuery
+    ? searchProductMaster(query, PRODUCT_MASTER)
+    : rankProductAlternatives(item, PRODUCT_MASTER)
+        .filter((product) => product.code !== currentCode)
+        .slice(0, 4)
+
+  return (
+    <div className="product-picker">
+      <FormField label="Cari Product Master" htmlFor={inputId} hint={hint}>
+        <input id={inputId} value={query} onChange={(event) => onQueryChange(event.target.value)} autoFocus />
+      </FormField>
+
+      {!hasQuery && hasCurrentProduct ? (
+        <div className="product-picker__current" aria-label={`${currentLabel}: ${item.masterProductTitle}`}>
+          <div>
+            <span>{currentLabel}</span>
+            <strong>{item.masterProductTitle}</strong>
+            <small>{currentCode}</small>
+            <small>HET {formatCurrency(item.hetUnitPrice ?? 0)}</small>
+          </div>
+          <small>ARKAS {formatCurrency(item.arkasUnitPrice)} sebagai pembanding</small>
+        </div>
+      ) : null}
+
+      {!hasQuery ? <p className="product-picker__section-label">Alternatif yang disarankan</p> : null}
+      <div className="product-search-results" aria-label={hasQuery ? 'Hasil pencarian produk' : 'Alternatif produk yang disarankan'}>
+        {products.length > 0 ? products.map((product) => (
+          <button
+            type="button"
+            key={product.code}
+            className={product.code === currentCode ? 'is-current' : ''}
+            onClick={() => onChoose(product)}
+          >
+            <span>
+              <strong>{product.title}</strong>
+              <small>{product.code}</small>
+            </span>
+            <span>HET {formatCurrency(product.hetUnitPrice)}</span>
+            <b>{product.code === currentCode ? 'Produk saat ini' : `Pilih ${product.code}`}</b>
+          </button>
+        )) : (
+          <div className="product-search-empty">
+            <p>Tidak ada produk yang cocok dengan pencarian. Hapus kata pencarian atau cari dengan judul/kode Product Master.</p>
+            <Button variant="ghost" size="sm" onClick={() => onQueryChange('')}>Hapus pencarian</Button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 export function HetReviewPage() {
@@ -60,7 +132,7 @@ export function HetReviewPage() {
 
   const openEditor = (item: OrderItem, mode: EditorMode) => {
     setEditor({ itemId: item.id, mode })
-    setProductQuery(mode === 'PRODUCT' ? (item.productCode ?? item.arkasTitle) : '')
+    setProductQuery('')
     setManualReason('')
     setManualPrice(String(item.hetUnitPrice ?? item.arkasUnitPrice))
     setManualFieldErrors({})
@@ -190,8 +262,6 @@ export function HetReviewPage() {
   const reviewedPreview = unresolvedItems.length === 0
     ? calculateReviewedHetAmount(order.items)
     : null
-  const productResults = searchProductMaster(productQuery, PRODUCT_MASTER)
-
   return (
     <div className="page-stack focused-route het-review-page">
       <Link className="back-link" to={`/orders/${order.id}`}>← Ruang kerja order</Link>
@@ -262,25 +332,17 @@ export function HetReviewPage() {
 
                 {editorOpen && editor.mode === 'PRODUCT' ? (
                   <div className="inline-editor">
-                    <FormField label="Cari Product Master" htmlFor={`product-search-${item.id}`} hint="Cari dengan judul atau kode produk.">
-                      <input id={`product-search-${item.id}`} value={productQuery} onChange={(event) => setProductQuery(event.target.value)} autoFocus />
-                    </FormField>
-                    <div className="product-search-results">
-                      {productResults.length > 0 ? productResults.map((product) => (
-                        <button
-                          type="button"
-                          key={product.code}
-                          onClick={() => {
-                            chooseProduct(order.id, item.id, product)
-                            setEditor(null)
-                          }}
-                        >
-                          <span><strong>{product.title}</strong><small>{product.code}</small></span>
-                          <span>{formatCurrency(product.hetUnitPrice)}</span>
-                          <b>Pilih {product.code}</b>
-                        </button>
-                      )) : <p>Tidak ada produk yang cocok dengan pencarian.</p>}
-                    </div>
+                    <HetProductPicker
+                      item={item}
+                      inputId={`product-search-${item.id}`}
+                      query={productQuery}
+                      hint="Saran awal tampil sebelum pencarian. Cari dengan judul atau kode untuk hasil lain."
+                      onQueryChange={setProductQuery}
+                      onChoose={(product) => {
+                        chooseProduct(order.id, item.id, product)
+                        setEditor(null)
+                      }}
+                    />
                   </div>
                 ) : null}
 
@@ -357,25 +419,17 @@ export function HetReviewPage() {
 
                 {editorOpen && editor.mode === 'PRODUCT' ? (
                   <div className="inline-editor">
-                    <FormField label="Cari Product Master" htmlFor={`resolved-product-search-${item.id}`} hint="Pilih produk pengganti; ARKAS tidak akan diubah.">
-                      <input id={`resolved-product-search-${item.id}`} value={productQuery} onChange={(event) => setProductQuery(event.target.value)} autoFocus />
-                    </FormField>
-                    <div className="product-search-results">
-                      {productResults.length > 0 ? productResults.map((product) => (
-                        <button
-                          type="button"
-                          key={product.code}
-                          onClick={() => {
-                            chooseProduct(order.id, item.id, product)
-                            setEditor(null)
-                          }}
-                        >
-                          <span><strong>{product.title}</strong><small>{product.code}</small></span>
-                          <span>{formatCurrency(product.hetUnitPrice)}</span>
-                          <b>Pilih {product.code}</b>
-                        </button>
-                      )) : <p>Tidak ada produk yang cocok dengan pencarian.</p>}
-                    </div>
+                    <HetProductPicker
+                      item={item}
+                      inputId={`resolved-product-search-${item.id}`}
+                      query={productQuery}
+                      hint="Pilih produk pengganti; ARKAS tidak akan diubah. Saran awal tampil sebelum pencarian."
+                      onQueryChange={setProductQuery}
+                      onChoose={(product) => {
+                        chooseProduct(order.id, item.id, product)
+                        setEditor(null)
+                      }}
+                    />
                   </div>
                 ) : null}
 

@@ -61,6 +61,15 @@ describe('HET exception review and approval', () => {
     const pai = PRODUCT_MASTER.find((product) => product.code === 'BK-PAI-5')
     if (!pai) throw new Error('Missing PAI fixture')
     const productChosen = chooseHetProduct(priceAccepted, 'line-pendidikan-agama', pai, now)
+    expect(productChosen.het.status).toBe('NEEDS_REVIEW')
+    expect(productChosen.hetReviewedAmount).toBeNull()
+    expect(productChosen.arkasBudgetAmount).toBe(order.arkasBudgetAmount)
+    expect(productChosen.items.find((item) => item.id === 'line-pendidikan-agama')).toMatchObject({
+      arkasTitle: 'Pendidikan Agama Kelas V',
+      quantity: 12,
+      arkasUnitPrice: 66_000,
+      productCode: 'BK-PAI-5',
+    })
     const allResolved = manualOverrideHetItem(
       productChosen,
       'line-muatan-lokal',

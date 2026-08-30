@@ -4,6 +4,7 @@ import { PRODUCT_MASTER } from '../data/product-master'
 import {
   calculateArkasBudgetAmount,
   matchExtractedItems,
+  rankProductAlternatives,
   searchProductMaster,
 } from './intake'
 
@@ -31,6 +32,28 @@ describe('deterministic ARKAS extraction and HET matching', () => {
     expect(items.find((item) => item.id === 'line-pendidikan-agama')?.matchStatus).toBe('AMBIGUOUS_MATCH')
     expect(items.find((item) => item.id === 'line-muatan-lokal')?.matchStatus).toBe('NO_MATCH')
     expect(items.find((item) => item.id === 'line-pendidikan-agama')?.matchReason).toContain('2 kandidat')
+  })
+
+  it('ranks ambiguous alternatives from title evidence and keeps candidate codes unique', () => {
+    const extraction = extractArkasFixture(DEMO_ARKAS_FIXTURE.id)
+    const religion = matchExtractedItems(extraction.lines, PRODUCT_MASTER)
+      .find((item) => item.id === 'line-pendidikan-agama')
+    if (!religion) throw new Error('Missing ambiguous religion item')
+
+    const ranked = rankProductAlternatives(religion, PRODUCT_MASTER)
+    expect(ranked.slice(0, 2).map((product) => product.code)).toEqual([
+      'BK-PAI-5',
+      'BK-PAK-5',
+    ])
+    expect(new Set(ranked.map((product) => product.code)).size).toBe(ranked.length)
+
+    const pai = PRODUCT_MASTER.find((product) => product.code === 'BK-PAI-5')
+    const pak = PRODUCT_MASTER.find((product) => product.code === 'BK-PAK-5')
+    if (!pai || !pak) throw new Error('Missing religion Product Master fixtures')
+    expect(rankProductAlternatives(religion, [pai, pak, pak]).map((product) => product.code)).toEqual([
+      'BK-PAI-5',
+      'BK-PAK-5',
+    ])
   })
 
   it('searches the local Product Master by title or product code', () => {

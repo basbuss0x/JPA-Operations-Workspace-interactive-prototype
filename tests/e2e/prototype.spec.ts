@@ -542,6 +542,7 @@ test('COR-09 requires explicit eligible school context before ARKAS extraction',
 })
 
 test('Pass 2 journey reaches Vendor readiness while admin documents remain later', async ({ page }, testInfo) => {
+  test.setTimeout(60_000)
   await page.goto('/orders/new')
   await expect(page.getByRole('heading', { name: 'Pesanan Baru' })).toBeVisible()
   await page.getByRole('button', { name: 'Sekolah demo baru' }).click()
@@ -586,8 +587,53 @@ test('Pass 2 journey reaches Vendor readiness while admin documents remain later
 
   const religionException = page.locator('.het-exception-card').filter({ hasText: 'Pendidikan Agama Kelas V' })
   await religionException.getByRole('button', { name: 'Pilih produk lain' }).click()
-  await religionException.getByLabel('Cari Product Master').fill('BK-PAI-5')
-  await religionException.getByText('Pilih BK-PAI-5').click()
+  await expect(religionException.getByLabel('Saran saat ini: Pendidikan Agama Islam dan Budi Pekerti Kelas V')).toBeVisible()
+  await expect(religionException.getByText('BK-PAI-5', { exact: true })).toBeVisible()
+  await expect(religionException.getByText('BK-PAK-5', { exact: true })).toBeVisible()
+  await expect(religionException.getByText('Alternatif yang disarankan', { exact: true })).toBeVisible()
+  const productSearch = religionException.getByLabel('Cari Product Master')
+  await productSearch.fill('Agama')
+  await expect(religionException.getByRole('button', { name: /Pilih BK-PAK-5/ })).toBeVisible()
+  await productSearch.fill('produk-tidak-ada')
+  await expect(religionException.getByText('Tidak ada produk yang cocok dengan pencarian.', { exact: false })).toBeVisible()
+  await expect(religionException.getByRole('button', { name: 'Hapus pencarian' })).toBeVisible()
+  await religionException.getByRole('button', { name: 'Hapus pencarian' }).click()
+  await expect(religionException.getByText('Alternatif yang disarankan', { exact: true })).toBeVisible()
+  await productSearch.fill('BK-PAK-5')
+  await religionException.getByRole('button', { name: /Pilih BK-PAK-5/ }).click()
+  await expect(page.getByRole('heading', { name: 'Review Selisih HET' })).toBeVisible()
+  const selectedReligion = await page.evaluate(() => {
+    const persisted = JSON.parse(window.localStorage.getItem('jpa-operations-prototype') ?? '{}') as {
+      state?: {
+        orders?: Record<string, {
+          arkasBudgetAmount?: number
+          hetReviewedAmount?: number | null
+          het?: { status?: string }
+          items?: Array<{
+            id: string
+            productCode?: string | null
+            arkasTitle?: string
+            quantity?: number
+            arkasUnitPrice?: number
+          }>
+        }>
+      }
+    }
+    const order = persisted.state?.orders?.['ORD-2026-240']
+    const item = order?.items?.find((candidate) => candidate.id === 'line-pendidikan-agama')
+    return { arkasBudgetAmount: order?.arkasBudgetAmount, hetReviewedAmount: order?.hetReviewedAmount, hetStatus: order?.het?.status, item }
+  })
+  expect(selectedReligion).toMatchObject({
+    arkasBudgetAmount: 8_072_000,
+    hetReviewedAmount: null,
+    hetStatus: 'NEEDS_REVIEW',
+    item: {
+      productCode: 'BK-PAK-5',
+      arkasTitle: 'Pendidikan Agama Kelas V',
+      quantity: 12,
+      arkasUnitPrice: 66_000,
+    },
+  })
 
   const localException = page.locator('.het-exception-card').filter({ hasText: 'Muatan Lokal Khas Ambon' })
   await localException.getByRole('button', { name: 'Penyesuaian manual' }).click()
@@ -597,11 +643,11 @@ test('Pass 2 journey reaches Vendor readiness while admin documents remain later
 
   await expect(page.getByRole('heading', { name: 'Semua pengecualian sudah diputuskan' })).toBeVisible()
   await expect(page.getByText(/8\.072\.000/)).toBeVisible()
-  await expect(page.getByText(/8\.188\.000/)).toBeVisible()
+  await expect(page.getByText(/8\.212\.000/)).toBeVisible()
   await page.getByRole('button', { name: 'Konfirmasi Review HET' }).click()
   await expect(page.getByRole('heading', { name: 'Review HET dikonfirmasi' })).toBeVisible()
   await expect(page.getByText(/8\.072\.000/)).toBeVisible()
-  await expect(page.getByText(/8\.188\.000/)).toHaveCount(1)
+  await expect(page.getByText(/8\.212\.000/)).toHaveCount(1)
   await expect(page.getByText('Invoice final').last()).toBeVisible()
   await expect(page.getByText('—').last()).toBeVisible()
 
@@ -609,7 +655,7 @@ test('Pass 2 journey reaches Vendor readiness while admin documents remain later
   await expect(page.getByRole('heading', { name: 'Alur SIPLah' })).toBeVisible()
   await page.getByRole('button', { name: 'Tandai akses tersedia' }).click()
   await page.getByRole('button', { name: 'Tandai pesanan dibuat' }).click()
-  await page.getByLabel('Nominal final transaksi SIPLah').fill('8188000')
+  await page.getByLabel('Nominal final transaksi SIPLah').fill('8212000')
   await page.getByLabel('Nomor order SIPLah').fill('SPL-E2E-2026-240')
   await page.getByLabel('Saya mengonfirmasi nominal final sesuai transaksi SIPLah aktual.').check()
   await page.getByRole('button', { name: 'Konfirmasi nominal & catat order' }).click()
@@ -637,6 +683,69 @@ test('Pass 2 journey reaches Vendor readiness while admin documents remain later
   await expect(page.getByText('HET disetujui')).toBeVisible()
   await expect(page.getByText('Transaksi SIPLah dikonfirmasi')).toBeVisible()
   await expect(page.getByText('Dokumen SIPLah dikirim').first()).toBeVisible()
+})
+
+test('COR-14 keeps ranked HET alternatives available after reopening a resolved item', async ({ page }) => {
+  await page.goto('/orders/ORD-2026-071/arkas')
+  await expect(page.getByRole('heading', { name: 'Review HET dikonfirmasi' })).toBeVisible()
+
+  await page.getByLabel('Alasan wajib').fill('Perlu memeriksa ulang pemetaan produk sebelum SIPLah.')
+  await page.getByRole('button', { name: 'Buka kembali review HET' }).click()
+  await expect(page.getByRole('heading', { name: 'Review Selisih HET' })).toBeVisible()
+
+  await page.locator('.matched-items-disclosure summary').click()
+  const resolvedMath = page.locator('.matched-items-disclosure article').filter({ hasText: 'Matematika Kelas IV' })
+  await resolvedMath.getByRole('button', { name: 'Ubah' }).click()
+  await resolvedMath.getByRole('button', { name: 'Pilih produk lain' }).click()
+  await expect(resolvedMath.getByText('Produk saat ini', { exact: true })).toBeVisible()
+  await expect(resolvedMath.getByText('Alternatif yang disarankan', { exact: true })).toBeVisible()
+  await expect(resolvedMath.getByText('BK-MTK-4', { exact: true })).toBeVisible()
+  await expect(resolvedMath.getByRole('button', { name: /Pilih BK-MTK-5/ })).toBeVisible()
+
+  const productSearch = resolvedMath.getByLabel('Cari Product Master')
+  await productSearch.fill('Matematika')
+  await expect(resolvedMath.getByRole('button', { name: /Pilih BK-MTK-5/ })).toBeVisible()
+  await productSearch.fill('BK-MTK-5')
+  await resolvedMath.getByRole('button', { name: /Pilih BK-MTK-5/ }).click()
+
+  await expect(page.getByRole('heading', { name: 'Semua pengecualian sudah diputuskan' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Konfirmasi Review HET' })).toBeEnabled()
+  const reopenedState = await page.evaluate(() => {
+    const persisted = JSON.parse(window.localStorage.getItem('jpa-operations-prototype') ?? '{}') as {
+      state?: {
+        orders?: Record<string, {
+          het?: { status?: string }
+          hetReviewedAmount?: number | null
+          arkasBudgetAmount?: number
+          items?: Array<{
+            id: string
+            productCode?: string | null
+            arkasTitle?: string
+            quantity?: number
+            arkasUnitPrice?: number
+          }>
+        }>
+      }
+    }
+    const order = persisted.state?.orders?.['ORD-2026-071']
+    return {
+      hetStatus: order?.het?.status,
+      hetReviewedAmount: order?.hetReviewedAmount,
+      arkasBudgetAmount: order?.arkasBudgetAmount,
+      item: order?.items?.find((candidate) => candidate.id === 'mtk-4'),
+    }
+  })
+  expect(reopenedState).toMatchObject({
+    hetStatus: 'NEEDS_REVIEW',
+    hetReviewedAmount: null,
+    arkasBudgetAmount: 16_780_000,
+    item: {
+      productCode: 'BK-MTK-5',
+      arkasTitle: 'Matematika Kelas IV',
+      quantity: 18,
+      arkasUnitPrice: 78_000,
+    },
+  })
 })
 
 test('Pass 3 Vendor Batch journey preserves recap, lifecycle, reminders, arrival targeting, and persistence', async ({ page }, testInfo) => {
@@ -1167,7 +1276,13 @@ test.describe('mobile operations layout', () => {
     await page.goto('/orders/ORD-2026-030/arkas')
     await expect(page.getByRole('heading', { name: 'Review Selisih HET' })).toBeVisible()
     await expect(page.locator('.het-comparison').first()).toBeVisible()
-    await page.screenshot({ path: testInfo.outputPath('mobile-het-review.png'), fullPage: true })
+    const mobileReligion = page.locator('.het-exception-card').filter({ hasText: 'Pendidikan Agama / PAI V' })
+    await mobileReligion.getByRole('button', { name: 'Pilih produk lain' }).click()
+    await expect(mobileReligion.getByText('Saran saat ini', { exact: true })).toBeVisible()
+    await expect(mobileReligion.getByText('BK-PAI-5', { exact: true })).toBeVisible()
+    await expect(mobileReligion.getByText('BK-PAK-5', { exact: true })).toBeVisible()
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
+    await page.screenshot({ path: testInfo.outputPath('mobile-het-alternatives.png'), fullPage: true })
 
     await page.goto('/orders/ORD-2026-071/siplah')
     await expect(page.getByRole('heading', { name: 'Alur SIPLah' })).toBeVisible()

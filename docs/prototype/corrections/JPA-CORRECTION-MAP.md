@@ -1,6 +1,6 @@
 # JPA Post-Audit Correction Map
 
-Status: JPA-COR-07–13 implemented; Review Gate B pending
+Status: JPA-COR-07–14 implemented; Review Gate B pending
 Baseline: `00a747e` on `prototype/pass-5-final-integration`  
 Audit source: `outputs/jpa-ui-ux-audit/JPA-Operations-Workspace-UI-UX-Audit.md`  
 Design plan: `outputs/jpa-ui-ux-audit/JPA-Graph-First-Correction-Plan.md`
@@ -261,7 +261,7 @@ Can one presentation vocabulary replace raw enums and mixed technical copy witho
 
 ### Answer
 
-Implemented with centralized exhaustive presentation maps shared by workspace, Pipeline, Vendor Batch, Finance, HET, SIPLah, Timeline, reminders, and demo-data copy. Canonical enums and transition semantics remain unchanged; operator-facing states now use the approved Indonesian vocabulary, including `Draf`, `Sedang diproses vendor`, `Tiba sebagian`, `Belum wajib dibayar`, `Belum tiba`, `Rekap dibuat, belum dikirim`, `Otomatis`, and `Catatan operator`. Financial copy distinguishes gross, deductions, and net, while tracker stale/conflict copy uses `Data tracker tertinggal` and `Konflik data tracker`; the audited `master HET` phrase is presented as `master produk HET`. Unit, typecheck, lint, build, diff, full E2E, and desktop/390 px rendered-route audits pass. The broad rendered scan's only intentional match is the canonical demo product identifier `BK-MATH-EXCEPTION`, not an operator label. COR-14 onward and the release-browser regression remain pending.
+Implemented with centralized exhaustive presentation maps shared by workspace, Pipeline, Vendor Batch, Finance, HET, SIPLah, Timeline, reminders, and demo-data copy. Canonical enums and transition semantics remain unchanged; operator-facing states now use the approved Indonesian vocabulary, including `Draf`, `Sedang diproses vendor`, `Tiba sebagian`, `Belum wajib dibayar`, `Belum tiba`, `Rekap dibuat, belum dikirim`, `Otomatis`, and `Catatan operator`. Financial copy distinguishes gross, deductions, and net, while tracker stale/conflict copy uses `Data tracker tertinggal` and `Konflik data tracker`; the audited `master HET` phrase is presented as `master produk HET`. Unit, typecheck, lint, build, diff, full E2E, and desktop/390 px rendered-route audits pass. The broad rendered scan's only intentional match is the canonical demo product identifier `BK-MATH-EXCEPTION`, not an operator label. COR-15 onward and the release-browser regression remain pending.
 
 ## #14: Can HET alternatives be discovered before free-text search?
 
@@ -276,7 +276,7 @@ Can the operator see ranked, meaningful replacement candidates immediately while
 
 ### Answer
 
-Pending implementation and interactive browser proof.
+Implemented with a deterministic Product Master ranking based on exact title/alias matches, shared meaningful title words, HET-price proximity, and stable source order. The HET product picker opens with the current suggestion clearly labeled plus ranked alternatives before typing, retains title/code search, and provides recovery for empty results. Choosing a product changes only the reviewed mapping; ARKAS source values, HET approval, and reviewed totals remain governed by the existing transitions. Reopened resolved items use the same picker. Unit and desktop/390 px browser coverage verifies the canonical Religion ambiguity, BK-PAK-5 selection, totals, no auto-approval, search, empty recovery, and reopen behavior.
 
 ## #15: Can SIPLah distinguish procurement blockers from later administration?
 

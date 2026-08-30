@@ -12,6 +12,53 @@ function normalize(value: string): string {
     .trim()
 }
 
+const productRankingStopWords = new Set(['buku', 'dan', 'kelas', 'mi', 'sd', 'untuk'])
+
+function meaningfulTokens(value: string): string[] {
+  return normalize(value)
+    .split(' ')
+    .filter((token) => token.length > 0 && !productRankingStopWords.has(token))
+}
+
+function sharedTokenCount(sourceTokens: Set<string>, candidate: string): number {
+  return meaningfulTokens(candidate).filter((token) => sourceTokens.has(token)).length
+}
+
+export function rankProductAlternatives(
+  item: Pick<OrderItem, 'arkasTitle' | 'arkasUnitPrice'>,
+  products: ProductMasterItem[],
+): ProductMasterItem[] {
+  const sourceTitle = normalize(item.arkasTitle)
+  const sourceTokens = new Set(meaningfulTokens(item.arkasTitle))
+  const seenCodes = new Set<string>()
+  const uniqueProducts = products.filter((product) => {
+    if (seenCodes.has(product.code)) return false
+    seenCodes.add(product.code)
+    return true
+  })
+
+  return uniqueProducts
+    .map((product, index) => {
+      const productTexts = [product.title, ...product.aliases]
+      const exactTitleMatch = productTexts.some((value) => normalize(value) === sourceTitle)
+      const overlap = Math.max(...productTexts.map((value) => sharedTokenCount(sourceTokens, value)))
+      return {
+        product,
+        index,
+        exactTitleMatch,
+        overlap,
+        priceDistance: Math.abs(product.hetUnitPrice - item.arkasUnitPrice),
+      }
+    })
+    .sort((left, right) => {
+      if (left.exactTitleMatch !== right.exactTitleMatch) return left.exactTitleMatch ? -1 : 1
+      if (left.overlap !== right.overlap) return right.overlap - left.overlap
+      if (left.priceDistance !== right.priceDistance) return left.priceDistance - right.priceDistance
+      return left.index - right.index
+    })
+    .map(({ product }) => product)
+}
+
 function matchesTitle(line: ExtractedArkasLine, product: ProductMasterItem): boolean {
   const source = normalize(line.arkasTitle)
   return [product.title, ...product.aliases].some((value) => normalize(value) === source)
