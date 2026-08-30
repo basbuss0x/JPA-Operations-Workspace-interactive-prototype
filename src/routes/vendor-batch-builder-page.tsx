@@ -64,11 +64,11 @@ export function VendorBatchBuilderPage() {
     <div className="page-stack vendor-builder-page">
       <Link className="back-link" to="/vendor-batches">← Semua Vendor Batch</Link>
       <PageHeader
-        eyebrow="TASK 09 · Vendor Batch Builder"
+        eyebrow="Penyusunan Vendor Batch"
         title="Buat Vendor Batch"
-        description="Pilih order Vendor-ready. Ringkasan dan alokasi sekolah dihitung langsung dari OrderItem—tanpa input quantity ulang."
+        description="Pilih order yang siap masuk Vendor Batch. Ringkasan dan alokasi sekolah dihitung langsung dari item order—tanpa mengisi ulang jumlah."
         actions={
-          <div className="batch-id-proposal" aria-label="Usulan Batch ID">
+          <div className="batch-id-proposal" aria-label="Usulan ID batch">
             <span>Batch ID</span><strong>{batchId}</strong>
           </div>
         }
@@ -77,8 +77,8 @@ export function VendorBatchBuilderPage() {
       <section className="workspace-panel eligible-orders-panel" aria-labelledby="eligible-orders-title">
         <div className="panel-heading">
           <div>
-            <h2 id="eligible-orders-title">Order eligible</h2>
-            <p>HET approved, tidak ada exception, SIPLah Vendor-ready, nominal final ada, dan belum masuk batch.</p>
+            <h2 id="eligible-orders-title">Order siap dipilih</h2>
+            <p>HET disetujui, tidak ada pengecualian, SIPLah siap untuk Vendor, nominal final tersedia, dan belum masuk batch.</p>
           </div>
           {eligibleOrders.length > 0 ? (
             <div className="selection-actions">
@@ -95,8 +95,8 @@ export function VendorBatchBuilderPage() {
 
         {eligibleOrders.length === 0 ? (
           <EmptyState
-            title="Belum ada order eligible"
-            description="Selesaikan checkpoint HET dan SIPLah procurement terlebih dahulu, atau periksa batch yang sudah aktif."
+            title="Belum ada order siap dipilih"
+            description="Selesaikan syarat HET dan pembelian SIPLah terlebih dahulu, atau periksa batch yang sudah aktif."
             action={<Link className="button button--secondary button--md" to="/orders?filter=ready-vendor">Periksa pesanan</Link>}
           />
         ) : (
@@ -117,10 +117,10 @@ export function VendorBatchBuilderPage() {
                     <strong>{formatCurrency(order.finalInvoiceAmount ?? 0)}</strong>
                   </div>
                   <div className="eligible-order__facts">
-                    <span>{order.items.length} product lines</span>
+                    <span>{order.items.length} jenis produk</span>
                     <span>{totalBooks} buku</span>
                     <StatusChip tone="success">HET {hetReviewStatusLabels.APPROVED}</StatusChip>
-                    <StatusChip tone="info">SIPLah siap Vendor</StatusChip>
+                    <StatusChip tone="info">SIPLah siap untuk Vendor</StatusChip>
                   </div>
                 </label>
               )
@@ -131,7 +131,7 @@ export function VendorBatchBuilderPage() {
 
       {preview.error ? (
         <div className="callout callout--danger" role="alert">
-          <strong>Recap tidak dapat dibuat.</strong> {preview.error} Pilihan ini tidak akan dapat disimpan sebagai batch.
+          <strong>Rekap tidak dapat dibuat.</strong> {preview.error} Pilihan ini tidak akan dapat disimpan sebagai batch.
         </div>
       ) : null}
 
@@ -141,16 +141,16 @@ export function VendorBatchBuilderPage() {
           <section className="batch-create-bar">
             <div>
               <span>{selectedOrderIds.length} order dipilih · {preview.recap.schoolCount} sekolah · {preview.recap.totalQuantity} buku</span>
-              <strong>{batchId} akan dibuat sebagai DRAFT</strong>
-              <small>Membuat batch tidak membuat recap dan tidak berarti sudah dikirim ke vendor.</small>
+              <strong>{batchId} akan dibuat sebagai draf</strong>
+              <small>Membuat Vendor Batch tidak membuat rekap dan tidak berarti sudah dikirim ke vendor.</small>
             </div>
-            <Button onClick={submit}>Buat DRAFT Batch</Button>
+            <Button onClick={submit}>Buat draf Vendor Batch</Button>
           </section>
         </>
       ) : preview.error === null ? (
         <EmptyState
-          title="Pilih order untuk melihat recap"
-          description="Preview aggregate dan breakdown sekolah akan berubah langsung saat pilihan ditambah atau dihapus."
+          title="Pilih order untuk melihat rekap"
+          description="Pratinjau ringkasan dan rincian sekolah akan berubah langsung saat pilihan ditambah atau dihapus."
         />
       ) : null}
 

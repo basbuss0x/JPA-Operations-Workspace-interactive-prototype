@@ -34,7 +34,7 @@ export function ReminderForm({
   setupDescription,
   savedTitle,
   savedDescription,
-  hint = 'Tanggal hari ini atau sesudahnya; tetap klik Simpan reminder untuk konfirmasi.',
+  hint = 'Tanggal hari ini atau sesudahnya; tetap klik Simpan pengingat untuk konfirmasi.',
   saveSuccessMessage,
   clearSuccessMessage,
   onSave,
@@ -74,7 +74,7 @@ export function ReminderForm({
       onSave(calendarDateToReminderTimestamp(calendarDate))
       onCompleted?.(saveSuccessMessage)
     } catch (caught) {
-      setActionError(caught instanceof Error ? caught.message : 'Reminder belum tersimpan.')
+      setActionError(caught instanceof Error ? caught.message : 'Pengingat belum tersimpan.')
     } finally {
       setSubmitting(false)
     }
@@ -90,7 +90,7 @@ export function ReminderForm({
       setCalendarDate('')
       onCompleted?.(clearSuccessMessage)
     } catch (caught) {
-      setActionError(caught instanceof Error ? caught.message : 'Reminder belum tersimpan.')
+      setActionError(caught instanceof Error ? caught.message : 'Pengingat belum tersimpan.')
     } finally {
       setSubmitting(false)
     }
@@ -109,12 +109,12 @@ export function ReminderForm({
       ) : null}
       {actionError ? (
         <div className="callout callout--danger reminder-action-error" role="alert">
-          <strong>Reminder belum tersimpan.</strong> {actionError} Coba lagi tanpa memasukkan ulang tanggal.
+          <strong>Pengingat belum tersimpan.</strong> {actionError} Coba lagi tanpa memasukkan ulang tanggal.
         </div>
       ) : null}
       <form className="inline-action-form" onSubmit={submit} noValidate>
         <FormField
-          label="Tanggal follow-up"
+          label="Tanggal tindak lanjut"
           htmlFor={inputId}
           hint={hint}
           error={validationError ?? undefined}
@@ -133,10 +133,10 @@ export function ReminderForm({
           />
         </FormField>
         <div className="reminder-form-actions">
-          <Button variant="secondary" type="submit" disabled={submitting}>Simpan reminder</Button>
+          <Button variant="secondary" type="submit" disabled={submitting}>Simpan pengingat</Button>
           {hasStoredReminder ? (
             <Button variant="ghost" type="button" onClick={clear} disabled={submitting}>
-              Clear reminder
+              Hapus pengingat
             </Button>
           ) : null}
         </div>

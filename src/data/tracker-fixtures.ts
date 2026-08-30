@@ -14,10 +14,10 @@ export function getMockTrackerRefresh(
   outcome: MockTrackerOutcome,
 ): FulfillmentRefreshResult {
   if (outcome === 'STALE') {
-    return { status: 'STALE', message: 'Tracker belum memiliki snapshot yang lebih baru.' }
+    return { status: 'STALE', message: 'Data tracker belum memiliki pembaruan yang lebih baru.' }
   }
   if (outcome === 'ERROR') {
-    return { status: 'ERROR', message: 'Simulasi koneksi tracker gagal. Cache terakhir tetap digunakan.' }
+    return { status: 'ERROR', message: 'Simulasi koneksi tracker gagal. Data terakhir tetap digunakan.' }
   }
   const snapshot = SUCCESS_SNAPSHOTS[order.fulfillment.trackerOrderId]
   return {

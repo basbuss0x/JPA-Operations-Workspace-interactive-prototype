@@ -2,7 +2,12 @@ import { useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { deriveActionCandidates, derivePrimaryNextAction } from '../domain/next-action'
 import { isSiplahAdminComplete, isSiplahReadyForVendor } from '../domain/order-state'
-import { benefitStatusLabels, schoolPaymentStatusLabels } from '../domain/presentation'
+import {
+  benefitStatusLabels,
+  schoolPaymentStatusLabels,
+  siplahDocumentKindLabels,
+  siplahDocumentStatusLabels,
+} from '../domain/presentation'
 import type { SiplahDocument } from '../domain/types'
 import { usePrototypeStore } from '../store/use-prototype-store'
 import { formatCurrency, formatDateTime } from '../utils/format'
@@ -21,9 +26,9 @@ function documentComplete(document: SiplahDocument): boolean {
 }
 
 function documentRequirementLabel(document: SiplahDocument): string {
-  if (document.requiredForVendorReady) return 'Wajib untuk Vendor'
+  if (document.requiredForVendorReady) return 'Wajib untuk kesiapan Vendor'
   if (document.requiredForAdminCompletion) return 'Administrasi lanjutan'
-  return 'Opsional arsip'
+  return 'Opsional untuk arsip'
 }
 
 interface TransactionFieldErrors {
@@ -50,7 +55,7 @@ export function SiplahWorkflowPage() {
   const [renderedAt] = useState(() => new Date())
 
   if (!order) {
-    return <EmptyState title="Order tidak ditemukan" description="Order SIPLah tidak tersedia pada demo state." action={<Link className="button button--secondary button--md" to="/orders">Kembali ke Pesanan</Link>} />
+    return <EmptyState title="Order tidak ditemukan" description="Order SIPLah tidak tersedia pada data demo." action={<Link className="button button--secondary button--md" to="/orders">Kembali ke Pesanan</Link>} />
   }
 
   const isClosed = order.stage === 'CLOSED'
@@ -107,21 +112,21 @@ export function SiplahWorkflowPage() {
 
   return (
     <div className="page-stack focused-route siplah-workflow-page">
-      <Link className="back-link" to={`/orders/${order.id}`}>← Order Workspace</Link>
+      <Link className="back-link" to={`/orders/${order.id}`}>← Ruang kerja order</Link>
       <header className="focused-route__header">
         <div>
-          <p className="eyebrow">TASK 08 · Operasional SIPLah</p>
-          <h1>Workflow SIPLah</h1>
+          <p className="eyebrow">Operasional SIPLah</p>
+          <h1>Alur SIPLah</h1>
           <p>{order.schoolName} · {order.id}</p>
         </div>
         <StatusChip tone={isClosed ? 'success' : readyForVendor ? 'success' : 'warning'}>
-          {isClosed ? 'Order CLOSED · read-only' : readyForVendor ? 'Siap masuk Vendor Batch' : 'Checkpoint belum lengkap'}
+          {isClosed ? 'Order selesai · hanya baca' : readyForVendor ? 'Siap masuk Vendor Batch' : 'Syarat belum lengkap'}
         </StatusChip>
       </header>
 
       {isClosed ? (
         <div className="callout callout--info">
-          <strong>Order sudah CLOSED.</strong> Checkpoint SIPLah ditampilkan sebagai konteks read-only. Gunakan “Buka kembali order” dari workspace bila koreksi disetujui.
+          <strong>Order sudah selesai.</strong> Syarat SIPLah ditampilkan sebagai konteks hanya baca. Gunakan “Buka kembali order” dari ruang kerja bila koreksi disetujui.
         </div>
       ) : null}
 
@@ -143,7 +148,7 @@ export function SiplahWorkflowPage() {
         <div className="checkpoint-number">1</div>
         <div className="checkpoint-content">
           <div className="panel-heading">
-            <div><h2>Akses SIPLah tersedia</h2><p>Hanya status akses yang dicatat. Username/password asli tidak pernah diminta atau disimpan.</p></div>
+            <div><h2>Akses SIPLah tersedia</h2><p>Hanya status akses yang dicatat. Nama pengguna dan kata sandi asli tidak pernah diminta atau disimpan.</p></div>
             <StatusChip tone={order.siplah.accessAvailable ? 'success' : 'warning'}>{order.siplah.accessAvailable ? 'Tersedia' : 'Belum tersedia'}</StatusChip>
           </div>
           <Button
@@ -161,7 +166,7 @@ export function SiplahWorkflowPage() {
         <div className="checkpoint-number">2</div>
         <div className="checkpoint-content">
           <div className="panel-heading">
-            <div><h2>Pesanan dibuat di JPA/TokoLadang</h2><p>Nominal transaksi final harus dikonfirmasi dari transaksi SIPLah; ARKAS dan reviewed HET tidak berubah.</p></div>
+            <div><h2>Pesanan dibuat di JPA/TokoLadang</h2><p>Nominal transaksi final harus dikonfirmasi dari transaksi SIPLah; ARKAS dan hasil review HET tidak berubah.</p></div>
             <StatusChip tone={order.siplah.orderPlaced ? 'success' : 'neutral'}>{order.siplah.orderPlaced ? 'Sudah dibuat' : 'Belum dibuat'}</StatusChip>
           </div>
           {!order.siplah.orderPlaced ? (
@@ -173,13 +178,13 @@ export function SiplahWorkflowPage() {
           ) : (
             <form className="inline-action-form siplah-transaction-form" onSubmit={submitOrder} noValidate>
               <div className="totals-strip totals-strip--four">
-                <div><span>ARKAS source</span><strong>{formatCurrency(order.arkasBudgetAmount)}</strong></div>
-                <div><span>Reviewed HET</span><strong>{reviewedAmount === null ? 'Belum ada' : formatCurrency(reviewedAmount)}</strong></div>
-                <div><span>Final SIPLah / invoice</span><strong>Menunggu konfirmasi</strong></div>
+                <div><span>Sumber ARKAS</span><strong>{formatCurrency(order.arkasBudgetAmount)}</strong></div>
+                <div><span>Hasil review HET</span><strong>{reviewedAmount === null ? 'Belum ada' : formatCurrency(reviewedAmount)}</strong></div>
+                <div><span>Nominal final SIPLah / Invoice</span><strong>Menunggu konfirmasi</strong></div>
                 <div><span>Selisih</span><strong>—</strong></div>
               </div>
               <div className="form-grid">
-                <FormField label="Nominal final transaksi SIPLah" htmlFor="siplah-final-amount" hint="Prefill dari reviewed HET; ubah jika nominal transaksi aktual berbeda." error={transactionFieldErrors.amount}>
+                <FormField label="Nominal final transaksi SIPLah" htmlFor="siplah-final-amount" hint="Terisi dari hasil review HET; ubah jika nominal transaksi aktual berbeda." error={transactionFieldErrors.amount}>
                   <input
                     id="siplah-final-amount"
                     type="number"
@@ -246,9 +251,9 @@ export function SiplahWorkflowPage() {
           <StatusChip tone={order.finalInvoiceAmount === null ? 'warning' : 'success'}>{order.finalInvoiceAmount === null ? 'Final belum dikonfirmasi' : 'Final dikonfirmasi'}</StatusChip>
         </div>
         <div className="totals-strip totals-strip--four">
-          <div><span>ARKAS source</span><strong>{formatCurrency(order.arkasBudgetAmount)}</strong></div>
-          <div><span>Reviewed HET</span><strong>{reviewedAmount === null ? '—' : formatCurrency(reviewedAmount)}</strong></div>
-          <div><span>Final SIPLah / invoice</span><strong>{order.finalInvoiceAmount === null ? '—' : formatCurrency(order.finalInvoiceAmount)}</strong></div>
+          <div><span>Sumber ARKAS</span><strong>{formatCurrency(order.arkasBudgetAmount)}</strong></div>
+          <div><span>Hasil review HET</span><strong>{reviewedAmount === null ? '—' : formatCurrency(reviewedAmount)}</strong></div>
+          <div><span>Nominal final SIPLah / Invoice</span><strong>{order.finalInvoiceAmount === null ? '—' : formatCurrency(order.finalInvoiceAmount)}</strong></div>
           <div className={finalDifference !== null && finalDifference !== 0 ? 'is-warning' : ''}><span>Selisih vs HET</span><strong>{finalDifference === null ? '—' : finalDifference === 0 ? formatCurrency(0) : `${finalDifference > 0 ? '+' : ''}${formatCurrency(finalDifference)}`}</strong></div>
         </div>
       </section>
@@ -256,7 +261,7 @@ export function SiplahWorkflowPage() {
       <section className="workspace-panel siplah-documents-section">
         <div className="panel-heading">
           <div>
-            <span className="checkpoint-kicker">CHECKPOINT 3</span>
+            <span className="checkpoint-kicker">SYARAT 3</span>
             <h2>Dokumen SIPLah</h2>
             <p>{completedVendorDocuments} dari {vendorDocuments.length} dokumen untuk Vendor lengkap · {completedAdminDocuments} dari {adminDocuments.length} dokumen administrasi lengkap. Invoice, Kwitansi, dan BAST dapat dilengkapi setelah order masuk Vendor.</p>
           </div>
@@ -272,15 +277,15 @@ export function SiplahWorkflowPage() {
               <article className="siplah-document-row" key={document.kind}>
                 <div className="siplah-document-row__identity">
                   <span className={completeDocument ? 'document-icon is-complete' : 'document-icon'}>{completeDocument ? '✓' : '▤'}</span>
-                  <div><strong>{document.label}</strong><small>{document.kind} · {documentRequirementLabel(document)}</small></div>
+                  <div><strong>{document.label}</strong><small>{siplahDocumentKindLabels[document.kind]} · {documentRequirementLabel(document)}</small></div>
                 </div>
                 <div className="document-statuses">
-                  <StatusChip tone={document.available ? 'success' : 'neutral'}>{document.available ? 'Tersedia' : 'Missing'}</StatusChip>
-                  <StatusChip tone={document.fileName ? 'success' : 'neutral'}>{document.fileName ? 'Attached' : 'Belum attached'}</StatusChip>
-                  <StatusChip tone={document.verified ? 'success' : 'warning'}>{document.verified ? 'Verified' : 'Belum verified'}</StatusChip>
+                  <StatusChip tone={document.available ? 'success' : 'neutral'}>{document.available ? siplahDocumentStatusLabels.available : siplahDocumentStatusLabels.unavailable}</StatusChip>
+                  <StatusChip tone={document.fileName ? 'success' : 'neutral'}>{document.fileName ? siplahDocumentStatusLabels.attached : siplahDocumentStatusLabels.unattached}</StatusChip>
+                  <StatusChip tone={document.verified ? 'success' : 'warning'}>{document.verified ? siplahDocumentStatusLabels.verified : siplahDocumentStatusLabels.unverified}</StatusChip>
                   {document.sendToSchoolRequired ? (
-                    <StatusChip tone={document.sentToSchool ? 'success' : 'warning'}>{document.sentToSchool ? 'Sudah dikirim' : 'Belum dikirim'}</StatusChip>
-                  ) : <StatusChip>Tak perlu dikirim</StatusChip>}
+                    <StatusChip tone={document.sentToSchool ? 'success' : 'warning'}>{document.sentToSchool ? siplahDocumentStatusLabels.sent : siplahDocumentStatusLabels.unsent}</StatusChip>
+                  ) : <StatusChip>{siplahDocumentStatusLabels.notSentRequired}</StatusChip>}
                 </div>
                 {document.fileName ? <span className="document-file-name">{document.fileName}</span> : null}
                 <div className="siplah-document-row__actions">
@@ -306,7 +311,7 @@ export function SiplahWorkflowPage() {
 
       {readyForVendor && !adminComplete ? (
         <section className="callout callout--info">
-          <strong>Siap masuk Vendor Batch.</strong> Surat Pesanan sudah memenuhi checkpoint procurement. Invoice, Kwitansi, dan BAST masih terlihat belum lengkap sebagai administrasi SIPLah lanjutan dan tidak memblokir Vendor Batch.
+          <strong>Siap masuk Vendor Batch.</strong> Surat Pesanan sudah memenuhi syarat pembelian. Invoice, Kwitansi, dan BAST masih terlihat belum lengkap sebagai administrasi SIPLah lanjutan dan tidak memblokir Vendor Batch.
         </section>
       ) : null}
       {errorMessage ? <div className="callout callout--danger" role="alert"><strong>Perubahan SIPLah belum tersimpan.</strong> {errorMessage}</div> : null}
@@ -318,8 +323,8 @@ export function SiplahWorkflowPage() {
             <h2>{readyForVendor ? 'Siap masuk Vendor Batch' : 'SIPLah belum siap untuk Vendor Batch'}</h2>
             <p>{readyForVendor
               ? adminComplete
-                ? 'Checkpoint procurement dan administrasi SIPLah sudah lengkap.'
-                : 'Checkpoint procurement sudah lengkap. Administrasi SIPLah lengkap adalah state terpisah yang dapat menyusul.'
+                ? 'Syarat pembelian dan administrasi SIPLah sudah lengkap.'
+                : 'Syarat pembelian sudah lengkap. Administrasi SIPLah adalah status terpisah yang dapat menyusul.'
               : 'Lengkapi akses, transaksi, nomor order, dan Surat Pesanan tanpa melompati verifikasi.'}</p>
           </div>
         </div>
@@ -332,7 +337,7 @@ export function SiplahWorkflowPage() {
 
       <section className="workspace-panel siplah-admin-status-panel">
         <div className="panel-heading">
-          <div><h2>Administrasi SIPLah</h2><p>Dihitung otomatis dari order, nomor transaksi, dan dokumen yang ditetapkan untuk penyelesaian; bukan checkbox manual.</p></div>
+          <div><h2>Administrasi SIPLah</h2><p>Dihitung otomatis dari order, nomor transaksi, dan dokumen yang ditetapkan untuk penyelesaian; bukan kotak centang manual.</p></div>
           <StatusChip tone={adminComplete ? 'success' : 'warning'}>{adminComplete ? 'Administrasi SIPLah lengkap' : 'Administrasi SIPLah belum lengkap'}</StatusChip>
         </div>
         <p>{adminComplete
@@ -343,11 +348,11 @@ export function SiplahWorkflowPage() {
       <section className="independence-strip">
         <div><span>Pembayaran sekolah</span><StatusChip tone={order.schoolPayment.status === 'LUNAS' ? 'success' : 'neutral'}>{schoolPaymentStatusLabels[order.schoolPayment.status]}</StatusChip></div>
         <div><span>Benefit</span><StatusChip tone={order.benefit.status === 'ELIGIBLE' ? 'warning' : order.benefit.status === 'PAID' ? 'success' : 'neutral'}>{benefitStatusLabels[order.benefit.status]}</StatusChip></div>
-        <p>SIPLah readiness dan administrasi tidak mengubah dua state finansial ini.</p>
+        <p>Kesiapan SIPLah dan administrasinya tidak mengubah dua status keuangan ini.</p>
       </section>
 
       <section className="workflow-context-strip">
-        <span>Event terakhir</span><strong>{order.timeline[0]?.title}</strong><small>{order.timeline[0] ? formatDateTime(order.timeline[0].occurredAt) : '—'}</small>
+        <span>Kejadian terakhir</span><strong>{order.timeline[0]?.title}</strong><small>{order.timeline[0] ? formatDateTime(order.timeline[0].occurredAt) : '—'}</small>
       </section>
     </div>
   )

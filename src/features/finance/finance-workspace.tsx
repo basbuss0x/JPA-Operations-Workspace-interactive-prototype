@@ -2,8 +2,10 @@ import { useRef, useState, type FormEvent, type MouseEvent } from 'react'
 import { calculateBenefitAmount, isCompletionReady } from '../../domain/selectors'
 import type { BenefitPaymentMethod, BenefitRecipientType, Order } from '../../domain/types'
 import {
+  benefitPaymentMethodLabels,
   benefitRecipientTypeLabels,
   benefitStatusLabels,
+  schoolPaymentMethodLabels,
   schoolPaymentStatusLabels,
   supplierPaymentStatusLabels,
 } from '../../domain/presentation'
@@ -124,7 +126,7 @@ export function FinanceWorkspace({ order }: { order: Order }) {
         evidenceName: paymentEvidence,
       })
       setPaymentOpen(false)
-      setFeedback('Pembayaran LUNAS dicatat. Benefit 10% kini eligible dari invoice gross.')
+      setFeedback('Pembayaran LUNAS dicatat. Benefit 10% kini wajib dibayar dari invoice gross.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Pembayaran gagal dicatat.')
     }
@@ -183,7 +185,7 @@ export function FinanceWorkspace({ order }: { order: Order }) {
     event.preventDefault()
     if (closeSubmitting) return
     if (!closeConfirmed) {
-      setCloseConfirmationError('Konfirmasi review checkpoint wajib dicentang.')
+      setCloseConfirmationError('Konfirmasi review syarat wajib dicentang.')
       document.getElementById('close-confirmation')?.focus()
       return
     }
@@ -195,7 +197,7 @@ export function FinanceWorkspace({ order }: { order: Order }) {
       setCloseOpen(false)
       setCloseConfirmed(false)
       setCloseSubmitting(false)
-      setFeedback('Order ditutup setelah review checkpoint.')
+      setFeedback('Order ditutup setelah review syarat.')
     } catch (caught) {
       setCloseError(caught instanceof Error ? caught.message : 'Order gagal ditutup.')
       setCloseSubmitting(false)
@@ -218,7 +220,7 @@ export function FinanceWorkspace({ order }: { order: Order }) {
       <div className="workspace-grid">
         <section className="workspace-panel payment-operations-panel">
           <div className="panel-heading">
-            <div><h2>Pembayaran sekolah</h2><p>Konfirmasi settlement gross; bukan ledger accounting.</p></div>
+            <div><h2>Pembayaran sekolah</h2><p>Gross adalah jumlah sebelum potongan; net adalah jumlah yang diterima JPA. Ini bukan pencatatan akuntansi.</p></div>
             <StatusChip tone={order.schoolPayment.status === 'LUNAS' ? 'success' : 'warning'}>{schoolPaymentStatusLabels[order.schoolPayment.status]}</StatusChip>
           </div>
           <div className="detail-list">
@@ -227,31 +229,31 @@ export function FinanceWorkspace({ order }: { order: Order }) {
             <FinanceRow label="Potongan settlement" detail="Platform, pajak, atau potongan lain pada settlement ini" value={formatCurrency(order.schoolPayment.deductionAmount)} />
             <FinanceRow label="Net diterima JPA" value={formatCurrency(order.schoolPayment.netReceivedAmount)} />
             <FinanceRow label="Tanggal" value={formatDate(order.schoolPayment.paidAt)} />
-            <FinanceRow label="Metode" value={order.schoolPayment.method ?? '—'} />
+            <FinanceRow label="Metode" value={order.schoolPayment.method ? schoolPaymentMethodLabels[order.schoolPayment.method] ?? order.schoolPayment.method : '—'} />
             <FinanceRow label="Bukti" value={order.schoolPayment.evidenceName ?? 'Belum ada'} />
           </div>
           {order.stage !== 'CLOSED' && order.schoolPayment.status === 'UNPAID' && order.finalInvoiceAmount !== null ? (
-            <Button onClick={() => { setError(null); setPaymentFieldErrors({}); setPaymentOpen(true) }}>Confirm LUNAS</Button>
+            <Button onClick={() => { setError(null); setPaymentFieldErrors({}); setPaymentOpen(true) }}>Konfirmasi LUNAS</Button>
           ) : null}
         </section>
 
         <section className="workspace-panel benefit-operations-panel">
           <div className="panel-heading">
-            <div><h2>Benefit sekolah</h2><p>Tepat 10% dari invoice final gross—bukan net settlement.</p></div>
+            <div><h2>Benefit sekolah</h2><p>Tepat 10% dari invoice final sebelum potongan (gross), bukan dari jumlah bersih (net settlement).</p></div>
             <StatusChip tone={order.benefit.status === 'PAID' ? 'success' : order.benefit.status === 'ELIGIBLE' ? 'warning' : 'neutral'}>{benefitStatusLabels[order.benefit.status]}</StatusChip>
           </div>
           <div className="benefit-amount">
-            <span>Obligation {order.benefit.obligationAmount === null ? 'belum dibekukan' : 'dibekukan saat LUNAS'}</span>
+            <span>Kewajiban {order.benefit.obligationAmount === null ? 'belum dibekukan' : 'dibekukan saat LUNAS'}</span>
             <strong>{benefitAmount === null ? '—' : formatCurrency(benefitAmount)}</strong>
           </div>
           <div className="detail-list">
             <FinanceRow label="Basis gross" value={order.benefit.baseAmount === null ? '—' : formatCurrency(order.benefit.baseAmount)} />
             <FinanceRow label="Dibayar" value={formatDate(order.benefit.paidAt)} />
-            <FinanceRow label="Metode" value={order.benefit.method ?? '—'} />
+            <FinanceRow label="Metode" value={order.benefit.method ? benefitPaymentMethodLabels[order.benefit.method] : '—'} />
             <FinanceRow label="Tipe penerima" value={order.benefit.recipientType ? benefitRecipientTypeLabels[order.benefit.recipientType] : '—'} />
             <FinanceRow label="Nama penerima" value={order.benefit.recipient ?? '—'} />
             <FinanceRow label="Referensi" value={order.benefit.accountReference ?? '—'} />
-            <FinanceRow label="Konfirmasi sekolah" detail="Opsional; tidak memblokir closure" value={formatDate(order.benefit.schoolConfirmedAt)} />
+            <FinanceRow label="Konfirmasi sekolah" detail="Opsional; tidak memblokir penutupan" value={formatDate(order.benefit.schoolConfirmedAt)} />
           </div>
           {order.stage !== 'CLOSED' && order.benefit.status === 'ELIGIBLE' ? <Button onClick={() => { setError(null); setBenefitFieldErrors({}); setBenefitOpen(true) }}>Bayar benefit penuh</Button> : null}
           {order.benefit.status === 'PAID' && !order.benefit.schoolConfirmedAt && order.stage !== 'CLOSED' ? (
@@ -263,15 +265,15 @@ export function FinanceWorkspace({ order }: { order: Order }) {
           <div><span>Kewajiban supplier</span><strong>{order.supplierPayment.obligationAmount === null ? 'Belum ditetapkan' : formatCurrency(order.supplierPayment.obligationAmount)}</strong></div>
           <div><span>Sudah dibayar</span><strong>{formatCurrency(order.supplierPayment.paidAmount)}</strong></div>
           <div><span>Status</span><StatusChip tone={order.supplierPayment.status === 'PAID' ? 'success' : 'neutral'}>{supplierPaymentStatusLabels[order.supplierPayment.status]}</StatusChip></div>
-          <p>Biaya supplier tidak diturunkan dari ARKAS atau persentase. Outstanding supplier tidak memblokir closure order sekolah.</p>
+          <p>Biaya supplier tidak dihitung dari ARKAS atau persentase. Sisa kewajiban supplier tidak memblokir penutupan order sekolah.</p>
         </section>
       </div>
 
       {order.schoolPayment.status === 'UNPAID' && order.stage !== 'CLOSED' ? (
         <section className="workspace-panel payment-reminder-panel">
           <div>
-            <h2>Reminder pembayaran</h2>
-            <p>Belum dibayar tetap pasif sampai tanggal follow-up eksplisit tercapai.</p>
+            <h2>Pengingat pembayaran</h2>
+            <p>Belum dibayar tetap pasif sampai tanggal tindak lanjut eksplisit tercapai.</p>
           </div>
           <ReminderForm
             inputId={`payment-follow-up-${order.id}`}
@@ -279,10 +281,10 @@ export function FinanceWorkspace({ order }: { order: Order }) {
             setupRequired
             setupTitle="Atur tindak lanjut pembayaran."
             setupDescription="Tanggal belum dikonfirmasi; kolom sudah diisi saran tiga hari dari hari ini. Simpan untuk mengaktifkan jadwal."
-            savedTitle="Reminder pembayaran tersimpan."
-            savedDescription={(date) => `Follow-up dijadwalkan pada ${date}.`}
-            saveSuccessMessage="Reminder pembayaran disimpan."
-            clearSuccessMessage="Reminder pembayaran dihapus."
+            savedTitle="Pengingat pembayaran tersimpan."
+            savedDescription={(date) => `Tindak lanjut dijadwalkan pada ${date}.`}
+            saveSuccessMessage="Pengingat pembayaran disimpan."
+            clearSuccessMessage="Pengingat pembayaran dihapus."
             onSave={(dueAt) => setPaymentFollowUp(order.id, dueAt)}
             onClear={() => setPaymentFollowUp(order.id, null)}
             onBeforeAction={() => {
@@ -298,30 +300,30 @@ export function FinanceWorkspace({ order }: { order: Order }) {
         <section className={closeReady ? 'workspace-panel closure-panel' : 'workspace-panel closure-panel closure-panel--blocked'}>
           <div>
             <h2>{closeReady ? 'Siap ditutup' : 'Penutupan order belum siap'}</h2>
-            <p>{closeReady ? 'Review semua checkpoint sebelum mengubah order menjadi CLOSED. Supplier tidak menjadi blocker.' : 'Checkpoint yang belum selesai ditampilkan agar penutupan tidak dilakukan sebelum waktunya.'}</p>
+            <p>{closeReady ? 'Tinjau semua syarat sebelum menutup order. Supplier tidak menjadi penghambat.' : 'Syarat yang belum selesai ditampilkan agar penutupan tidak dilakukan sebelum waktunya.'}</p>
           </div>
           <ClosureChecklist order={order} />
           {closeReady ? (
             <Button onClick={openCloseReview}>Review penutupan</Button>
           ) : (
-            <div className="inline-clear-state inline-clear-state--neutral">Belum dapat ditutup. Lengkapi checkpoint wajib yang bertanda ○.</div>
+            <div className="inline-clear-state inline-clear-state--neutral">Belum dapat ditutup. Lengkapi syarat wajib yang bertanda ○.</div>
           )}
         </section>
       ) : (
         <section className="workspace-panel closure-panel closure-panel--readonly">
           <div>
             <h2>Order selesai</h2>
-            <p>Order sudah CLOSED dan workspace ini read-only. Riwayat tetap tersedia di Timeline.</p>
+            <p>Order sudah selesai dan workspace ini hanya baca. Riwayat tetap tersedia di Timeline.</p>
           </div>
           <ClosureChecklist order={order} />
-          <div className="readonly-workflow-note">Jika perlu koreksi operasional, gunakan aksi “Buka kembali order” di atas sebelum mengubah checkpoint.</div>
+          <div className="readonly-workflow-note">Jika perlu koreksi operasional, gunakan aksi “Buka kembali order” di atas sebelum mengubah syarat.</div>
         </section>
       )}
 
       <Modal
         open={closeOpen}
         title="Review penutupan order"
-        description="Pastikan semua checkpoint blocking selesai sebelum order diubah menjadi CLOSED."
+        description="Pastikan semua syarat wajib selesai sebelum order ditutup."
         onClose={cancelCloseReview}
         restoreFocusRef={closeTriggerRef}
         footer={
@@ -354,7 +356,7 @@ export function FinanceWorkspace({ order }: { order: Order }) {
               aria-invalid={Boolean(closeConfirmationError)}
               aria-describedby={closeConfirmationError ? 'close-confirmation-error' : undefined}
             />
-            <span>Saya sudah meninjau checkpoint dan mengonfirmasi penutupan order ini.</span>
+            <span>Saya sudah meninjau syarat dan mengonfirmasi penutupan order ini.</span>
           </label>
           {closeConfirmationError ? <span id="close-confirmation-error" className="form-error" role="alert">{closeConfirmationError}</span> : null}
           {closeError ? <div className="callout callout--danger" role="alert"><strong>Order belum ditutup.</strong> {closeError}</div> : null}
@@ -363,10 +365,10 @@ export function FinanceWorkspace({ order }: { order: Order }) {
 
       <Modal
         open={paymentOpen}
-        title="Confirm pembayaran LUNAS"
+        title="Konfirmasi pembayaran LUNAS"
         description="Gross harus sama dengan invoice final. Potongan hanya mengurangi net diterima, bukan benefit basis."
         onClose={() => setPaymentOpen(false)}
-        footer={<><Button variant="ghost" onClick={() => setPaymentOpen(false)}>Batal</Button><Button type="submit" form="school-payment-form">Confirm LUNAS</Button></>}
+        footer={<><Button variant="ghost" onClick={() => setPaymentOpen(false)}>Batal</Button><Button type="submit" form="school-payment-form">Konfirmasi LUNAS</Button></>}
       >
         <form id="school-payment-form" className="form-stack" onSubmit={submitPayment} noValidate>
           {error ? <div className="callout callout--danger" role="alert"><strong>Pembayaran belum tersimpan.</strong> {error}</div> : null}
@@ -403,7 +405,7 @@ export function FinanceWorkspace({ order }: { order: Order }) {
             />
           </FormField>
           <div className="derived-settlement"><span>Net diterima JPA</span><strong>{formatCurrency(derivedNet)}</strong><small>Gross − potongan</small></div>
-          <FormField label="Metode" htmlFor="school-payment-method"><select id="school-payment-method" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}><option>Transfer bank</option><option>SIPLah settlement</option><option>Cash</option></select></FormField>
+          <FormField label="Metode" htmlFor="school-payment-method"><select id="school-payment-method" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}><option value="Transfer bank">{schoolPaymentMethodLabels['Transfer bank']}</option><option value="SIPLah settlement">{schoolPaymentMethodLabels['SIPLah settlement']}</option><option value="Cash">{schoolPaymentMethodLabels.Cash}</option></select></FormField>
           <FormField label="Bukti pembayaran" htmlFor="school-payment-proof" error={paymentFieldErrors.evidence}>
             <input
               id="school-payment-proof"
@@ -430,15 +432,15 @@ export function FinanceWorkspace({ order }: { order: Order }) {
       >
         <form id="benefit-payment-form" className="form-stack" onSubmit={submitBenefit} noValidate>
           {error ? <div className="callout callout--danger" role="alert"><strong>Benefit belum tersimpan.</strong> {error}</div> : null}
-          <div className="derived-settlement"><span>Benefit obligation</span><strong>{benefitAmount === null ? '—' : formatCurrency(benefitAmount)}</strong><small>10% invoice final gross</small></div>
+          <div className="derived-settlement"><span>Kewajiban benefit</span><strong>{benefitAmount === null ? '—' : formatCurrency(benefitAmount)}</strong><small>10% dari invoice final gross</small></div>
           <FormField label="Metode" htmlFor="benefit-method"><select id="benefit-method" value={benefitMethod} onChange={(event) => {
             const method = event.target.value as BenefitPaymentMethod
             setBenefitMethod(method)
             if (method === 'CASH') setAccountReference('')
             setBenefitFieldErrors({})
             setError(null)
-          }}><option value="TRANSFER">TRANSFER</option><option value="CASH">CASH</option></select></FormField>
-          <FormField label="Tipe penerima" htmlFor="benefit-recipient-type"><select id="benefit-recipient-type" value={recipientType} onChange={(event) => setRecipientType(event.target.value as BenefitRecipientType)}><option value="SCHOOL_OFFICIAL">SCHOOL_OFFICIAL</option><option value="INDIVIDUAL">INDIVIDUAL</option></select></FormField>
+          }}><option value="TRANSFER">{benefitPaymentMethodLabels.TRANSFER}</option><option value="CASH">{benefitPaymentMethodLabels.CASH}</option></select></FormField>
+          <FormField label="Tipe penerima" htmlFor="benefit-recipient-type"><select id="benefit-recipient-type" value={recipientType} onChange={(event) => setRecipientType(event.target.value as BenefitRecipientType)}><option value="SCHOOL_OFFICIAL">{benefitRecipientTypeLabels.SCHOOL_OFFICIAL}</option><option value="INDIVIDUAL">{benefitRecipientTypeLabels.INDIVIDUAL}</option></select></FormField>
           <FormField label="Nama penerima" htmlFor="benefit-recipient" error={benefitFieldErrors.recipient}>
             <input
               id="benefit-recipient"

@@ -75,7 +75,7 @@ const fixtures = new Map([[DEMO_ARKAS_FIXTURE.id, DEMO_ARKAS_FIXTURE]])
 
 export function extractArkasFixture(fixtureId: string): ArkasExtractionResult {
   const fixture = fixtures.get(fixtureId)
-  if (!fixture) throw new Error('Fixture ARKAS tidak ditemukan atau gagal diekstrak.')
+  if (!fixture) throw new Error('Data contoh ARKAS tidak ditemukan atau gagal diekstrak.')
   return {
     fixtureId: fixture.fixtureId,
     activityReference: fixture.activityReference,

@@ -2,17 +2,24 @@ import { getHetExceptionCount, isSiplahAdminComplete, isSiplahReadyForVendor, is
 import type { Order, VendorBatch } from './types'
 
 export {
+  actionSourceLabels,
+  arkasSourceTypeLabels,
   arrivalTypeLabels,
+  benefitPaymentMethodLabels,
   benefitRecipientTypeLabels,
   benefitStatusLabels,
   hetItemStatusLabels,
   hetResolutionTypeLabels,
   hetReviewStatusLabels,
   lifecycleLabels,
+  schoolPaymentMethodLabels,
   schoolPaymentStatusLabels,
   siplahDocumentKindLabels,
+  siplahDocumentStatusLabels,
   supplierPaymentStatusLabels,
+  syncStatusLabels,
   timelineEventTypeLabels,
+  trackerRefreshOutcomeLabels,
   vendorBatchStatusLabels,
 } from './presentation-labels'
 import {

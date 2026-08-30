@@ -47,13 +47,13 @@ export function AppShell() {
           <div className="brand__mark">J</div>
           <div>
             <strong>JPA Operations</strong>
-            <span>Workspace prototype</span>
+            <span>Prototipe operasional</span>
           </div>
         </div>
         <Navigation />
         <div className="sidebar__foot">
           <span className="prototype-dot" />
-          Demo lokal · Pass 5
+          Demo lokal
         </div>
       </aside>
 
@@ -65,10 +65,10 @@ export function AppShell() {
           </div>
           <div className="topbar__context">
             <span className="prototype-dot" />
-            State demo tersimpan lokal
+            Data demo tersimpan lokal
           </div>
           <Button className="topbar__reset" variant="ghost" size="sm" onClick={() => setResetOpen(true)}>
-            Reset Demo Data
+            Atur ulang data demo
           </Button>
         </header>
         <main className="app-main">
@@ -80,18 +80,18 @@ export function AppShell() {
 
       <Modal
         open={resetOpen}
-        title="Reset Demo Data?"
-        description="Semua perubahan lokal akan dihapus dan skenario canonical dikembalikan."
+        title="Atur ulang data demo?"
+        description="Semua perubahan lokal akan dihapus dan skenario utama dikembalikan."
         onClose={() => setResetOpen(false)}
         footer={
           <>
             <Button variant="ghost" onClick={() => setResetOpen(false)}>Batal</Button>
-            <Button variant="danger" onClick={confirmReset}>Reset sekarang</Button>
+            <Button variant="danger" onClick={confirmReset}>Atur ulang sekarang</Button>
           </>
         }
       >
         <div className="callout callout--warning">
-          HET exception yang diselesaikan, snooze, override, batch baru, pembayaran, dan catatan demo akan hilang.
+          Pengecualian HET yang diselesaikan, penundaan, penyesuaian, batch baru, pembayaran, dan catatan demo akan hilang.
         </div>
       </Modal>
     </div>

@@ -98,12 +98,12 @@ export function getClosureChecklist(order: Order): ClosureChecklistItem[] {
   return [
     {
       key: 'FULFILLMENT',
-      label: 'Fulfillment seluruh order 100%',
+      label: 'Pemenuhan seluruh order 100%',
       complete: fulfillmentComplete,
       blocking: true,
       detail: fulfillmentComplete
         ? `${order.fulfillment.deliveredQty} dari ${order.fulfillment.orderedQty} buku tercatat diterima.`
-        : `Masih tersisa ${order.fulfillment.remainingQty} buku; progress tracker ${order.fulfillment.progressPercent}%.`,
+        : `Masih tersisa ${order.fulfillment.remainingQty} buku; kemajuan tracker ${order.fulfillment.progressPercent}%.`
     },
     {
       key: 'SCHOOL_ACCEPTANCE',
@@ -121,7 +121,7 @@ export function getClosureChecklist(order: Order): ClosureChecklistItem[] {
       blocking: true,
       detail: siplahAdminComplete
         ? 'Pesanan, nomor order, Invoice, Kwitansi, dan BAST lengkap.'
-        : `Belum lengkap: ${missingSiplahRequirements.join(', ') || 'checkpoint administrasi SIPLah'}.`,
+        : `Belum lengkap: ${missingSiplahRequirements.join(', ') || 'syarat administrasi SIPLah'}.`,
     },
     {
       key: 'SCHOOL_PAYMENT',

@@ -32,7 +32,7 @@ export function VendorBatchesPage() {
         try {
           recap = buildVendorRecap(memberOrders)
         } catch (caught) {
-          error = caught instanceof Error ? caught.message : 'Recap tidak valid.'
+          error = caught instanceof Error ? caught.message : 'Rekap tidak valid.'
         }
         return { batch, recap, error, operation: getVendorBatchOperationalState(batch, renderedAt) }
       })
@@ -46,7 +46,7 @@ export function VendorBatchesPage() {
   return (
     <div className="page-stack vendor-batches-page">
       <PageHeader
-        eyebrow="TASK 10 · Vendor execution"
+        eyebrow="Operasional vendor"
         title="Vendor Batch"
         description="Urutan kerja operasional: batch yang perlu tindakan muncul lebih dulu, tanpa metrik dashboard yang tidak membantu eksekusi."
         actions={<Link className="button button--primary button--md" to="/vendor-batches/new">Buat Vendor Batch</Link>}
@@ -66,7 +66,7 @@ export function VendorBatchesPage() {
               </div>
               <div className="vendor-batch-row__status">
                 <StatusChip tone={statusTone(batch.status)} dot>{vendorBatchStatusLabels[batch.status]}</StatusChip>
-                <small>{batch.recapGeneratedAt ? `Recap ${batch.recapGenerationCount}×` : 'Recap belum dibuat'}</small>
+                <small>{batch.recapGeneratedAt ? `Rekap ${batch.recapGenerationCount}×` : 'Rekap belum dibuat'}</small>
               </div>
               {recap ? (
                 <div className="vendor-batch-row__counts">

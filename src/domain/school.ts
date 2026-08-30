@@ -52,7 +52,7 @@ export function createSchoolCandidate(
   if (validationError) throw new Error(validationError)
   const duplicate = findDuplicateSchool(schools, name)
   if (duplicate) {
-    throw new Error(`Sekolah kemungkinan duplikat: ${duplicate.name} (${duplicate.id}). Pilih sekolah existing atau periksa identitasnya.`)
+    throw new Error(`Sekolah kemungkinan duplikat: ${duplicate.name} (${duplicate.id}). Pilih sekolah yang sudah terdaftar atau periksa identitasnya.`)
   }
   return {
     id: proposeSchoolId(schools, name),

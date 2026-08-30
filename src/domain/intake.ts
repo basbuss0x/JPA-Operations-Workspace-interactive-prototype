@@ -61,7 +61,7 @@ export function matchExtractedItems(
           codeMatch,
           'PRICE_MISMATCH',
           0.99,
-          'Kode produk cocok, tetapi harga ARKAS berbeda dari HET master.',
+          'Kode produk cocok, tetapi harga ARKAS berbeda dari HET Product Master.',
         )
       }
       return toMatchedItem(
@@ -69,14 +69,14 @@ export function matchExtractedItems(
         codeMatch,
         'MATCHED',
         0.99,
-        'Kode produk dan harga cocok dengan HET master.',
+        'Kode produk dan harga cocok dengan HET Product Master.',
       )
     }
 
     const titleMatches = products.filter((product) => matchesTitle(line, product))
     if (titleMatches.length === 1) {
       const product = titleMatches[0]
-      if (!product) throw new Error('Product match tidak ditemukan.')
+      if (!product) throw new Error('Pencocokan produk tidak ditemukan.')
       const status = product.hetUnitPrice === line.arkasUnitPrice ? 'MATCHED' : 'PRICE_MISMATCH'
       return toMatchedItem(
         line,
@@ -84,8 +84,8 @@ export function matchExtractedItems(
         status,
         0.92,
         status === 'MATCHED'
-          ? 'Judul dan harga cocok dengan satu produk master.'
-          : 'Judul cocok, tetapi harga ARKAS berbeda dari HET master.',
+          ? 'Judul dan harga cocok dengan satu produk acuan.'
+          : 'Judul cocok, tetapi harga ARKAS berbeda dari HET Product Master.',
       )
     }
 

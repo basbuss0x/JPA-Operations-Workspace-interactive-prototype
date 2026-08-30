@@ -55,7 +55,7 @@ describe('HET exception review and approval', () => {
 
   it('requires every exception resolution and an explicit confirmation gate', () => {
     const order = createExtractedOrder()
-    expect(() => confirmHetReview(order, now)).toThrow(/exception/)
+    expect(() => confirmHetReview(order, now)).toThrow(/pengecualian/)
 
     const priceAccepted = acceptSuggestedHetMatch(order, 'line-mtk-5', now)
     const pai = PRODUCT_MASTER.find((product) => product.code === 'BK-PAI-5')

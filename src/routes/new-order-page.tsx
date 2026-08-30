@@ -22,10 +22,10 @@ type SourceMode = 'DEMO' | 'PDF' | 'PHOTO' | 'MANUAL'
 type ExtractionState = 'IDLE' | 'LOADING' | 'SUCCESS' | 'ERROR'
 
 const sourceOptions: Array<{ id: SourceMode; label: string; detail: string }> = [
-  { id: 'DEMO', label: 'Demo ARKAS', detail: 'Fixture PDF deterministik untuk evaluasi end-to-end.' },
-  { id: 'PDF', label: 'Upload PDF', detail: 'Pilih file lokal; isi tetap disimulasikan.' },
-  { id: 'PHOTO', label: 'Foto / gambar', detail: 'Untuk hasil foto/scan saat kunjungan sekolah.' },
-  { id: 'MANUAL', label: 'Input manual demo', detail: 'Gunakan baris fixture tanpa file.' },
+  { id: 'DEMO', label: 'Demo ARKAS', detail: 'Data PDF demo deterministik untuk evaluasi alur.' },
+  { id: 'PDF', label: 'Unggah PDF', detail: 'Pilih file lokal; isi tetap disimulasikan.' },
+  { id: 'PHOTO', label: 'Foto / gambar', detail: 'Untuk hasil foto/pindai saat kunjungan sekolah.' },
+  { id: 'MANUAL', label: 'Input manual demo', detail: 'Gunakan baris data demo tanpa file.' },
 ]
 
 function statusTone(item: OrderItem) {
@@ -212,13 +212,13 @@ export function NewOrderPage() {
   return (
     <div className="page-stack intake-page">
       <PageHeader
-        eyebrow="TASK 06 · Intake ARKAS"
+        eyebrow="Penerimaan ARKAS"
         title="Pesanan Baru"
         description="Satu kali tangkap ARKAS menghasilkan order terstruktur dan hanya menyisakan keputusan HET yang benar-benar perlu operator."
         actions={<Link className="button button--ghost button--sm" to="/orders">Batal</Link>}
       />
 
-      <ol className="workflow-steps" aria-label="Tahapan intake">
+      <ol className="workflow-steps" aria-label="Tahapan penerimaan">
         <li className="is-active"><span>1</span>Sekolah</li>
         <li className={confirmedSchool ? 'is-active' : ''}><span>2</span>Sumber ARKAS</li>
         <li className={extractionState === 'SUCCESS' ? 'is-active' : ''}><span>3</span>Review hasil</li>
@@ -231,7 +231,7 @@ export function NewOrderPage() {
             <div><h2>1. Pilih sekolah</h2><p>Tidak ada sekolah yang dipilih otomatis. Konfirmasi identitas sebelum ARKAS diproses.</p></div>
           </div>
           <div className="segmented-control" role="group" aria-label="Sumber sekolah">
-            <button type="button" className={schoolMode === 'EXISTING' ? 'is-active' : ''} onClick={() => switchSchoolMode('EXISTING')}>Sekolah existing</button>
+            <button type="button" className={schoolMode === 'EXISTING' ? 'is-active' : ''} onClick={() => switchSchoolMode('EXISTING')}>Sekolah terdaftar</button>
             <button type="button" className={schoolMode === 'NEW' ? 'is-active' : ''} onClick={() => switchSchoolMode('NEW')}>Sekolah demo baru</button>
           </div>
           {schoolMode === 'EXISTING' ? (
@@ -263,7 +263,7 @@ export function NewOrderPage() {
                   placeholder="Contoh: SD Inpres Pass 2"
                 />
               </FormField>
-              <FormField label="Kota / kabupaten" htmlFor="new-school-city" hint="Opsional untuk fixture; identitas sekolah tetap memakai ID stabil.">
+              <FormField label="Kota / kabupaten" htmlFor="new-school-city" hint="Opsional untuk data demo; identitas sekolah tetap memakai ID stabil.">
                 <input id="new-school-city" value={newSchoolCity} onChange={(event) => changeNewSchoolCity(event.target.value)} placeholder="Contoh: Ambon" />
               </FormField>
               <Button variant="secondary" onClick={confirmSchool}>Konfirmasi sekolah baru</Button>
@@ -310,7 +310,7 @@ export function NewOrderPage() {
             </FormField>
           ) : (
             <div className="selected-fixture">
-              <span>Fixture terpilih</span>
+              <span>Data demo terpilih</span>
               <strong>{DEMO_ARKAS_FIXTURE.sourceLabel}</strong>
               <small>{DEMO_ARKAS_FIXTURE.fileName} · 8 baris sumber</small>
             </div>
@@ -325,7 +325,7 @@ export function NewOrderPage() {
 
         <section className="workspace-panel extraction-review" aria-live="polite">
           <div className="panel-heading">
-            <div><h2>3. Review hasil ekstraksi</h2><p>Nilai sumber ini akan disimpan immutable pada order.</p></div>
+            <div><h2>3. Review hasil ekstraksi</h2><p>Nilai sumber ini akan disimpan tetap pada order.</p></div>
             {extractionState === 'SUCCESS' ? <StatusChip tone="success">Siap dibuat</StatusChip> : null}
           </div>
 
@@ -336,7 +336,7 @@ export function NewOrderPage() {
             <div className="extraction-loading"><span className="spinner" /><strong>Membaca 8 baris ARKAS</strong><p>Struktur item dan Product Master sedang dicocokkan…</p></div>
           ) : null}
           {extractionState === 'ERROR' ? (
-            <EmptyState title="Tidak ada hasil extraction" description="Perbaiki konteks sekolah atau input di sebelah kiri lalu coba kembali." />
+            <EmptyState title="Tidak ada hasil ekstraksi" description="Perbaiki konteks sekolah atau input di sebelah kiri lalu coba kembali." />
           ) : null}
           {extractionState === 'SUCCESS' && extraction && confirmedSchool ? (
             <>
@@ -360,7 +360,7 @@ export function NewOrderPage() {
                   <span>Sekolah yang akan dibuat</span>
                   <strong>{confirmedSchool.name}</strong>
                   <small>{confirmedSchool.id} · {confirmedSchool.city} · identitas aktif terkonfirmasi</small>
-                  <span>{autoMatchedCount} item tidak perlu dicek ulang. {exceptions.length} exception akan dibuka langsung pada workflow HET.</span>
+                  <span>{autoMatchedCount} item tidak perlu dicek ulang. {exceptions.length} pengecualian akan dibuka langsung pada review HET.</span>
                 </div>
                 <Button onClick={createOrder}>Buat order & review HET</Button>
               </div>

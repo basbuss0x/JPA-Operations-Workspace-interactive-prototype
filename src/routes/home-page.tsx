@@ -54,7 +54,7 @@ export function HomePage() {
       <PageHeader
         eyebrow="Ruang kerja hari ini"
         title="Kerjakan Sekarang"
-        description="Pekerjaan penting diurutkan dari blocker dan aksi yang paling siap diselesaikan."
+        description="Pekerjaan penting diurutkan dari penghambat dan tindakan yang paling siap diselesaikan."
         actions={
           <Link className="button button--secondary button--sm" to="/orders?filter=needs-action">
             Semua yang perlu tindakan
@@ -66,9 +66,9 @@ export function HomePage() {
         <div className="section-heading">
           <div>
             <h2 id="work-queue-title">Prioritas operasional</h2>
-            <p>{queue.length} pekerjaan aktif dari state demo saat ini.</p>
+            <p>{queue.length} pekerjaan aktif dari data demo saat ini.</p>
           </div>
-          {snoozedCount > 0 ? <StatusChip tone="info">{snoozedCount} disnooze</StatusChip> : null}
+          {snoozedCount > 0 ? <StatusChip tone="info">{snoozedCount} ditunda</StatusChip> : null}
         </div>
 
         {queue.length > 0 ? (
@@ -85,8 +85,8 @@ export function HomePage() {
           </div>
         ) : (
           <EmptyState
-            title="Queue bersih"
-            description="Tidak ada next action aktif. Periksa kembali item yang disnooze atau pesanan selesai."
+            title="Antrean bersih"
+            description="Tidak ada Next Action aktif. Periksa kembali item yang ditunda atau pesanan selesai."
             action={<Link className="button button--secondary button--md" to="/orders">Buka semua pesanan</Link>}
           />
         )}

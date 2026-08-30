@@ -64,7 +64,7 @@ export function OrdersPage() {
       <PageHeader
         eyebrow="Semua konteks sekolah"
         title="Pesanan"
-        description="Cari sekolah atau referensi, lalu lihat masalah penting dan next action tanpa membuka satu per satu."
+        description="Cari sekolah atau referensi, lalu lihat masalah penting dan Next Action tanpa membuka satu per satu."
         actions={<Link className="button button--primary button--sm" to="/orders/new">+ Pesanan Baru</Link>}
       />
 
@@ -75,7 +75,7 @@ export function OrdersPage() {
           <input
             value={query}
             onChange={(event) => updateParam('q', event.target.value)}
-            placeholder="Cari sekolah, order ID, SIPLah, atau ARKAS…"
+            placeholder="Cari sekolah, ID order, SIPLah, atau ARKAS…"
           />
           {query ? (
             <button type="button" aria-label="Hapus pencarian" onClick={() => updateParam('q', '')}>×</button>
@@ -113,7 +113,7 @@ export function OrdersPage() {
                 <tr>
                   <th>Sekolah / order</th>
                   <th>Posisi</th>
-                  <th>Masalah / next action</th>
+                  <th>Masalah / Next Action</th>
                   <th>Sinyal order</th>
                 </tr>
               </thead>

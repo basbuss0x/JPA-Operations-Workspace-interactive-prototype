@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import type { NextAction, NextActionKind } from '../../domain/types'
+import { actionSourceLabels } from '../../domain/presentation'
 import { formatDate } from '../../utils/format'
 import { Button } from '../ui/button'
 import { StatusChip } from '../ui/status-chip'
@@ -21,8 +22,8 @@ export function OutstandingActions({
     <section className="outstanding-actions" aria-labelledby="outstanding-actions-title">
       <div className="section-heading">
         <div>
-          <h2 id="outstanding-actions-title">Aksi lain & yang disnooze</h2>
-          <p>Kewajiban paralel tetap terlihat meskipun bukan Primary Next Action.</p>
+          <h2 id="outstanding-actions-title">Tindakan lain & yang ditunda</h2>
+          <p>Kewajiban paralel tetap terlihat meskipun bukan Next Action utama.</p>
         </div>
         <StatusChip tone="info">{actions.length} aksi</StatusChip>
       </div>
@@ -32,11 +33,11 @@ export function OutstandingActions({
             <div className="outstanding-action-row__main">
               <div>
                 <StatusChip tone={action.source === 'MANUAL' ? 'info' : 'neutral'}>
-                  {action.source === 'MANUAL' ? 'Manual' : 'System'}
+                  {actionSourceLabels[action.source]}
                 </StatusChip>
                 {action.availability === 'SNOOZED' ? (
                   <StatusChip tone="warning">
-                    Snooze sampai {formatDate(action.snoozedUntil)}
+                    Ditunda sampai {formatDate(action.snoozedUntil)}
                   </StatusChip>
                 ) : null}
               </div>
@@ -51,7 +52,7 @@ export function OutstandingActions({
                 </Button>
               ) : (
                 <Button variant="ghost" size="sm" onClick={() => onSnooze(action.kind)}>
-                  Snooze 3 hari
+                  Tunda 3 hari
                 </Button>
               ) : <span className="action-required-label">Wajib diatur</span>}
             </div>

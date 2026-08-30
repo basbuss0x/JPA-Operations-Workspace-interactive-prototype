@@ -4,7 +4,9 @@ import {
   arrivalTypeLabels,
   benefitStatusLabels,
   getOrderStateItems,
+  syncStatusLabels,
   timelineEventTypeLabels,
+  trackerRefreshOutcomeLabels,
   vendorBatchStatusLabels,
 } from './presentation'
 
@@ -18,6 +20,8 @@ describe('operator presentation labels', () => {
     expect(vendorBatchStatusLabels.RECAP_GENERATED).toBe('Rekap dibuat, belum dikirim')
     expect(timelineEventTypeLabels.SYSTEM).toBe('Otomatis')
     expect(timelineEventTypeLabels.NOTE).toBe('Catatan operator')
+    expect(syncStatusLabels.STALE).toBe('Data tracker tertinggal')
+    expect(trackerRefreshOutcomeLabels.STALE).toBe('Data tracker tertinggal')
   })
 
   it('uses Belum tiba only in the Barang arrival signal', () => {

@@ -3,7 +3,7 @@ import type { VendorBatch, VendorRecap } from '../../domain/types'
 
 export const VENDOR_WORKBOOK_SHEETS = {
   summary: 'Ringkasan Vendor',
-  schoolBreakdown: 'Breakdown Sekolah',
+  schoolBreakdown: 'Rincian Sekolah',
 } as const
 
 export function vendorWorkbookFilename(batchId: string): string {
@@ -16,10 +16,10 @@ export function createVendorWorkbook(batch: VendorBatch, recap: VendorRecap): Wo
     ['Batch ID', batch.id],
     ['Tanggal dibuat', batch.createdAt],
     ['Jumlah sekolah', recap.schoolCount],
-    ['Jumlah product lines', recap.distinctProductCount],
-    ['Total quantity', recap.totalQuantity],
+    ['Jumlah jenis produk', recap.distinctProductCount],
+    ['Total jumlah buku', recap.totalQuantity],
     [],
-    ['Kode Produk', 'Nama Buku', 'Total Qty', 'Jumlah Sekolah'],
+    ['Kode Produk', 'Nama Buku', 'Total Jumlah', 'Jumlah Sekolah'],
     ...recap.aggregatedItems.map((item) => [
       item.productCode,
       item.title,
@@ -28,7 +28,7 @@ export function createVendorWorkbook(batch: VendorBatch, recap: VendorRecap): Wo
     ]),
   ]
   const breakdownRows: Array<Array<string | number>> = [
-    ['Sekolah', 'Order ID', 'Nomor SIPLah', 'Kode Produk', 'Nama Buku', 'Qty'],
+    ['Sekolah', 'ID Order', 'Nomor SIPLah', 'Kode Produk', 'Nama Buku', 'Jumlah'],
     ...recap.schoolBreakdown.flatMap((school) =>
       school.items.map((item) => [
         school.schoolName,

@@ -154,8 +154,8 @@ describe('Vendor Batch domain', () => {
 
   it('rejects generic arrival transitions so allocations remain the only arrival source', () => {
     const processing = processingBatch()
-    expect(() => transitionVendorBatch(processing, 'VB-2026-010', 'ARRIVED', now)).toThrow(/recordGoodsArrival/)
-    expect(() => transitionVendorBatch(processing, 'VB-2026-010', 'PARTIALLY_ARRIVED', now)).toThrow(/recordGoodsArrival/)
+    expect(() => transitionVendorBatch(processing, 'VB-2026-010', 'ARRIVED', now)).toThrow(/pencatatan alokasi/)
+    expect(() => transitionVendorBatch(processing, 'VB-2026-010', 'PARTIALLY_ARRIVED', now)).toThrow(/pencatatan alokasi/)
 
     const partial = recordGoodsArrival(
       processing,
@@ -163,7 +163,7 @@ describe('Vendor Batch domain', () => {
       [{ orderId: 'ORD-2026-040', arrivalType: 'PARTIAL' }],
       now,
     )
-    expect(() => transitionVendorBatch(partial, 'VB-2026-010', 'ARRIVED', now)).toThrow(/recordGoodsArrival/)
+    expect(() => transitionVendorBatch(partial, 'VB-2026-010', 'ARRIVED', now)).toThrow(/pencatatan alokasi/)
   })
 
   it('keeps future reminders passive and exposes one reached reminder candidate per order', () => {

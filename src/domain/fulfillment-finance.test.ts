@@ -187,7 +187,7 @@ describe('goods check and cached fulfillment boundary', () => {
     expect(conflicted.fulfillment.syncMessage).toMatch(/247.*300|300.*247/)
     expect(conflicted.timeline).toHaveLength(cached.timeline.length + 1)
     expect(conflicted.timeline[0]?.title).toMatch(/konflik/i)
-    expect(conflicted.timeline[0]?.detail).toMatch(/cache terakhir dipertahankan/i)
+    expect(conflicted.timeline[0]?.detail).toMatch(/data terakhir dipertahankan/i)
   })
 
   it('does not regress a completion-stage order when refreshing its independent tracker cache', () => {
@@ -237,14 +237,14 @@ describe('goods check and cached fulfillment boundary', () => {
     const accepted = recordSchoolAcceptance(refreshed, now)
     const failed = refreshFulfillmentSummary(
       canonicalOrder('ORD-2026-065'),
-      { status: 'STALE', message: 'Belum ada snapshot baru.' },
+      { status: 'STALE', message: 'Belum ada pembaruan baru.' },
       now,
     )
 
     expect(checked.timeline[0]?.title).toBe('Pemeriksaan barang selesai')
-    expect(refreshed.timeline[0]?.title).toBe('Ringkasan fulfillment diperbarui')
+    expect(refreshed.timeline[0]?.title).toBe('Ringkasan pemenuhan diperbarui')
     expect(accepted.timeline[0]?.title).toBe('Barang diterima sekolah')
-    expect(failed.timeline[0]?.title).toBe('Ringkasan tracker masih stale')
+    expect(failed.timeline[0]?.title).toBe('Data tracker tertinggal')
   })
 })
 
@@ -278,7 +278,7 @@ describe('school payment gross, deduction, and net semantics', () => {
       netReceivedAmount: 23_900_000,
       method: 'Settlement',
       evidenceName: 'proof.pdf',
-    }, now)).toThrow(/Net received/)
+    }, now)).toThrow(/Net diterima/)
 
     expect(() => recordSchoolPayment(order, {
       schoolPaidAmount: 24_350_000,
@@ -369,7 +369,7 @@ describe('school payment gross, deduction, and net semantics', () => {
   it('records payment and benefit eligibility as meaningful separate timeline events', () => {
     const paid = payCanonical68()
     expect(paid.timeline.slice(0, 2).map((event) => event.title)).toEqual([
-      'Benefit menjadi eligible',
+      'Benefit wajib dibayar',
       'Pembayaran sekolah LUNAS',
     ])
     expect(paid.timeline[1]?.detail).toContain('potongan Rp350.000')

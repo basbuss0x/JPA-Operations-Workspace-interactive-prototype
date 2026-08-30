@@ -75,7 +75,7 @@ export function HetReviewPage() {
     const price = Number(manualPrice)
     if (!manualPrice.trim()) nextErrors.price = 'Harga review per item wajib diisi.'
     else if (!Number.isFinite(price) || price <= 0) nextErrors.price = 'Harga review per item harus berupa angka lebih dari nol.'
-    if (!manualReason.trim()) nextErrors.reason = 'Alasan manual override wajib diisi.'
+    if (!manualReason.trim()) nextErrors.reason = 'Alasan penyesuaian manual wajib diisi.'
     if (nextErrors.price || nextErrors.reason) {
       setManualFieldErrors(nextErrors)
       const fieldPrefix = resolvedItems.some((candidate) => candidate.id === item.id) ? 'resolved-manual' : 'manual'
@@ -89,7 +89,7 @@ export function HetReviewPage() {
       })
       setEditor(null)
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'Manual override gagal.')
+      setFormError(error instanceof Error ? error.message : 'Penyesuaian manual gagal.')
     }
   }
 
@@ -127,11 +127,11 @@ export function HetReviewPage() {
     )
     return (
       <div className="page-stack focused-route">
-        <Link className="back-link" to={`/orders/${order.id}`}>← Order Workspace</Link>
+        <Link className="back-link" to={`/orders/${order.id}`}>← Ruang kerja order</Link>
         <section className="workflow-success">
           <div className="workflow-success__mark">✓</div>
           <div>
-            <p className="eyebrow">HET Review selesai</p>
+            <p className="eyebrow">Review HET selesai</p>
             <h1>Review HET dikonfirmasi</h1>
             <p>{order.schoolName} · {order.id}</p>
           </div>
@@ -144,7 +144,7 @@ export function HetReviewPage() {
             <div><span>Selisih</span><strong>{order.hetReviewedAmount === null ? '—' : formatCurrency(Math.abs(order.hetReviewedAmount - order.arkasBudgetAmount))}</strong></div>
           </div>
           <div className="callout callout--success">
-            Konfirmasi HET menetapkan <strong>reviewed HET</strong>. Nominal final SIPLah / invoice masih menunggu konfirmasi transaksi; nilai ARKAS sumber tidak berubah.
+            Konfirmasi HET menetapkan <strong>hasil review HET</strong>. Nominal final SIPLah / Invoice masih menunggu konfirmasi transaksi; nilai sumber ARKAS tidak berubah.
           </div>
           <div className="workflow-next-step">
             <div><span>Next Action</span><strong>{primary?.title ?? 'Lanjutkan SIPLah'}</strong></div>
@@ -153,12 +153,12 @@ export function HetReviewPage() {
         </section>
         {order.siplah.orderPlaced ? (
           <section className="callout callout--info">
-            <strong>Review HET tidak dapat dibuka kembali langsung.</strong> Order SIPLah sudah dibuat; koreksi setelah titik ini membutuhkan alur koreksi atau pembatalan berikutnya yang belum menjadi bagian prototype.
+            <strong>Review HET tidak dapat dibuka kembali langsung.</strong> Order SIPLah sudah dibuat; koreksi setelah titik ini membutuhkan alur koreksi atau pembatalan berikutnya yang belum menjadi bagian prototipe.
           </section>
         ) : (
           <section className="workspace-panel het-reopen-panel">
             <div className="panel-heading">
-              <div><h2>Buka kembali review HET</h2><p>Dapat dilakukan sebelum order SIPLah dibuat. Alasan operator wajib dicatat dan approval sebelumnya akan dihapus.</p></div>
+              <div><h2>Buka kembali review HET</h2><p>Dapat dilakukan sebelum order SIPLah dibuat. Alasan operator wajib dicatat dan persetujuan sebelumnya akan dihapus.</p></div>
               <StatusChip tone="warning">Koreksi sebelum SIPLah</StatusChip>
             </div>
             <form className="inline-action-form" onSubmit={reopenReview} noValidate>
@@ -194,10 +194,10 @@ export function HetReviewPage() {
 
   return (
     <div className="page-stack focused-route het-review-page">
-      <Link className="back-link" to={`/orders/${order.id}`}>← Order Workspace</Link>
+      <Link className="back-link" to={`/orders/${order.id}`}>← Ruang kerja order</Link>
       <header className="focused-route__header">
         <div>
-          <p className="eyebrow">TASK 07 · Exception-first HET</p>
+          <p className="eyebrow">Review pengecualian HET</p>
           <h1>Review Selisih HET</h1>
           <p>{order.schoolName} · {order.id} · {order.arkas.reference}</p>
         </div>
@@ -213,10 +213,10 @@ export function HetReviewPage() {
       </section>
 
       {unresolvedItems.length > 0 ? (
-        <section className="exception-worklist" aria-label="HET exceptions">
+        <section className="exception-worklist" aria-label="Pengecualian HET">
           <div className="section-heading">
-            <div><h2>Keputusan operator</h2><p>Item normal disembunyikan; fokus hanya pada exception.</p></div>
-            <ExceptionIndicator label={`${unresolvedItems.length} blocker sebelum SIPLah`} level="danger" />
+            <div><h2>Keputusan operator</h2><p>Item normal disembunyikan; fokus hanya pada pengecualian.</p></div>
+            <ExceptionIndicator label={`${unresolvedItems.length} penghambat sebelum SIPLah`} level="danger" />
           </div>
           {unresolvedItems.map((item) => {
             const difference = item.hetUnitPrice === null ? null : item.hetUnitPrice - item.arkasUnitPrice
@@ -227,37 +227,37 @@ export function HetReviewPage() {
                   <div>
                     <ExceptionIndicator label={exceptionLabel(item.matchStatus)} level={item.matchStatus === 'PRICE_MISMATCH' ? 'danger' : 'warning'} />
                     <h2>{item.arkasTitle}</h2>
-                    <p>{item.matchReason} {item.matchConfidence !== null ? `Confidence ${Math.round(item.matchConfidence * 100)}%.` : ''}</p>
+                    <p>{item.matchReason} {item.matchConfidence !== null ? `Keyakinan pencocokan ${Math.round(item.matchConfidence * 100)}%.` : ''}</p>
                   </div>
-                  <StatusChip tone="neutral">Qty {item.quantity}</StatusChip>
+                  <StatusChip tone="neutral">Jumlah {item.quantity}</StatusChip>
                 </div>
 
                 <div className="het-comparison">
                   <div>
-                    <span>Sumber ARKAS · immutable</span>
+                    <span>Sumber ARKAS · tetap</span>
                     <strong>{item.arkasTitle}</strong>
                     <p>{item.quantity} × {formatCurrency(item.arkasUnitPrice)}</p>
                   </div>
                   <div className={!item.masterProductTitle ? 'is-empty' : ''}>
-                    <span>Suggested Product Master</span>
-                    <strong>{item.masterProductTitle ?? 'Belum ada suggested match'}</strong>
+                    <span>Saran Product Master</span>
+                    <strong>{item.masterProductTitle ?? 'Belum ada saran kecocokan'}</strong>
                     <p>{item.productCode ?? '—'} · {item.hetUnitPrice === null ? 'Harga belum ada' : formatCurrency(item.hetUnitPrice)}</p>
                   </div>
                   <div>
                     <span>Selisih per item</span>
                     <strong className={difference && difference !== 0 ? 'text-danger' : ''}>{difference === null ? '—' : formatCurrency(Math.abs(difference))}</strong>
-                    <p>{difference === null ? 'Pilih produk atau override' : difference > 0 ? 'HET lebih tinggi' : difference < 0 ? 'HET lebih rendah' : 'Harga sama'}</p>
+                    <p>{difference === null ? 'Pilih produk atau lakukan penyesuaian' : difference > 0 ? 'HET lebih tinggi' : difference < 0 ? 'HET lebih rendah' : 'Harga sama'}</p>
                   </div>
                 </div>
 
                 <div className="het-exception-card__actions">
                   {item.productCode && item.hetUnitPrice !== null ? (
                     <Button size="sm" onClick={() => acceptSuggestion(order.id, item.id)}>
-                      {item.matchStatus === 'PRICE_MISMATCH' ? `Gunakan HET ${formatCurrency(item.hetUnitPrice)}` : 'Terima suggested match'}
+                      {item.matchStatus === 'PRICE_MISMATCH' ? `Gunakan HET ${formatCurrency(item.hetUnitPrice)}` : 'Terima saran'}
                     </Button>
                   ) : null}
                   <Button variant="secondary" size="sm" onClick={() => openEditor(item, 'PRODUCT')}>Pilih produk lain</Button>
-                  <Button variant="ghost" size="sm" onClick={() => openEditor(item, 'MANUAL')}>Manual override</Button>
+                  <Button variant="ghost" size="sm" onClick={() => openEditor(item, 'MANUAL')}>Penyesuaian manual</Button>
                 </div>
 
                 {editorOpen && editor.mode === 'PRODUCT' ? (
@@ -319,8 +319,8 @@ export function HetReviewPage() {
                         />
                       </FormField>
                     </div>
-                    {formError ? <div className="callout callout--danger" role="alert"><strong>Manual override belum tersimpan.</strong> {formError}</div> : null}
-                    <div><Button size="sm" type="submit">Simpan manual override</Button></div>
+                    {formError ? <div className="callout callout--danger" role="alert"><strong>Penyesuaian manual belum tersimpan.</strong> {formError}</div> : null}
+                    <div><Button size="sm" type="submit">Simpan penyesuaian manual</Button></div>
                   </form>
                 ) : null}
               </article>
@@ -330,28 +330,28 @@ export function HetReviewPage() {
       ) : (
         <section className="workspace-panel review-ready">
           <div className="workflow-success__mark">✓</div>
-          <div><h2>Semua exception sudah diputuskan</h2><p>Status belum disetujui. Periksa total lalu konfirmasi secara eksplisit.</p></div>
+          <div><h2>Semua pengecualian sudah diputuskan</h2><p>Status belum disetujui. Periksa total lalu konfirmasi secara eksplisit.</p></div>
         </section>
       )}
 
       <details className="matched-items-disclosure">
-        <summary>{resolvedItems.length} item berhasil dicocokkan · buka bila perlu inspeksi atau koreksi</summary>
+        <summary>{resolvedItems.length} item berhasil dicocokkan · buka bila perlu diperiksa atau dikoreksi</summary>
         <div>
           {resolvedItems.map((item) => {
             const editorOpen = editor?.itemId === item.id
             return (
               <article key={item.id}>
                 <div className="matched-item-summary">
-                  <span><strong>{item.arkasTitle}</strong><small>ARKAS immutable · {item.quantity} × {formatCurrency(item.arkasUnitPrice)}</small></span>
+                  <span><strong>{item.arkasTitle}</strong><small>Sumber ARKAS tetap · {item.quantity} × {formatCurrency(item.arkasUnitPrice)}</small></span>
                   <span><StatusChip tone="success">{item.resolutionType ? hetResolutionTypeLabels[item.resolutionType] : 'Cocok'}</StatusChip><small>{item.masterProductTitle} · {item.hetUnitPrice === null ? 'Harga belum ada' : formatCurrency(item.hetUnitPrice)}</small></span>
-                  <Button variant="ghost" size="sm" onClick={() => openEditor(item, 'ACTIONS')}>Edit</Button>
+                  <Button variant="ghost" size="sm" onClick={() => openEditor(item, 'ACTIONS')}>Ubah</Button>
                 </div>
 
                 {editorOpen && editor.mode === 'ACTIONS' ? (
                   <div className="matched-item-edit-actions">
                     <div><strong>Koreksi hasil review</strong><small>Nilai ARKAS di atas tetap tidak berubah.</small></div>
                     <Button variant="secondary" size="sm" onClick={() => openEditor(item, 'PRODUCT')}>Pilih produk lain</Button>
-                    <Button variant="ghost" size="sm" onClick={() => openEditor(item, 'MANUAL')}>Manual override</Button>
+                    <Button variant="ghost" size="sm" onClick={() => openEditor(item, 'MANUAL')}>Penyesuaian manual</Button>
                   </div>
                 ) : null}
 
@@ -414,8 +414,8 @@ export function HetReviewPage() {
                         />
                       </FormField>
                     </div>
-                    {formError ? <div className="callout callout--danger" role="alert"><strong>Manual override belum tersimpan.</strong> {formError}</div> : null}
-                    <div><Button size="sm" type="submit">Simpan manual override</Button></div>
+                    {formError ? <div className="callout callout--danger" role="alert"><strong>Penyesuaian manual belum tersimpan.</strong> {formError}</div> : null}
+                    <div><Button size="sm" type="submit">Simpan penyesuaian manual</Button></div>
                   </form>
                 ) : null}
               </article>
@@ -427,7 +427,7 @@ export function HetReviewPage() {
       <section className="het-review-footer">
         <div className="totals-strip">
           <div><span>Anggaran ARKAS</span><strong>{formatCurrency(order.arkasBudgetAmount)}</strong></div>
-          <div><span>Preview HET review</span><strong>{reviewedPreview === null ? 'Selesaikan exception' : formatCurrency(reviewedPreview)}</strong></div>
+          <div><span>Pratinjau hasil review HET</span><strong>{reviewedPreview === null ? 'Selesaikan pengecualian' : formatCurrency(reviewedPreview)}</strong></div>
           <div className={reviewedPreview !== null && reviewedPreview !== order.arkasBudgetAmount ? 'is-warning' : ''}>
             <span>Selisih</span><strong>{reviewedPreview === null ? '—' : formatCurrency(Math.abs(reviewedPreview - order.arkasBudgetAmount))}</strong>
           </div>
@@ -435,15 +435,15 @@ export function HetReviewPage() {
         <div className="het-review-footer__confirm">
           <div>
             <strong>Konfirmasi tidak otomatis.</strong>
-            <span>Approval membekukan hasil reviewed HET. Nominal final SIPLah / invoice baru ditetapkan setelah transaksi SIPLah dikonfirmasi.</span>
+            <span>Persetujuan membekukan hasil review HET. Nominal final SIPLah / Invoice baru ditetapkan setelah transaksi SIPLah dikonfirmasi.</span>
           </div>
-          <Button onClick={confirmReview} disabled={getHetExceptionCount(order) > 0}>Confirm HET Review</Button>
+          <Button onClick={confirmReview} disabled={getHetExceptionCount(order) > 0}>Konfirmasi Review HET</Button>
         </div>
         {formError && !editor ? <div className="callout callout--danger" role="alert"><strong>Tindakan HET gagal.</strong> {formError}</div> : null}
       </section>
 
       <section className="workflow-context-strip">
-        <span>Event terakhir</span>
+        <span>Kejadian terakhir</span>
         <strong>{order.timeline[0]?.title}</strong>
         <small>{order.timeline[0] ? formatDateTime(order.timeline[0].occurredAt) : '—'}</small>
       </section>

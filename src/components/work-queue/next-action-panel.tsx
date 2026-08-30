@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import type { NextAction } from '../../domain/types'
+import { actionSourceLabels } from '../../domain/presentation'
 import { formatDate } from '../../utils/format'
 import { Button } from '../ui/button'
 import { StatusChip } from '../ui/status-chip'
@@ -26,9 +27,9 @@ export function NextActionPanel({
       <section className={`next-action next-action--clear ${compact ? 'next-action--compact' : ''}`}>
         <div className="next-action__icon" aria-hidden="true">✓</div>
         <div className="next-action__main">
-          <p className="eyebrow">Primary Next Action</p>
+          <p className="eyebrow">Next Action utama</p>
           <h2>{emptyState?.title ?? 'Tidak ada tindakan aktif'}</h2>
-          <p>{emptyState?.description ?? 'Periksa aksi yang disnooze atau pin tindakan manual bila konteks lapangan membutuhkannya.'}</p>
+          <p>{emptyState?.description ?? 'Periksa aksi yang ditunda atau pasang tindakan manual bila konteks lapangan membutuhkannya.'}</p>
         </div>
         {onCustomize ? (
           <div className="next-action__actions">
@@ -45,7 +46,7 @@ export function NextActionPanel({
         <div className="next-action__label">
           <span className="next-action__pulse" aria-hidden="true" />
           Next Action
-          {action.source === 'MANUAL' ? <StatusChip tone="info">Override manual</StatusChip> : null}
+          {action.source === 'MANUAL' ? <StatusChip tone="info">{actionSourceLabels[action.source]}</StatusChip> : null}
         </div>
         <h2>{action.title}</h2>
         {schoolName ? <strong className="next-action__school">{schoolName}</strong> : null}
@@ -55,7 +56,7 @@ export function NextActionPanel({
       <div className="next-action__actions">
         <Link className="button button--primary button--md" to={action.href}>{action.ctaLabel}</Link>
         {onSnooze && action.snoozable ? (
-          <Button variant="ghost" size="sm" onClick={onSnooze}>Snooze 3 hari</Button>
+          <Button variant="ghost" size="sm" onClick={onSnooze}>Tunda 3 hari</Button>
         ) : null}
         {onCustomize ? (
           <Button variant="ghost" size="sm" onClick={onCustomize}>Atur manual</Button>

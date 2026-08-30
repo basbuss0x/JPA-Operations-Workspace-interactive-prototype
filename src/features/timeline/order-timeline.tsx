@@ -37,11 +37,11 @@ export function OrderTimeline({ order }: { order: Order }) {
     <section className="workspace-panel focused-workflow">
       <div className="panel-heading">
         <div><h2>Timeline order</h2><p>Riwayat otomatis dan catatan operator untuk memulihkan konteks.</p></div>
-        <StatusChip>{events.length} event</StatusChip>
+        <StatusChip>{events.length} kejadian</StatusChip>
       </div>
       {order.stage !== 'CLOSED' ? (
         <form className="timeline-note-form" onSubmit={submit} noValidate>
-          <FormField label="Add Note" htmlFor={`timeline-note-${order.id}`} hint="Catatan manual ditandai berbeda dari kejadian otomatis." error={noteError ?? undefined}>
+          <FormField label="Tambah catatan" htmlFor={`timeline-note-${order.id}`} hint="Catatan manual ditandai berbeda dari kejadian otomatis." error={noteError ?? undefined}>
             <textarea
               id={`timeline-note-${order.id}`}
               value={note}

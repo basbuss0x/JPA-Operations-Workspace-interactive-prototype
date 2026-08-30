@@ -61,8 +61,8 @@ function item(
     matchConfidence: status === 'MATCHED' ? 0.99 : 0.7,
     matchReason:
       status === 'MATCHED'
-        ? 'Cocok otomatis dengan fixture Product Master.'
-        : 'Fixture canonical memerlukan keputusan operator.',
+        ? 'Cocok otomatis dengan data Product Master.'
+        : 'Data acuan memerlukan keputusan operator.',
     resolutionType: status === 'MATCHED' ? 'AUTO_MATCHED' : null,
   }
 }
@@ -311,7 +311,7 @@ function canonicalOrders(): Order[] {
       finalInvoiceAmount: null,
       siplah: { ...incompleteSiplah, accessAvailable: true },
       timeline: [
-        event('071-1', 'HET disetujui', 'Seluruh item cocok dengan master HET.'),
+        event('071-1', 'HET disetujui', 'Seluruh item cocok dengan master produk HET.'),
         event('071-2', 'Akses SIPLah tersedia', 'Operator dapat melanjutkan pembelian.', DATE.today),
       ],
     }),
@@ -360,7 +360,7 @@ function canonicalOrders(): Order[] {
       vendorBatchId: 'VB-2026-009',
       timeline: [
         event('049-1', 'Masuk vendor batch', 'Order tergabung dalam VB-2026-009.'),
-        event('049-2', 'Vendor memproses', 'Vendor mengonfirmasi recap dan menyiapkan barang.', DATE.today),
+        event('049-2', 'Vendor memproses', 'Vendor mengonfirmasi rekap dan menyiapkan barang.', DATE.today),
       ],
     }),
     makeOrder({
@@ -457,7 +457,7 @@ function canonicalOrders(): Order[] {
       supplierPaid: 5_000_000,
       timeline: [
         event('068-1', 'Barang diterima sekolah', 'Kelengkapan 100% dan diterima sekolah.'),
-        event('068-2', 'Menunggu pembayaran sekolah', 'Fulfillment selesai; pembayaran tetap checkpoint independen.', DATE.today),
+        event('068-2', 'Menunggu pembayaran sekolah', 'Pemenuhan selesai; pembayaran tetap menjadi syarat independen.', DATE.today),
       ],
     }),
     makeOrder({
@@ -495,7 +495,7 @@ function canonicalOrders(): Order[] {
       benefitDate: '2025-12-12T03:00:00.000Z',
       supplierStatus: 'PARTIAL',
       supplierPaid: 8_000_000,
-      timeline: [event('closed-1', 'Order ditutup', 'Semua checkpoint JPA selesai; supplier masih dibayar bertahap.')],
+      timeline: [event('closed-1', 'Order ditutup', 'Semua syarat JPA selesai; supplier masih dibayar bertahap.')],
     }),
   ]
 }

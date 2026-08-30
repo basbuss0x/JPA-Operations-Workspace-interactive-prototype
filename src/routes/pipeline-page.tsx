@@ -8,7 +8,7 @@ import {
   isSiplahAdminComplete,
   isSiplahReadyForVendor,
 } from '../domain/selectors'
-import { benefitStatusLabels, lifecycleLabels } from '../domain/presentation'
+import { actionSourceLabels, benefitStatusLabels, lifecycleLabels, syncStatusLabels } from '../domain/presentation'
 import type { Order, VendorBatch } from '../domain/types'
 import { usePrototypeStore } from '../store/use-prototype-store'
 import { Button } from '../components/ui/button'
@@ -30,7 +30,7 @@ function getPipelineSignals(order: Order): PipelineSignal[] {
     signals.push({ label: `${exceptions} selisih HET`, tone: 'danger' })
   }
   if (order.fulfillment.syncStatus !== 'OK') {
-    signals.push({ label: `Tracker ${order.fulfillment.syncStatus}`, tone: 'warning' })
+    signals.push({ label: syncStatusLabels[order.fulfillment.syncStatus], tone: 'warning' })
   }
   if (order.goods.arrivedAt && !order.goods.preDeliveryCheckCompleted) {
     signals.push({ label: 'Barang tiba · belum dicek', tone: 'warning' })
@@ -45,7 +45,7 @@ function getPipelineSignals(order: Order): PipelineSignal[] {
     signals.push({ label: 'Pembayaran belum dikonfirmasi', tone: 'warning' })
   }
   if (order.het.status === 'APPROVED' && !isSiplahReadyForVendor(order)) {
-    signals.push({ label: 'SIPLah procurement belum selesai', tone: 'warning' })
+    signals.push({ label: 'Pembelian SIPLah belum selesai', tone: 'warning' })
   }
   if (isSiplahReadyForVendor(order) && !isSiplahAdminComplete(order)) {
     signals.push({ label: 'Administrasi SIPLah menyusul', tone: 'info' })
@@ -53,7 +53,7 @@ function getPipelineSignals(order: Order): PipelineSignal[] {
 
   if (signals.length === 0) {
     signals.push({
-      label: order.stage === 'CLOSED' ? 'Order selesai' : 'Tidak ada exception terbuka',
+      label: order.stage === 'CLOSED' ? 'Order selesai' : 'Tidak ada pengecualian terbuka',
       tone: order.stage === 'CLOSED' ? 'success' : 'neutral',
     })
   }
@@ -63,7 +63,7 @@ function getPipelineSignals(order: Order): PipelineSignal[] {
 
 function getClearState(order: Order): string {
   if (order.stage === 'CLOSED') return 'Order selesai'
-  if (order.stage === 'VENDOR') return 'Menunggu update vendor'
+  if (order.stage === 'VENDOR') return 'Menunggu pembaruan vendor'
   if (order.stage === 'COMPLETION' && order.schoolPayment.status === 'UNPAID') {
     return 'Menunggu pembayaran sekolah'
   }
@@ -101,7 +101,7 @@ function PipelineCard({
       <div className="pipeline-card__action">
         <span>Next Action</span>
         <strong>{action?.title ?? getClearState(order)}</strong>
-        {action?.source === 'MANUAL' ? <StatusChip tone="info">Manual override</StatusChip> : null}
+        {action?.source === 'MANUAL' ? <StatusChip tone="info">{actionSourceLabels[action.source]}</StatusChip> : null}
         <span className="pipeline-card__arrow" aria-hidden="true">→</span>
       </div>
     </Link>
@@ -123,9 +123,9 @@ export function PipelinePage() {
   return (
     <div className="page-stack pipeline-page">
       <PageHeader
-        eyebrow="View sekunder · lintas order"
+        eyebrow="Tampilan sekunder · lintas order"
         title="Pipeline"
-        description="Lihat pesanan sekolah tersebar di tahap mana. Posisi di sini diturunkan dari tahap proses order; pekerjaan utama tetap dimulai dari Kerjakan Sekarang."
+        description="Lihat pesanan sekolah tersebar di tahap mana. Posisi di sini dihitung otomatis dari tahap proses order; pekerjaan utama tetap dimulai dari Kerjakan Sekarang."
         actions={
           <Button
             variant="secondary"
@@ -140,7 +140,7 @@ export function PipelinePage() {
 
       <div className="pipeline-context-strip" role="status">
         <strong>{activeOrderCount} order aktif</strong>
-        <span>Urutkan dari Next Action yang paling perlu dikerjakan; klik kartu untuk membuka workspace order.</span>
+        <span>Urutkan berdasarkan Next Action yang paling perlu dikerjakan; klik kartu untuk membuka ruang kerja order.</span>
         {completedOrderCount > 0 ? (
           <span>{showCompleted ? `${completedOrderCount} order selesai ditampilkan` : `${completedOrderCount} order selesai disembunyikan`}</span>
         ) : null}

@@ -8,7 +8,7 @@ export function VendorRecapView({ recap }: { recap: VendorRecap }) {
         <div className="panel-heading">
           <div>
             <h2 id="aggregate-title">Ringkasan Vendor</h2>
-            <p>Quantity digabung berdasarkan kode produk stabil dari OrderItem terpilih.</p>
+            <p>Jumlah digabung berdasarkan kode produk stabil dari item order yang dipilih.</p>
           </div>
           <StatusChip tone="info">{recap.totalQuantity} buku</StatusChip>
         </div>
@@ -16,7 +16,7 @@ export function VendorRecapView({ recap }: { recap: VendorRecap }) {
         <div className="vendor-aggregate-table-wrap">
           <table className="vendor-aggregate-table">
             <thead>
-              <tr><th>Kode</th><th>Nama Buku</th><th>Total Qty</th><th>Sekolah</th></tr>
+              <tr><th>Kode</th><th>Nama buku</th><th>Total jumlah</th><th>Sekolah</th></tr>
             </thead>
             <tbody>
               {recap.aggregatedItems.map((item) => (
@@ -45,7 +45,7 @@ export function VendorRecapView({ recap }: { recap: VendorRecap }) {
             <details className="vendor-product-card" key={item.productCode} data-product-code={item.productCode}>
               <summary>
                 <span><strong>{item.productCode}</strong><small>{item.title}</small></span>
-                <span className="vendor-product-card__total"><strong>{item.totalQuantity}</strong><small>{item.schools.length} sekolah · buka alokasi</small></span>
+                <span className="vendor-product-card__total"><strong>{item.totalQuantity}</strong><small>{item.schools.length} sekolah · lihat alokasi</small></span>
               </summary>
               <div>
                 <span className="detail-row__label">Alokasi {item.schools.length} sekolah</span>
@@ -63,7 +63,7 @@ export function VendorRecapView({ recap }: { recap: VendorRecap }) {
       <section className="workspace-panel vendor-recap-section" aria-labelledby="school-breakdown-title">
         <div className="panel-heading">
           <div>
-            <h2 id="school-breakdown-title">Breakdown Sekolah</h2>
+            <h2 id="school-breakdown-title">Rincian sekolah</h2>
             <p>Alokasi per sekolah berasal dari data item yang sama dengan ringkasan vendor.</p>
           </div>
           <StatusChip>{recap.schoolCount} sekolah</StatusChip>

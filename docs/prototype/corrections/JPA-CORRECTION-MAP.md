@@ -1,6 +1,6 @@
 # JPA Post-Audit Correction Map
 
-Status: JPA-COR-07–12 implemented; Review Gate B pending
+Status: JPA-COR-07–13 implemented; Review Gate B pending
 Baseline: `00a747e` on `prototype/pass-5-final-integration`  
 Audit source: `outputs/jpa-ui-ux-audit/JPA-Operations-Workspace-UI-UX-Audit.md`  
 Design plan: `outputs/jpa-ui-ux-audit/JPA-Graph-First-Correction-Plan.md`
@@ -261,7 +261,7 @@ Can one presentation vocabulary replace raw enums and mixed technical copy witho
 
 ### Answer
 
-Pending implementation and interactive browser proof.
+Implemented with centralized exhaustive presentation maps shared by workspace, Pipeline, Vendor Batch, Finance, HET, SIPLah, Timeline, reminders, and demo-data copy. Canonical enums and transition semantics remain unchanged; operator-facing states now use the approved Indonesian vocabulary, including `Draf`, `Sedang diproses vendor`, `Tiba sebagian`, `Belum wajib dibayar`, `Belum tiba`, `Rekap dibuat, belum dikirim`, `Otomatis`, and `Catatan operator`. Financial copy distinguishes gross, deductions, and net, while tracker stale/conflict copy uses `Data tracker tertinggal` and `Konflik data tracker`; the audited `master HET` phrase is presented as `master produk HET`. Unit, typecheck, lint, build, diff, full E2E, and desktop/390 px rendered-route audits pass. The broad rendered scan's only intentional match is the canonical demo product identifier `BK-MATH-EXCEPTION`, not an operator label. COR-14 onward and the release-browser regression remain pending.
 
 ## #14: Can HET alternatives be discovered before free-text search?
 

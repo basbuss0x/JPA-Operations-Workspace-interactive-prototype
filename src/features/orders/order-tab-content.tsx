@@ -7,6 +7,7 @@ import {
 } from '../../domain/selectors'
 import {
   benefitStatusLabels,
+  hetItemStatusLabels,
   hetReviewStatusLabels,
   vendorBatchStatusLabels,
 } from '../../domain/presentation'
@@ -59,9 +60,9 @@ function OverviewTab({ order, batch }: { order: Order; batch: VendorBatch | null
         <div className="panel-heading">
           <div>
             <h2>Kondisi operasional</h2>
-            <p>State penting tetap independen; tahap proses tidak menutupi masalah lain.</p>
+            <p>Status penting tetap independen; tahap proses tidak menutupi masalah lain.</p>
           </div>
-          {exceptions > 0 ? <ExceptionIndicator label={`${exceptions} blocker HET`} level="danger" /> : null}
+          {exceptions > 0 ? <ExceptionIndicator label={`${exceptions} penghambat HET`} level="danger" /> : null}
         </div>
         <OrderStateSummary order={order} batch={batch} />
       </section>
@@ -70,7 +71,7 @@ function OverviewTab({ order, batch }: { order: Order; batch: VendorBatch | null
         <div className="panel-heading">
           <div>
             <h2>Yang masih kurang</h2>
-            <p>Hanya checkpoint yang perlu perhatian.</p>
+            <p>Hanya syarat yang perlu perhatian.</p>
           </div>
         </div>
         <div className="detail-list">
@@ -78,7 +79,7 @@ function OverviewTab({ order, batch }: { order: Order; batch: VendorBatch | null
             <DetailRow label="HET" detail="Memblokir proses SIPLah" value={<StatusChip tone="danger">{exceptions} selisih</StatusChip>} />
           ) : null}
           {!isSiplahReadyForVendor(order) && order.het.status === 'APPROVED' ? (
-            <DetailRow label="SIPLah procurement" detail="Checkpoint Vendor belum lengkap" value={<StatusChip tone="warning">Dalam proses</StatusChip>} />
+            <DetailRow label="Pembelian SIPLah" detail="Syarat Vendor belum lengkap" value={<StatusChip tone="warning">Dalam proses</StatusChip>} />
           ) : null}
           {isSiplahReadyForVendor(order) && !isSiplahAdminComplete(order) ? (
             <DetailRow label="Administrasi SIPLah" detail="Invoice, Kwitansi, atau BAST masih menyusul" value={<StatusChip tone="warning">Belum lengkap</StatusChip>} />
@@ -96,7 +97,7 @@ function OverviewTab({ order, batch }: { order: Order; batch: VendorBatch | null
           {order.schoolPayment.status === 'UNPAID' && order.finalInvoiceAmount !== null ? (
             <DetailRow
               label="Pembayaran sekolah"
-              detail={order.schoolPayment.followUpDueAt ? `Reminder ${formatDate(order.schoolPayment.followUpDueAt)}` : 'Belum ada reminder follow-up aktif'}
+              detail={order.schoolPayment.followUpDueAt ? `Pengingat ${formatDate(order.schoolPayment.followUpDueAt)}` : 'Belum ada pengingat tindak lanjut aktif'}
               value={<StatusChip tone="warning">Belum dibayar</StatusChip>}
             />
           ) : null}
@@ -109,7 +110,7 @@ function OverviewTab({ order, batch }: { order: Order; batch: VendorBatch | null
           order.fulfillment.remainingQty === 0 &&
           order.schoolPayment.status === 'LUNAS' &&
           order.benefit.status !== 'ELIGIBLE' ? (
-            <div className="inline-clear-state">✓ Tidak ada exception operasional yang terbuka.</div>
+            <div className="inline-clear-state">✓ Tidak ada pengecualian operasional yang terbuka.</div>
           ) : null}
         </div>
       </section>
@@ -172,11 +173,11 @@ function ArkasTab({ order }: { order: Order }) {
             <article className="exception-row" key={item.id}>
               <div>
                 <ExceptionIndicator
-                  label={item.matchStatus === 'PRICE_MISMATCH' ? 'Harga berbeda' : 'Match ambigu'}
+                  label={hetItemStatusLabels[item.matchStatus]}
                   level={item.matchStatus === 'PRICE_MISMATCH' ? 'danger' : 'warning'}
                 />
                 <h3>{item.arkasTitle}</h3>
-                <p>Usulan master: {item.masterProductTitle ?? 'Belum ada match'}</p>
+                <p>Usulan master: {item.masterProductTitle ?? 'Belum ada kecocokan'}</p>
               </div>
               <div className="exception-row__prices">
                 <span>ARKAS {formatCurrency(item.arkasUnitPrice)}</span>
@@ -185,8 +186,8 @@ function ArkasTab({ order }: { order: Order }) {
             </article>
           ))}
           <div className="deferred-action-note">
-            <strong>Exception membutuhkan keputusan per item.</strong>
-            <span>Tidak ada tombol generik yang akan melompati review dan approval eksplisit.</span>
+            <strong>Pengecualian membutuhkan keputusan per item.</strong>
+            <span>Tidak ada tombol generik yang akan melompati review dan persetujuan eksplisit.</span>
             <Link className="button button--primary button--sm" to={`/orders/${order.id}/arkas`}>Buka Review HET</Link>
           </div>
         </div>
@@ -211,15 +212,15 @@ function SiplahTab({ order }: { order: Order }) {
     <section className="workspace-panel focused-workflow">
       <div className="panel-heading">
         <div>
-          <h2>Checklist SIPLah</h2>
-          <p>Setiap checkpoint merepresentasikan pekerjaan nyata; tidak ada penyimpanan password sekolah.</p>
+          <h2>Daftar periksa SIPLah</h2>
+          <p>Setiap syarat merepresentasikan pekerjaan nyata; tidak ada penyimpanan kata sandi sekolah.</p>
         </div>
         <StatusChip tone={isSiplahReadyForVendor(order) ? 'success' : 'warning'}>
           {isSiplahReadyForVendor(order) ? 'Siap masuk Vendor Batch' : 'Belum siap Vendor'}
         </StatusChip>
       </div>
       <ol className="checklist">
-        <ChecklistItem done={process.accessAvailable} label="Akses sekolah tersedia" detail="Kredensial asli tidak disimpan di prototype." />
+        <ChecklistItem done={process.accessAvailable} label="Akses sekolah tersedia" detail="Kredensial asli tidak disimpan di prototipe." />
         <ChecklistItem done={process.orderPlaced} label="Pesanan dibuat di JPA/TokoLadang" />
         <ChecklistItem done={Boolean(process.orderNumber)} label="Nomor order SIPLah tercatat" detail={process.orderNumber ?? 'Belum ada nomor order'} />
         {process.documents.map((document) => {
@@ -229,8 +230,8 @@ function SiplahTab({ order }: { order: Order }) {
             document.verified &&
             (!document.sendToSchoolRequired || document.sentToSchool)
           const requirement = document.requiredForVendorReady
-            ? 'wajib untuk Vendor'
-            : document.requiredForAdminCompletion ? 'administrasi lanjutan' : 'opsional arsip'
+            ? 'wajib untuk kesiapan Vendor'
+            : document.requiredForAdminCompletion ? 'administrasi lanjutan' : 'opsional untuk arsip'
           const status = [
             requirement,
             document.available ? 'tersedia' : 'belum tersedia',
@@ -255,13 +256,13 @@ function SiplahTab({ order }: { order: Order }) {
       </ol>
       {!isSiplahReadyForVendor(order) ? (
         <div className="deferred-action-note">
-          <strong>Lanjutkan checkpoint procurement secara eksplisit.</strong>
-          <span>Akses, nominal transaksi, order number, Surat Pesanan, attachment, verifikasi, dan pengiriman tetap terpisah.</span>
-          <Link className="button button--primary button--sm" to={`/orders/${order.id}/siplah`}>Buka Workflow SIPLah</Link>
+          <strong>Lanjutkan syarat pembelian secara eksplisit.</strong>
+          <span>Akses, nominal transaksi, nomor order, Surat Pesanan, lampiran, verifikasi, dan pengiriman tetap terpisah.</span>
+          <Link className="button button--primary button--sm" to={`/orders/${order.id}/siplah`}>Buka alur SIPLah</Link>
         </div>
       ) : !isSiplahAdminComplete(order) ? (
         <div className="deferred-action-note">
-          <strong>Vendor-ready; administrasi SIPLah menyusul.</strong>
+          <strong>Siap untuk Vendor; administrasi SIPLah menyusul.</strong>
           <span>Invoice, Kwitansi, dan BAST tidak memblokir masuk Vendor Batch.</span>
         </div>
       ) : null}
@@ -278,29 +279,29 @@ function VendorTab({ order, batch }: { order: Order; batch: VendorBatch | null }
           <p>Keanggotaan order dan tahap proses batch ditampilkan terpisah dari SIPLah.</p>
         </div>
         <StatusChip tone={batch ? 'info' : isVendorBatchEligible(order) ? 'warning' : 'neutral'}>
-          {batch ? vendorBatchStatusLabels[batch.status] : isVendorBatchEligible(order) ? 'Siap masuk batch' : 'Belum siap masuk batch'}
+          {batch ? vendorBatchStatusLabels[batch.status] : isVendorBatchEligible(order) ? 'Siap masuk Vendor Batch' : 'Belum siap masuk Vendor Batch'}
         </StatusChip>
       </div>
       {batch ? (
         <div className="detail-list">
           <DetailRow label="Vendor Batch" value={<Link className="text-link" to={`/vendor-batches/${batch.id}`}>{batch.id} →</Link>} />
           <DetailRow label="Status batch" detail="Status ini tidak berasal dari tahap proses order" value={<StatusChip tone="info">{vendorBatchStatusLabels[batch.status]}</StatusChip>} />
-          <DetailRow label="Anggota batch" detail="Aggregate lengkap tersedia di Batch Workspace" value={`${batch.orderIds.length} order`} />
+          <DetailRow label="Anggota batch" detail="Ringkasan lengkap tersedia di ruang kerja batch" value={`${batch.orderIds.length} order`} />
           <DetailRow label="Dibuat" value={formatDate(batch.createdAt)} />
-          <DetailRow label="Recap dibuat" value={formatDate(batch.recapGeneratedAt)} />
+          <DetailRow label="Rekap dibuat" value={formatDate(batch.recapGeneratedAt)} />
           <DetailRow label="Dikirim ke vendor" value={formatDate(batch.sentAt)} />
           <DetailRow label="Barang tiba" value={formatDate(batch.arrivedAt)} />
-          <DetailRow label="Reminder follow-up" value={formatDate(batch.followUpDueAt)} />
+          <DetailRow label="Pengingat tindak lanjut" value={formatDate(batch.followUpDueAt)} />
           <div className="deferred-action-note">
-            <strong>{batch.status === 'RECAP_GENERATED' ? 'Rekap sudah dibuat, belum dikirim.' : 'Kelola pekerjaan pada level batch.'}</strong>
-            <span>Tindakan vendor lintas sekolah tidak diduplikasi di workspace order ini.</span>
+            <strong>{batch.status === 'RECAP_GENERATED' ? 'Rekap sudah dibuat, belum dikirim.' : 'Kelola pekerjaan pada tingkat batch.'}</strong>
+            <span>Tindakan vendor lintas sekolah tidak diduplikasi di ruang kerja order ini.</span>
             <Link className="button button--secondary button--sm" to={`/vendor-batches/${batch.id}`}>Buka {batch.id}</Link>
           </div>
         </div>
       ) : isVendorBatchEligible(order) ? (
         <div className="callout callout--warning">
           <strong>Order siap direkap.</strong> Item sudah terstruktur dan dapat diagregasi bersama sekolah lain tanpa input ulang.
-          <Link className="button button--primary button--sm" to="/vendor-batches/new">Buka Vendor Batch Builder</Link>
+          <Link className="button button--primary button--sm" to="/vendor-batches/new">Buka penyusunan Vendor Batch</Link>
         </div>
       ) : (
         <div className="inline-clear-state inline-clear-state--neutral">Order belum memenuhi semua syarat Vendor Batch.</div>

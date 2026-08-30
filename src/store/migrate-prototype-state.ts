@@ -116,8 +116,8 @@ function migrateItem(item: LegacyOrderItem): OrderItem {
     ...item,
     matchConfidence: item.matchStatus === 'MATCHED' ? 0.99 : null,
     matchReason: resolved
-      ? 'Dimigrasikan dari state prototype sebelumnya.'
-      : 'Exception canonical dari state prototype sebelumnya.',
+      ? 'Dimigrasikan dari data prototipe sebelumnya.'
+      : 'Pengecualian dari data sebelumnya memerlukan keputusan operator.',
     resolutionType:
       item.matchStatus === 'MATCHED'
         ? 'AUTO_MATCHED'

@@ -37,10 +37,10 @@ function createProcessingBatch(): PrototypeData {
 describe('important transitions', () => {
   it('requires every HET exception to be resolved before explicit approval', () => {
     const order = canonicalOrder('ORD-2026-030')
-    expect(() => confirmHetReview(order, now)).toThrow(/Semua HET exception/)
+    expect(() => confirmHetReview(order, now)).toThrow(/Semua pengecualian HET/)
 
     const first = resolveHetException(order, 'math-exception', 'Harga HET disepakati.', now)
-    expect(() => confirmHetReview(first, now)).toThrow(/Semua HET exception/)
+    expect(() => confirmHetReview(first, now)).toThrow(/Semua pengecualian HET/)
 
     const second = resolveHetException(first, 'religion-exception', 'Pilih master PAI Kelas V.', now)
     const approved = confirmHetReview(second, now)
@@ -87,7 +87,7 @@ describe('important transitions', () => {
       now,
     )
     expect(rescheduled.timeline).toHaveLength(scheduled.timeline.length + 1)
-    expect(rescheduled.timeline[0]?.title).toBe('Reminder pembayaran diperbarui')
+    expect(rescheduled.timeline[0]?.title).toBe('Pengingat pembayaran diperbarui')
 
     const paid = recordSchoolPayment(
       rescheduled,
@@ -142,7 +142,7 @@ describe('important transitions', () => {
       'SCHEDULE_PAYMENT_FOLLOW_UP',
       calendarDateToReminderTimestamp('2026-02-25'),
       now,
-    )).toThrow(/tidak dapat di-snooze/)
+    )).toThrow(/tidak dapat ditunda/)
     expect(order.nextActionControl.controlsByActionKey).toEqual({})
   })
 

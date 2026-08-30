@@ -7,7 +7,7 @@ export function ClosureChecklist({ order }: { order: Order }) {
   const nonBlocking = checklist.filter((item) => !item.blocking)
 
   return (
-    <div className="closure-checklist" aria-label="Checklist penutupan order">
+    <div className="closure-checklist" aria-label="Daftar periksa penutupan order">
       <div className="closure-checklist__group">
         <h3>Wajib sebelum ditutup</h3>
         <ul>

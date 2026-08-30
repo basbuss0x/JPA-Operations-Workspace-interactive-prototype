@@ -3,7 +3,12 @@ import { Link } from 'react-router-dom'
 import { getMockTrackerRefresh, type MockTrackerOutcome } from '../../data/tracker-fixtures'
 import { isReadyToDeliver } from '../../domain/selectors'
 import type { Order, VendorBatch } from '../../domain/types'
-import { arrivalTypeLabels, vendorBatchStatusLabels } from '../../domain/presentation'
+import {
+  arrivalTypeLabels,
+  syncStatusLabels,
+  trackerRefreshOutcomeLabels,
+  vendorBatchStatusLabels,
+} from '../../domain/presentation'
 import { usePrototypeStore } from '../../store/use-prototype-store'
 import { formatDate, formatDateTime } from '../../utils/format'
 import { Button } from '../../components/ui/button'
@@ -66,8 +71,8 @@ export function DistributionWorkspace({ order, batch }: { order: Order; batch: V
     run(
       () => refreshTrackerSummary(order.id, getMockTrackerRefresh(order, refreshOutcome)),
       refreshOutcome === 'SUCCESS'
-        ? 'Cache fulfillment diperbarui dari tracker demo.'
-        : 'Percobaan refresh dicatat; cache quantity terakhir tetap dipertahankan.',
+        ? 'Ringkasan pemenuhan diperbarui dari tracker demo.'
+        : 'Percobaan pembaruan dicatat; jumlah terakhir tetap dipertahankan.',
     )
   }
 
@@ -93,8 +98,8 @@ export function DistributionWorkspace({ order, batch }: { order: Order; batch: V
             detail={order.goods.checkNote ?? undefined}
             value={<StatusChip tone={order.goods.preDeliveryCheckCompleted ? 'success' : order.goods.arrivedAt ? 'warning' : 'neutral'}>{order.goods.preDeliveryCheckCompleted ? 'Selesai' : 'Belum selesai'}</StatusChip>}
           />
-          <StateRow label="Checked at" value={formatDate(order.goods.checkedAt)} />
-          <StateRow label="Kesiapan distribusi" detail="Dihitung otomatis dari kedatangan + pemeriksaan, bukan delivery sekolah" value={<StatusChip tone={isReadyToDeliver(order) ? 'success' : 'neutral'}>{isReadyToDeliver(order) ? 'Siap didistribusikan' : 'Belum siap'}</StatusChip>} />
+          <StateRow label="Waktu pemeriksaan" value={formatDate(order.goods.checkedAt)} />
+          <StateRow label="Kesiapan distribusi" detail="Dihitung otomatis dari kedatangan + pemeriksaan, bukan pengantaran sekolah" value={<StatusChip tone={isReadyToDeliver(order) ? 'success' : 'neutral'}>{isReadyToDeliver(order) ? 'Siap didistribusikan' : 'Belum siap'}</StatusChip>} />
         </div>
         {order.stage !== 'CLOSED' && !order.goods.preDeliveryCheckCompleted && order.goods.arrivedAt ? (
           <Button onClick={() => setCheckOpen(true)}>Cek barang selesai</Button>
@@ -107,48 +112,48 @@ export function DistributionWorkspace({ order, batch }: { order: Order; batch: V
       <section className="workspace-panel tracker-summary-panel">
         <div className="panel-heading">
           <div>
-            <h2>Cache Kelengkapan Buku Tracker</h2>
-            <p>Ringkasan whole-order saja. Rekonsiliasi judul dan delivery detail tetap di tracker eksternal.</p>
+            <h2>Ringkasan Kelengkapan Buku Tracker</h2>
+            <p>Ringkasan seluruh order saja. Rekonsiliasi judul dan detail pengantaran tetap di tracker eksternal.</p>
           </div>
           <StatusChip tone={fulfillment.syncStatus === 'OK' ? 'success' : fulfillment.syncStatus === 'ERROR' ? 'danger' : 'warning'}>
-            Sync {fulfillment.syncStatus}
+            {syncStatusLabels[fulfillment.syncStatus]}
           </StatusChip>
         </div>
 
         <div className="tracker-identity">
-          <div><span>Tracker Order ID</span><strong>{fulfillment.trackerOrderId}</strong></div>
-          <a className="button button--secondary button--sm" href={fulfillment.trackerUrl} target="_blank" rel="noreferrer">Open Kelengkapan Tracker ↗</a>
+          <div><span>ID order tracker</span><strong>{fulfillment.trackerOrderId}</strong></div>
+          <a className="button button--secondary button--sm" href={fulfillment.trackerUrl} target="_blank" rel="noreferrer">Buka Kelengkapan Tracker ↗</a>
         </div>
 
         <div className="progress-block">
-          <div className="progress-block__head"><span>Whole school order</span><strong>{fulfillment.deliveredQty} / {fulfillment.orderedQty} buku</strong></div>
+          <div className="progress-block__head"><span>Seluruh order sekolah</span><strong>{fulfillment.deliveredQty} / {fulfillment.orderedQty} buku</strong></div>
           <div className="progress-track"><span style={{ width: `${fulfillment.progressPercent}%` }} /></div>
         </div>
         <div className="fulfillment-quantity-grid">
-          <div><span>Ordered</span><strong>{fulfillment.orderedQty}</strong></div>
-          <div><span>Delivered kumulatif</span><strong>{fulfillment.deliveredQty}</strong></div>
-          <div className={fulfillment.remainingQty > 0 ? 'is-warning' : ''}><span>Remaining whole order</span><strong>{fulfillment.remainingQty}</strong></div>
+          <div><span>Dipesan</span><strong>{fulfillment.orderedQty}</strong></div>
+          <div><span>Diterima kumulatif</span><strong>{fulfillment.deliveredQty}</strong></div>
+          <div className={fulfillment.remainingQty > 0 ? 'is-warning' : ''}><span>Sisa seluruh order</span><strong>{fulfillment.remainingQty}</strong></div>
           <div><span>Masalah tracker</span><strong>{fulfillment.problemCount}</strong></div>
         </div>
-        <p className="tracker-semantics-note">Delivery tanpa discrepancy hanya memastikan delivery itu sesuai—bukan berarti seluruh order selesai. Remaining selalu ordered − delivered.</p>
+        <p className="tracker-semantics-note">Pengantaran tanpa selisih hanya memastikan pengantaran itu sesuai—bukan berarti seluruh order selesai. Sisa selalu jumlah dipesan − jumlah diterima.</p>
         <div className="detail-list">
-          <StateRow label="Snapshot terakhir" value={formatDate(fulfillment.lastUpdated)} />
-          <StateRow label="Percobaan sync terakhir" value={fulfillment.lastSyncAttemptAt ? formatDateTime(fulfillment.lastSyncAttemptAt) : '—'} />
-          {fulfillment.syncMessage ? <StateRow label="Pesan sync" value={fulfillment.syncMessage} /> : null}
+          <StateRow label="Data tracker terakhir" value={formatDate(fulfillment.lastUpdated)} />
+          <StateRow label="Percobaan sinkronisasi terakhir" value={fulfillment.lastSyncAttemptAt ? formatDateTime(fulfillment.lastSyncAttemptAt) : '—'} />
+          {fulfillment.syncMessage ? <StateRow label="Pesan sinkronisasi" value={fulfillment.syncMessage} /> : null}
         </div>
         {order.stage !== 'CLOSED' ? (
           <div className="tracker-refresh-controls">
-            <FormField label="Hasil simulasi refresh" htmlFor={`tracker-outcome-${order.id}`} hint="Prototype deterministic; tidak melakukan request jaringan.">
+            <FormField label="Hasil simulasi pembaruan" htmlFor={`tracker-outcome-${order.id}`} hint="Prototipe deterministik; tidak melakukan permintaan jaringan.">
               <select id={`tracker-outcome-${order.id}`} value={refreshOutcome} onChange={(event) => setRefreshOutcome(event.target.value as MockTrackerOutcome)}>
-                <option value="SUCCESS">Successful sync</option>
-                <option value="STALE">Stale snapshot</option>
-                <option value="ERROR">Connection error</option>
+                <option value="SUCCESS">{trackerRefreshOutcomeLabels.SUCCESS}</option>
+                <option value="STALE">{trackerRefreshOutcomeLabels.STALE}</option>
+                <option value="ERROR">{trackerRefreshOutcomeLabels.ERROR}</option>
               </select>
             </FormField>
-            <Button variant="secondary" onClick={refresh}>Refresh summary</Button>
+            <Button variant="secondary" onClick={refresh}>Perbarui ringkasan</Button>
           </div>
         ) : (
-          <p className="readonly-workflow-note">Order sudah CLOSED. Cache tracker ditampilkan sebagai konteks read-only.</p>
+          <p className="readonly-workflow-note">Order sudah selesai. Ringkasan tracker ditampilkan sebagai konteks hanya baca.</p>
         )}
       </section>
 

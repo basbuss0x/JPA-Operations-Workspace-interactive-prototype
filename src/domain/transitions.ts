@@ -6,7 +6,14 @@ import {
 } from './order-state'
 import { buildVendorRecap, calculateBenefitAmount, isVendorBatchEligible } from './selectors'
 import { createSiplahDocuments, getSiplahDocument } from './siplah'
-import { hetReviewStatusLabels, lifecycleLabels, vendorBatchStatusLabels } from './presentation-labels'
+import {
+  arkasSourceTypeLabels,
+  benefitPaymentMethodLabels,
+  hetReviewStatusLabels,
+  lifecycleLabels,
+  syncStatusLabels,
+  vendorBatchStatusLabels,
+} from './presentation-labels'
 import {
   reminderTimestampToCalendarDate,
   validateReminderTimestamp,
@@ -171,7 +178,7 @@ export function createOrderFromExtraction(
         id: `${input.id}-matched-${createdAt}`,
         occurredAt: createdAt,
         type: 'SYSTEM',
-        title: 'HET matching selesai',
+        title: 'Pencocokan HET selesai',
         detail: `${input.matchedItems.length - exceptionCount} item cocok otomatis; ${exceptionCount} memerlukan review.`,
       },
       {
@@ -186,7 +193,7 @@ export function createOrderFromExtraction(
         occurredAt: createdAt,
         type: 'SYSTEM',
         title: 'ARKAS diterima',
-        detail: `Sumber ${input.sourceType} dicatat tanpa mengubah nilai aslinya.`,
+        detail: `Sumber ${arkasSourceTypeLabels[input.sourceType]} dicatat tanpa mengubah nilai aslinya.`,
       },
     ],
   }
@@ -208,7 +215,7 @@ function getHetItem(order: Order, itemId: string) {
 function getResolvableHetItem(order: Order, itemId: string) {
   const target = getHetItem(order, itemId)
   if (!['PRICE_MISMATCH', 'AMBIGUOUS_MATCH', 'NO_MATCH'].includes(target.matchStatus)) {
-    throw new Error('Item bukan HET exception yang dapat diselesaikan.')
+    throw new Error('Item bukan pengecualian HET yang dapat diselesaikan.')
   }
   return target
 }
@@ -216,7 +223,7 @@ function getResolvableHetItem(order: Order, itemId: string) {
 export function acceptSuggestedHetMatch(order: Order, itemId: string, now?: Date): Order {
   const target = getResolvableHetItem(order, itemId)
   if (!target.productCode || !target.masterProductTitle || target.hetUnitPrice === null) {
-    throw new Error('Item tidak memiliki suggested match yang dapat diterima.')
+    throw new Error('Item tidak memiliki saran kecocokan yang dapat diterima.')
   }
   return withEvent(
     {
@@ -227,13 +234,13 @@ export function acceptSuggestedHetMatch(order: Order, itemId: string, now?: Date
               ...item,
               matchStatus: 'MATCHED' as const,
               resolutionType: 'ACCEPTED_SUGGESTION' as const,
-              resolutionNote: 'Suggested Product Master diterima operator.',
+              resolutionNote: 'Saran Product Master diterima operator.',
             }
           : item,
       ),
     },
-    'HET exception diselesaikan',
-    `${target.arkasTitle}: suggested match diterima.`,
+    'Pengecualian HET diselesaikan',
+    `${target.arkasTitle}: saran kecocokan diterima.`,
     now,
   )
 }
@@ -281,7 +288,7 @@ export function manualOverrideHetItem(
 ): Order {
   const target = getHetItem(order, itemId)
   const isCorrection = target.matchStatus === 'MATCHED' || target.matchStatus === 'MANUAL_OVERRIDE'
-  if (!input.reason.trim()) throw new Error('Manual override membutuhkan alasan.')
+  if (!input.reason.trim()) throw new Error('Penyesuaian manual membutuhkan alasan.')
   if (!Number.isFinite(input.reviewedUnitPrice) || input.reviewedUnitPrice <= 0) {
     throw new Error('Harga review manual harus lebih dari nol.')
   }
@@ -304,7 +311,7 @@ export function manualOverrideHetItem(
           : item,
       ),
     },
-    isCorrection ? 'Harga HET dikoreksi' : 'HET manual override',
+    isCorrection ? 'Harga HET dikoreksi' : 'Penyesuaian manual HET',
     isCorrection
       ? `${target.arkasTitle}: ${target.hetUnitPrice === null ? 'harga belum ada' : `Rp${target.hetUnitPrice.toLocaleString('id-ID')}`} menjadi Rp${input.reviewedUnitPrice.toLocaleString('id-ID')}. Alasan: ${input.reason.trim()}`
       : `${target.arkasTitle}: ${input.reason.trim()}`,
@@ -317,7 +324,7 @@ export function calculateReviewedHetAmount(items: Order['items']): number {
     ['PRICE_MISMATCH', 'AMBIGUOUS_MATCH', 'NO_MATCH'].includes(item.matchStatus),
   )
   if (unresolved || items.some((item) => item.hetUnitPrice === null)) {
-    throw new Error('Reviewed HET amount belum dapat dihitung karena masih ada exception.')
+    throw new Error('Jumlah hasil review HET belum dapat dihitung karena masih ada pengecualian.')
   }
   return items.reduce(
     (total, item) => total + item.quantity * (item.hetUnitPrice ?? 0),
@@ -342,7 +349,7 @@ export function resolveHetException(
 
 export function confirmHetReview(order: Order, now?: Date): Order {
   if (getHetExceptionCount(order) > 0) {
-    throw new Error('Semua HET exception harus diselesaikan sebelum approval.')
+    throw new Error('Semua pengecualian HET harus diselesaikan sebelum persetujuan.')
   }
   if (order.het.status === 'APPROVED') throw new Error('HET review sudah disetujui.')
   const reviewedAmount = calculateReviewedHetAmount(order.items)
@@ -357,7 +364,7 @@ export function confirmHetReview(order: Order, now?: Date): Order {
   return withEvent(
     next,
     'HET disetujui',
-    `Review HET dikonfirmasi sebesar Rp${reviewedAmount.toLocaleString('id-ID')}; nilai transaksi final akan dicatat saat order SIPLah dikonfirmasi. ARKAS sumber tetap Rp${order.arkasBudgetAmount.toLocaleString('id-ID')}.`,
+    `Review HET dikonfirmasi sebesar Rp${reviewedAmount.toLocaleString('id-ID')}; nilai transaksi final akan dicatat saat order SIPLah dikonfirmasi. Sumber ARKAS tetap Rp${order.arkasBudgetAmount.toLocaleString('id-ID')}.`,
     now,
   )
 }
@@ -372,7 +379,7 @@ export function setSiplahAccessAvailable(
     { ...order, siplah: { ...order.siplah, accessAvailable: available } },
     'Akses SIPLah diperbarui',
     available
-      ? 'Akses sekolah tersedia. Username/password tidak disimpan.'
+      ? 'Akses sekolah tersedia. Nama pengguna dan kata sandi tidak disimpan.'
       : 'Akses sekolah ditandai belum tersedia.',
     now,
   )
@@ -428,7 +435,7 @@ export function recordSiplahOrder(
       siplah: { ...order.siplah, orderNumber },
     },
     'Transaksi SIPLah dikonfirmasi',
-    `Nomor order ${orderNumber} dicatat dengan nominal final Rp${finalInvoiceAmount.toLocaleString('id-ID')}; reviewed HET Rp${order.hetReviewedAmount.toLocaleString('id-ID')}; selisih ${differenceFromHet >= 0 ? '+' : ''}Rp${differenceFromHet.toLocaleString('id-ID')}. ARKAS sumber Rp${order.arkasBudgetAmount.toLocaleString('id-ID')} tidak berubah.`,
+    `Nomor order ${orderNumber} dicatat dengan nominal final Rp${finalInvoiceAmount.toLocaleString('id-ID')}; hasil review HET Rp${order.hetReviewedAmount.toLocaleString('id-ID')}; selisih ${differenceFromHet >= 0 ? '+' : ''}Rp${differenceFromHet.toLocaleString('id-ID')}. Sumber ARKAS Rp${order.arkasBudgetAmount.toLocaleString('id-ID')} tidak berubah.`,
     now,
   )
 }
@@ -613,7 +620,7 @@ export function createVendorBatch(
     const existingBatch = activeBatchContainingOrder(data, id)
     if (existingBatch) throw new Error(`${id} sudah menjadi anggota aktif ${existingBatch.id}.`)
     if (!isVendorBatchEligible(order)) {
-      throw new Error(`${id} tidak lagi eligible untuk Vendor Batch.`)
+      throw new Error(`${id} tidak lagi siap untuk Vendor Batch.`)
     }
     return order
   })
@@ -636,14 +643,14 @@ export function createVendorBatch(
     orderIds: uniqueOrderIds,
     timeline: [],
   }
-  batch.timeline = [vendorBatchEvent(batch, 'Vendor Batch dibuat', `${orders.length} order ditambahkan sebagai draft.`, now)]
+  batch.timeline = [vendorBatchEvent(batch, 'Vendor Batch dibuat', `${orders.length} order ditambahkan sebagai draf.`, now)]
 
   const nextOrders = { ...data.orders }
   for (const order of orders) {
     nextOrders[order.id] = withEvent(
       { ...order, stage: 'VENDOR', vendorBatchId: batchId },
       'Masuk Vendor Batch',
-      `Order ditambahkan ke ${batchId} sebagai draft.`,
+      `Order ditambahkan ke ${batchId} sebagai draf.`,
       now,
     )
   }
@@ -670,19 +677,19 @@ const batchTransitionCopy: Record<
 > = {
   RECAP_GENERATED: {
     title: 'Rekap vendor dibuat',
-    detail: 'Workbook dibuat dari OrderItem; batch belum dikirim ke vendor.',
+    detail: 'Workbook dibuat dari item order; batch belum dikirim ke vendor.',
   },
   SENT_TO_VENDOR: {
     title: 'Rekap dikirim ke vendor',
-    detail: 'Operator menandai pengiriman recap secara eksplisit.',
+    detail: 'Operator menandai pengiriman rekap secara eksplisit.',
   },
   VENDOR_CONFIRMED: {
     title: 'Vendor mengonfirmasi pesanan',
-    detail: 'Vendor mengonfirmasi recap yang dikirim.',
+    detail: 'Vendor mengonfirmasi rekap yang dikirim.',
   },
   PROCESSING: {
     title: 'Vendor mulai memproses',
-    detail: 'Vendor sedang menyiapkan barang; follow-up hanya aktif jika reminder ditetapkan.',
+    detail: 'Vendor sedang menyiapkan barang; tindak lanjut hanya aktif jika pengingat ditetapkan.',
   },
 }
 
@@ -695,7 +702,7 @@ export function transitionVendorBatch(
   const batch = data.vendorBatches[batchId]
   if (!batch) throw new Error('Vendor Batch tidak ditemukan.')
   if (status === 'PARTIALLY_ARRIVED' || status === 'ARRIVED') {
-    throw new Error('Status kedatangan hanya dapat diturunkan oleh recordGoodsArrival dari alokasi order.')
+    throw new Error('Status kedatangan hanya dapat diturunkan oleh pencatatan alokasi order.')
   }
   if (!allowedBatchTransitions[batch.status].includes(status)) {
     throw new Error(`Transisi ${vendorBatchStatusLabels[batch.status]} → ${vendorBatchStatusLabels[status]} tidak diizinkan.`)
@@ -750,7 +757,7 @@ export function generateVendorRecap(data: PrototypeData, batchId: string, now?: 
     recapGeneratedAt: generatedAt,
     recapGenerationCount: batch.recapGenerationCount + 1,
     timeline: [
-      vendorBatchEvent(batch, 'Rekap vendor dibuat ulang', 'Workbook terbaru dibuat dari OrderItem yang sama.', now),
+      vendorBatchEvent(batch, 'Rekap vendor dibuat ulang', 'Workbook terbaru dibuat dari item order yang sama.', now),
       ...batch.timeline,
     ],
   }
@@ -766,24 +773,24 @@ export function setVendorFollowUpReminder(
   const batch = data.vendorBatches[batchId]
   if (!batch) throw new Error('Vendor Batch tidak ditemukan.')
   if (!['SENT_TO_VENDOR', 'VENDOR_CONFIRMED', 'PROCESSING', 'PARTIALLY_ARRIVED'].includes(batch.status)) {
-    throw new Error(`Reminder vendor tidak relevan untuk status ${vendorBatchStatusLabels[batch.status]}.`)
+    throw new Error(`Pengingat vendor tidak relevan untuk status ${vendorBatchStatusLabels[batch.status]}.`)
   }
   if (followUpDueAt !== null) {
     const validationError = validateReminderTimestamp(
       followUpDueAt,
       now ?? new Date(),
-      'Tanggal follow-up vendor',
+      'Tanggal tindak lanjut vendor',
     )
     if (validationError) throw new Error(validationError)
   }
   if (sameReminderDate(batch.followUpDueAt, followUpDueAt)) return data
 
   const title = followUpDueAt
-    ? batch.followUpDueAt ? 'Reminder follow-up vendor diperbarui' : 'Reminder follow-up vendor diatur'
-    : 'Reminder follow-up vendor dihapus'
+    ? batch.followUpDueAt ? 'Pengingat tindak lanjut vendor diperbarui' : 'Pengingat tindak lanjut vendor diatur'
+    : 'Pengingat tindak lanjut vendor dihapus'
   const detail = followUpDueAt
-    ? `Follow-up dijadwalkan pada ${reminderTimestampToCalendarDate(followUpDueAt)}.`
-    : 'Batch kembali pasif tanpa reminder vendor.'
+    ? `Tindak lanjut dijadwalkan pada ${reminderTimestampToCalendarDate(followUpDueAt)}.`
+    : 'Batch kembali pasif tanpa pengingat vendor.'
   const nextBatch: VendorBatch = {
     ...batch,
     followUpDueAt,
@@ -923,20 +930,20 @@ export function refreshFulfillmentSummary(
           syncMessage: result.message,
         },
       },
-      result.status === 'ERROR' ? 'Sinkronisasi tracker gagal' : 'Ringkasan tracker masih stale',
-      `${result.message} Nilai cache terakhir dipertahankan.`,
+      result.status === 'ERROR' ? 'Sinkronisasi tracker gagal' : syncStatusLabels.STALE,
+      `${result.message} Data terakhir dipertahankan.`,
       now,
     )
   }
   const { orderedQty } = order.fulfillment
   if (!Number.isInteger(result.deliveredQty) || result.deliveredQty < 0 || result.deliveredQty > orderedQty) {
-    throw new Error('Delivered quantity tracker harus berada antara 0 dan ordered quantity.')
+    throw new Error('Jumlah diterima tracker harus berada antara 0 dan jumlah dipesan.')
   }
   if (!Number.isInteger(result.problemCount) || result.problemCount < 0) {
-    throw new Error('Problem count tracker tidak valid.')
+    throw new Error('Jumlah masalah tracker tidak valid.')
   }
   if (result.deliveredQty < order.fulfillment.deliveredQty) {
-    const syncMessage = `Konflik snapshot tracker: delivered kumulatif masuk ${result.deliveredQty}, lebih rendah dari cache ${order.fulfillment.deliveredQty}. Cache terakhir dipertahankan.`
+    const syncMessage = `Konflik data tracker: jumlah diterima kumulatif masuk ${result.deliveredQty}, lebih rendah dari data terakhir ${order.fulfillment.deliveredQty}. Data terakhir dipertahankan.`
     return withEvent(
       {
         ...order,
@@ -947,7 +954,7 @@ export function refreshFulfillmentSummary(
           syncMessage,
         },
       },
-      'Konflik snapshot tracker',
+      'Konflik data tracker',
       syncMessage,
       now,
     )
@@ -970,10 +977,10 @@ export function refreshFulfillmentSummary(
         lastUpdated: attemptedAt,
         lastSyncAttemptAt: attemptedAt,
         syncStatus: 'OK',
-        syncMessage: 'Cache diperbarui dari snapshot tracker demo.',
+        syncMessage: 'Ringkasan diperbarui dari data tracker demo.',
       },
     },
-    'Ringkasan fulfillment diperbarui',
+    'Ringkasan pemenuhan diperbarui',
     `${result.deliveredQty} dari ${orderedQty} buku sudah diterima sekolah; tersisa ${remainingQty}.`,
     now,
   )
@@ -992,7 +999,7 @@ export function recordSchoolAcceptance(order: Order, now?: Date): Order {
     order.fulfillment.remainingQty !== 0 ||
     order.fulfillment.progressPercent !== 100
   ) {
-    throw new Error('Penerimaan sekolah hanya dapat dicatat setelah fulfillment seluruh order 100%.')
+    throw new Error('Penerimaan sekolah hanya dapat dicatat setelah pemenuhan seluruh order 100%.')
   }
   if (order.goods.acceptedBySchoolAt) throw new Error('Penerimaan sekolah sudah dicatat.')
   const acceptedAt = timestamp(now)
@@ -1003,7 +1010,7 @@ export function recordSchoolAcceptance(order: Order, now?: Date): Order {
       goods: { ...order.goods, acceptedBySchoolAt: acceptedAt },
     },
     'Barang diterima sekolah',
-    'Sekolah mengonfirmasi penerimaan seluruh order; checkpoint lain tetap independen.',
+    'Sekolah mengonfirmasi penerimaan seluruh order; syarat lain tetap independen.',
     now,
   )
 }
@@ -1015,24 +1022,24 @@ export function setPaymentFollowUpReminder(
 ): Order {
   if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
   if (order.schoolPayment.status === 'LUNAS') {
-    throw new Error('Reminder pembayaran tidak relevan setelah LUNAS.')
+    throw new Error('Pengingat pembayaran tidak relevan setelah LUNAS.')
   }
   if (followUpDueAt !== null) {
     const validationError = validateReminderTimestamp(
       followUpDueAt,
       now ?? new Date(),
-      'Tanggal follow-up pembayaran',
+      'Tanggal tindak lanjut pembayaran',
     )
     if (validationError) throw new Error(validationError)
   }
   if (sameReminderDate(order.schoolPayment.followUpDueAt, followUpDueAt)) return order
 
   const title = followUpDueAt
-    ? order.schoolPayment.followUpDueAt ? 'Reminder pembayaran diperbarui' : 'Reminder pembayaran diatur'
-    : 'Reminder pembayaran dihapus'
+    ? order.schoolPayment.followUpDueAt ? 'Pengingat pembayaran diperbarui' : 'Pengingat pembayaran diatur'
+    : 'Pengingat pembayaran dihapus'
   const detail = followUpDueAt
-    ? `Follow-up pembayaran dijadwalkan pada ${reminderTimestampToCalendarDate(followUpDueAt)}.`
-    : 'Tidak ada reminder pembayaran aktif.'
+    ? `Tindak lanjut pembayaran dijadwalkan pada ${reminderTimestampToCalendarDate(followUpDueAt)}.`
+    : 'Tidak ada pengingat pembayaran aktif.'
   return withEvent(
     { ...order, schoolPayment: { ...order.schoolPayment, followUpDueAt } },
     title,
@@ -1051,16 +1058,16 @@ export function recordSchoolPayment(
     throw new Error('Pembayaran sekolah sudah dikonfirmasi LUNAS.')
   }
   if (order.finalInvoiceAmount === null || input.schoolPaidAmount !== order.finalInvoiceAmount) {
-    throw new Error('Pembayaran gross harus sama dengan finalInvoiceAmount untuk konfirmasi LUNAS.')
+    throw new Error('Pembayaran gross harus sama dengan invoice final untuk konfirmasi LUNAS.')
   }
   if (!Number.isFinite(input.deductionAmount) || input.deductionAmount < 0) {
-    throw new Error('Deduction amount tidak valid.')
+    throw new Error('Potongan settlement tidak valid.')
   }
   const expectedNet = input.schoolPaidAmount - input.deductionAmount
-  if (expectedNet < 0) throw new Error('Deduction amount tidak boleh melebihi pembayaran gross.')
+  if (expectedNet < 0) throw new Error('Potongan settlement tidak boleh melebihi pembayaran gross.')
   const netReceivedAmount = input.netReceivedAmount ?? expectedNet
   if (netReceivedAmount !== expectedNet) {
-    throw new Error('Net received harus sama dengan schoolPaidAmount dikurangi deductionAmount.')
+    throw new Error('Net diterima harus sama dengan pembayaran gross dikurangi potongan settlement.')
   }
   if (!input.method.trim() || !input.evidenceName.trim()) {
     throw new Error('Metode dan bukti pembayaran wajib dicatat.')
@@ -1098,7 +1105,7 @@ export function recordSchoolPayment(
   )
   return withEvent(
     paid,
-    'Benefit menjadi eligible',
+    'Benefit wajib dibayar',
     `Kewajiban 10% dibekukan dari invoice gross menjadi Rp${benefitObligation.toLocaleString('id-ID')}.`,
     now,
   )
@@ -1143,7 +1150,7 @@ export function recordBenefitPayment(
   return withEvent(
     next,
     'Benefit dibayar',
-    `Benefit Rp${obligationAmount.toLocaleString('id-ID')} dibayar penuh kepada ${input.recipient.trim()} melalui ${input.method}.`,
+    `Benefit Rp${obligationAmount.toLocaleString('id-ID')} dibayar penuh kepada ${input.recipient.trim()} melalui ${benefitPaymentMethodLabels[input.method]}.`,
     now,
   )
 }
@@ -1169,7 +1176,7 @@ export function closeOrder(order: Order, now?: Date): Order {
   return withEvent(
     { ...order, stage: 'CLOSED' },
     'Order ditutup',
-    'Semua checkpoint blocking sisi JPA selesai; pembayaran supplier tidak memblokir penutupan.',
+    'Semua syarat wajib sisi JPA selesai; pembayaran supplier tidak memblokir penutupan.',
     now,
   )
 }
@@ -1215,7 +1222,7 @@ export function snoozeOrderAction(
 ): Order {
   if (order.stage === 'CLOSED') throw new Error('Order CLOSED tidak dapat diubah.')
   if (!isActionSnoozable(actionKind)) {
-    throw new Error('Kewajiban Atur tindak lanjut tidak dapat di-snooze.')
+    throw new Error('Kewajiban Atur tindak lanjut tidak dapat ditunda.')
   }
   const controlsByActionKey = { ...order.nextActionControl.controlsByActionKey }
   if (until === null) delete controlsByActionKey[actionKind]

@@ -100,7 +100,7 @@ function getCanonicalVendorProduct(order: Order, item: Order['items'][number]) {
     throw new Error(`${order.id} memiliki item "${item.arkasTitle}" yang belum dipetakan ke Product Master.`)
   }
   if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
-    throw new Error(`${order.id} memiliki quantity tidak valid untuk ${item.productCode}.`)
+    throw new Error(`${order.id} memiliki jumlah tidak valid untuk ${item.productCode}.`)
   }
   const masterProduct = PRODUCT_MASTER.find((product) => product.code === item.productCode)
   const title = masterProduct?.title ?? item.masterProductTitle
@@ -230,41 +230,41 @@ export function getVendorBatchOperationalState(
     .includes(batch.status)
   if (reminderDue && reminderRelevant) {
     return {
-      label: 'Follow-up vendor',
-      detail: 'Reminder eksplisit sudah tercapai.',
+      label: 'Tindak lanjut vendor',
+      detail: 'Pengingat eksplisit sudah tercapai.',
       priority: 5,
       actionable: true,
     }
   }
   switch (batch.status) {
     case 'DRAFT':
-      return { label: 'Generate recap', detail: 'Batch belum memiliki workbook recap.', priority: 10, actionable: true }
+      return { label: 'Buat rekap', detail: 'Batch belum memiliki workbook rekap.', priority: 10, actionable: true }
     case 'RECAP_GENERATED':
       return { label: 'Kirim ke vendor', detail: 'Rekap sudah dibuat, belum dikirim ke vendor.', priority: 20, actionable: true }
     case 'SENT_TO_VENDOR':
-      return { label: 'Menunggu konfirmasi vendor', detail: 'Follow-up hanya muncul jika reminder eksplisit tercapai.', priority: 60, actionable: false }
+      return { label: 'Menunggu konfirmasi vendor', detail: 'Tindak lanjut hanya muncul jika pengingat eksplisit tercapai.', priority: 60, actionable: false }
     case 'VENDOR_CONFIRMED':
-      return { label: 'Mulai processing', detail: 'Konfirmasi vendor sudah tercatat.', priority: 30, actionable: true }
+      return { label: 'Mulai proses', detail: 'Konfirmasi vendor sudah tercatat.', priority: 30, actionable: true }
     case 'PROCESSING':
       return !hasValidDate(batch.followUpDueAt)
         ? {
             label: 'Atur tindak lanjut vendor',
-            detail: 'Batch sedang diproses tanpa tanggal follow-up yang dikonfirmasi.',
+            detail: 'Batch sedang diproses tanpa tanggal tindak lanjut yang dikonfirmasi.',
             priority: 61,
             actionable: true,
           }
-        : { label: 'Menunggu vendor', detail: 'Pasif sampai reminder follow-up tercapai.', priority: 70, actionable: false }
+        : { label: 'Menunggu vendor', detail: 'Pasif sampai pengingat tindak lanjut tercapai.', priority: 70, actionable: false }
     case 'PARTIALLY_ARRIVED':
       return !hasValidDate(batch.followUpDueAt)
         ? {
             label: 'Atur tindak lanjut vendor',
-            detail: 'Batch baru tiba sebagian dan belum memiliki tanggal follow-up yang dikonfirmasi untuk order yang masih menunggu.',
+            detail: 'Batch baru tiba sebagian dan belum memiliki tanggal tindak lanjut yang dikonfirmasi untuk order yang masih menunggu.',
             priority: 51,
             actionable: true,
           }
         : { label: 'Catat kedatangan berikutnya', detail: 'Sebagian sekolah/order sudah menerima alokasi.', priority: 50, actionable: true }
     case 'ARRIVED':
-      return { label: 'Barang tiba', detail: 'Goods handling dilanjutkan pada alur distribusi.', priority: 100, actionable: false }
+      return { label: 'Barang tiba', detail: 'Penanganan barang dilanjutkan pada alur distribusi.', priority: 100, actionable: false }
   }
 }
 
@@ -324,7 +324,7 @@ export function deriveWorkQueue(
         title: `${vendorItems.length} pesanan siap masuk Vendor Batch`,
         reason: 'Data item sudah terstruktur dan dapat direkap tanpa input ulang.',
         href: '/vendor-batches/new',
-        ctaLabel: 'Buat batch',
+        ctaLabel: 'Buat Vendor Batch',
         schoolName: `${vendorItems.length} sekolah`,
         orderIds: vendorItems.flatMap((item) => item.orderIds),
         context: vendorItems.map((item) => item.schoolName).join(' · '),
@@ -352,9 +352,9 @@ export function deriveWorkQueue(
       ...first,
       id: `queue-schedule-vendor-${batchId}`,
       title: `Atur tindak lanjut vendor · ${batchId}`,
-      reason: `Vendor Batch ${batchId} memiliki ${pendingLabel}; tetapkan satu reminder untuk order yang masih menunggu.`,
+      reason: `Vendor Batch ${batchId} memiliki ${pendingLabel}; tetapkan satu pengingat untuk order yang masih menunggu.`,
       href: `/vendor-batches/${batchId}`,
-      ctaLabel: 'Atur reminder',
+      ctaLabel: 'Atur pengingat',
       schoolName: batchId,
       orderIds,
       context: `${batchId} · ${schoolNames.join(' · ')}`,
@@ -374,8 +374,8 @@ export function deriveWorkQueue(
     rest.push({
       ...first,
       id: `queue-follow-up-${batchId}`,
-      title: `Follow-up vendor · ${batchId}`,
-      reason: `Reminder batch sudah tercapai; ${pendingOrderIds.length} order anggota belum tiba penuh dan menunggu tindak lanjut yang sama.`,
+      title: `Tindak lanjut vendor · ${batchId}`,
+      reason: `Pengingat batch sudah tercapai; ${pendingOrderIds.length} order anggota belum tiba penuh dan menunggu tindak lanjut yang sama.`,
       href: `/vendor-batches/${batchId}`,
       ctaLabel: 'Buka batch',
       schoolName: batchId,

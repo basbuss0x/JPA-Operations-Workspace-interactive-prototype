@@ -46,7 +46,7 @@ export function VendorBatchDetailPage() {
     try {
       return { recap: buildVendorRecap(memberOrders), error: null }
     } catch (error) {
-      return { recap: null, error: error instanceof Error ? error.message : 'Recap tidak valid.' }
+      return { recap: null, error: error instanceof Error ? error.message : 'Rekap tidak valid.' }
     }
   }, [batch, memberOrders])
 
@@ -73,7 +73,7 @@ export function VendorBatchDetailPage() {
 
   const generateAndDownload = async () => {
     if (!preview.recap) {
-      setActionError(preview.error ?? 'Recap tidak dapat dibuat.')
+      setActionError(preview.error ?? 'Rekap tidak dapat dibuat.')
       return
     }
     setActionError(null)
@@ -118,15 +118,15 @@ export function VendorBatchDetailPage() {
     <div className="page-stack vendor-batch-detail-page">
       <Link className="back-link" to="/vendor-batches">← Semua Vendor Batch</Link>
       <PageHeader
-        eyebrow="Vendor Batch detail"
+        eyebrow="Detail Vendor Batch"
         title={batch.id}
-        description={`${memberOrders.length} order anggota · dibuat ${formatDate(batch.createdAt)}. Quantity recap selalu dihitung otomatis dari OrderItem.`}
+        description={`${memberOrders.length} order anggota · dibuat ${formatDate(batch.createdAt)}. Jumlah rekap selalu dihitung otomatis dari item order.`}
         actions={<StatusChip tone={batch.status === 'ARRIVED' ? 'success' : batch.status === 'DRAFT' ? 'warning' : 'info'} dot>{vendorBatchStatusLabels[batch.status]}</StatusChip>}
       />
 
       {batch.status === 'RECAP_GENERATED' ? (
         <div className="callout callout--info recap-not-sent" role="status">
-          <strong>Rekap sudah dibuat, belum dikirim ke vendor.</strong> Download tidak pernah dianggap sebagai pengiriman. Gunakan tindakan “Mark sent to vendor” setelah benar-benar dikirim.
+          <strong>Rekap sudah dibuat, belum dikirim ke vendor.</strong> Mengunduh tidak pernah dianggap sebagai pengiriman. Gunakan tindakan “Tandai dikirim ke vendor” setelah benar-benar dikirim.
         </div>
       ) : null}
       {feedback ? <div className="callout callout--success" role="status">{feedback}</div> : null}
@@ -137,26 +137,26 @@ export function VendorBatchDetailPage() {
           <div><h2 id="batch-actions-title">Tindakan tahap proses</h2><p>Setiap tombol mencatat satu kejadian bisnis; tidak ada tombol “lanjutkan status” generik.</p></div>
         </div>
         <div className="batch-lifecycle-actions">
-          {batch.status === 'DRAFT' ? <Button onClick={generateAndDownload} disabled={exporting}>{exporting ? 'Generating recap…' : 'Generate recap .xlsx'}</Button> : null}
+          {batch.status === 'DRAFT' ? <Button onClick={generateAndDownload} disabled={exporting}>{exporting ? 'Membuat rekap…' : 'Buat rekap .xlsx'}</Button> : null}
           {batch.status === 'RECAP_GENERATED' ? (
             <>
-              <Button variant="secondary" onClick={generateAndDownload} disabled={exporting}>{exporting ? 'Regenerating recap…' : 'Regenerate recap .xlsx'}</Button>
-              <Button onClick={() => runAction(() => markVendorBatchSent(batch.id), 'Batch ditandai sudah dikirim ke vendor.')}>Mark sent to vendor</Button>
+              <Button variant="secondary" onClick={generateAndDownload} disabled={exporting}>{exporting ? 'Membuat ulang rekap…' : 'Buat ulang rekap .xlsx'}</Button>
+              <Button onClick={() => runAction(() => markVendorBatchSent(batch.id), 'Batch ditandai sudah dikirim ke vendor.')}>Tandai dikirim ke vendor</Button>
             </>
           ) : null}
-          {batch.status === 'SENT_TO_VENDOR' ? <Button onClick={() => runAction(() => markVendorConfirmed(batch.id), 'Konfirmasi vendor dicatat.')}>Mark vendor confirmed</Button> : null}
-          {batch.status === 'VENDOR_CONFIRMED' ? <Button onClick={() => runAction(() => startVendorProcessing(batch.id), 'Vendor mulai processing.')}>Start processing</Button> : null}
+          {batch.status === 'SENT_TO_VENDOR' ? <Button onClick={() => runAction(() => markVendorConfirmed(batch.id), 'Konfirmasi vendor dicatat.')}>Tandai vendor sudah mengonfirmasi</Button> : null}
+          {batch.status === 'VENDOR_CONFIRMED' ? <Button onClick={() => runAction(() => startVendorProcessing(batch.id), 'Vendor mulai memproses.')}>Mulai proses</Button> : null}
           {batch.status === 'PROCESSING' || batch.status === 'PARTIALLY_ARRIVED' ? (
-            <Button onClick={openArrival}>{batch.status === 'PROCESSING' ? 'Record partial/full arrival' : 'Record additional/full arrival'}</Button>
+            <Button onClick={openArrival}>{batch.status === 'PROCESSING' ? 'Catat kedatangan sebagian/penuh' : 'Catat kedatangan tambahan/penuh'}</Button>
           ) : null}
-          {batch.status === 'ARRIVED' ? <span className="inline-clear-state">✓ Semua order anggota tercatat tiba penuh. Goods handling berikutnya tetap di TASK 11.</span> : null}
+          {batch.status === 'ARRIVED' ? <span className="inline-clear-state">✓ Semua order anggota tercatat tiba penuh. Penanganan barang berikutnya dilakukan pada tahap lanjutan.</span> : null}
         </div>
       </section>
 
       {reminderAllowed ? (
         <section className="workspace-panel vendor-reminder-panel" aria-labelledby="vendor-reminder-title">
           <div>
-            <h2 id="vendor-reminder-title">Vendor follow-up reminder</h2>
+            <h2 id="vendor-reminder-title">Pengingat tindak lanjut vendor</h2>
             <p>{vendorBatchStatusLabels.PROCESSING} tetap pasif sampai tanggal eksplisit ini tercapai. Tidak ada ambang otomatis.</p>
           </div>
           <ReminderForm
@@ -164,11 +164,11 @@ export function VendorBatchDetailPage() {
             currentDueAt={batch.followUpDueAt}
             setupRequired={batch.status === 'PROCESSING' || batch.status === 'PARTIALLY_ARRIVED'}
             setupTitle="Atur tindak lanjut vendor."
-            setupDescription="Jadwal batch belum dikonfirmasi; kolom sudah diisi saran tiga hari dari hari ini. Satu reminder berlaku untuk order anggota yang belum tiba penuh."
-            savedTitle="Reminder vendor tersimpan."
-            savedDescription={(date) => `Follow-up dijadwalkan pada ${date} untuk order anggota yang belum tiba penuh.`}
-            saveSuccessMessage="Reminder follow-up vendor disimpan."
-            clearSuccessMessage="Reminder follow-up vendor dihapus."
+            setupDescription="Jadwal batch belum dikonfirmasi; kolom sudah diisi saran tiga hari dari hari ini. Satu pengingat berlaku untuk order anggota yang belum tiba penuh."
+            savedTitle="Pengingat vendor tersimpan."
+            savedDescription={(date) => `Tindak lanjut dijadwalkan pada ${date} untuk order anggota yang belum tiba penuh.`}
+            saveSuccessMessage="Pengingat tindak lanjut vendor disimpan."
+            clearSuccessMessage="Pengingat tindak lanjut vendor dihapus."
             onSave={(dueAt) => setVendorFollowUp(batch.id, dueAt)}
             onClear={() => setVendorFollowUp(batch.id, null)}
             onBeforeAction={() => {
@@ -195,23 +195,23 @@ export function VendorBatchDetailPage() {
         </div>
       </section>
 
-      {preview.error ? <div className="callout callout--danger" role="alert"><strong>Recap invalid.</strong> {preview.error}</div> : null}
+      {preview.error ? <div className="callout callout--danger" role="alert"><strong>Rekap tidak valid.</strong> {preview.error}</div> : null}
       {preview.recap ? <VendorRecapView recap={preview.recap} /> : null}
 
       <section className="workspace-panel batch-timeline-panel" aria-labelledby="batch-timeline-title">
-        <div className="panel-heading"><div><h2 id="batch-timeline-title">Timeline batch</h2><p>Timestamps penting untuk membedakan dibuat, direkap, dikirim, dan diproses.</p></div></div>
+        <div className="panel-heading"><div><h2 id="batch-timeline-title">Timeline batch</h2><p>Waktu penting untuk membedakan dibuat, direkap, dikirim, dan diproses.</p></div></div>
         <div className="batch-timestamps">
           <span><small>Dibuat</small><strong>{formatDateTime(batch.createdAt)}</strong></span>
-          <span><small>Recap terakhir</small><strong>{batch.recapGeneratedAt ? formatDateTime(batch.recapGeneratedAt) : '—'}</strong></span>
+          <span><small>Rekap terakhir</small><strong>{batch.recapGeneratedAt ? formatDateTime(batch.recapGeneratedAt) : '—'}</strong></span>
           <span><small>Dikirim</small><strong>{batch.sentAt ? formatDateTime(batch.sentAt) : '—'}</strong></span>
           <span><small>Dikonfirmasi</small><strong>{batch.confirmedAt ? formatDateTime(batch.confirmedAt) : '—'}</strong></span>
-          <span><small>Processing</small><strong>{batch.processingStartedAt ? formatDateTime(batch.processingStartedAt) : '—'}</strong></span>
+          <span><small>Proses dimulai</small><strong>{batch.processingStartedAt ? formatDateTime(batch.processingStartedAt) : '—'}</strong></span>
         </div>
         {timeline.length > 0 ? (
           <ol className="mini-timeline">
             {timeline.map((event) => <li key={event.id}><span className="mini-timeline__dot" /><div><strong>{event.title}</strong><p>{event.detail}</p><time>{formatDateTime(event.occurredAt)}</time></div></li>)}
           </ol>
-        ) : <div className="inline-clear-state inline-clear-state--neutral">Fixture lama belum memiliki event batch terperinci.</div>}
+        ) : <div className="inline-clear-state inline-clear-state--neutral">Data lama belum memiliki kejadian batch terperinci.</div>}
       </section>
 
       <Modal

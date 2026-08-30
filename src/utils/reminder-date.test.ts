@@ -23,11 +23,11 @@ describe('local operator reminder dates', () => {
   it('rejects empty, malformed, impossible, and past calendar dates', () => {
     const now = new Date('2026-02-21T08:00:00.000Z')
 
-    expect(validateReminderCalendarDate('', now)).toBe('Tanggal follow-up wajib diisi.')
-    expect(validateReminderCalendarDate('21-02-2026', now)).toBe('Tanggal follow-up tidak valid.')
-    expect(validateReminderCalendarDate('2026-02-30', now)).toBe('Tanggal follow-up tidak valid.')
-    expect(validateReminderTimestamp('2026-02-30T00:00:00.000Z', now)).toBe('Tanggal follow-up tidak valid.')
-    expect(validateReminderCalendarDate('2026-02-20', now)).toBe('Tanggal follow-up tidak boleh sebelum hari ini.')
+    expect(validateReminderCalendarDate('', now)).toBe('Tanggal tindak lanjut wajib diisi.')
+    expect(validateReminderCalendarDate('21-02-2026', now)).toBe('Tanggal tindak lanjut tidak valid.')
+    expect(validateReminderCalendarDate('2026-02-30', now)).toBe('Tanggal tindak lanjut tidak valid.')
+    expect(validateReminderTimestamp('2026-02-30T00:00:00.000Z', now)).toBe('Tanggal tindak lanjut tidak valid.')
+    expect(validateReminderCalendarDate('2026-02-20', now)).toBe('Tanggal tindak lanjut tidak boleh sebelum hari ini.')
     expect(validateReminderCalendarDate('2026-02-21', now)).toBeNull()
   })
 

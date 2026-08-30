@@ -17,7 +17,7 @@ import { NextActionPanel } from '../components/work-queue/next-action-panel'
 import { OutstandingActions } from '../components/work-queue/outstanding-actions'
 
 const tabs: Array<{ id: OrderTab; label: string }> = [
-  { id: 'overview', label: 'Overview' },
+  { id: 'overview', label: 'Ringkasan' },
   { id: 'arkas', label: 'ARKAS & HET' },
   { id: 'siplah', label: 'SIPLah' },
   { id: 'vendor', label: 'Vendor' },
@@ -70,7 +70,7 @@ export function OrderWorkspacePage() {
     return (
       <EmptyState
         title="Order tidak ditemukan"
-        description="ID order tidak ada di demo state atau data lokal sudah tidak kompatibel."
+        description="ID order tidak ada di data demo atau data lokal sudah tidak kompatibel."
         action={<Link className="button button--secondary button--md" to="/orders">Kembali ke Pesanan</Link>}
       />
     )
@@ -99,7 +99,7 @@ export function OrderWorkspacePage() {
     setOverrideActionError(null)
     const trimmedTitle = overrideTitle.trim()
     if (!trimmedTitle) {
-      setOverrideError('Next action wajib diisi.')
+      setOverrideError('Next Action wajib diisi.')
       document.getElementById('override-title')?.focus()
       return
     }
@@ -111,7 +111,7 @@ export function OrderWorkspacePage() {
       })
       setOverrideOpen(false)
     } catch (caught) {
-      setOverrideActionError(caught instanceof Error ? caught.message : 'Next action manual gagal disimpan.')
+      setOverrideActionError(caught instanceof Error ? caught.message : 'Next Action manual gagal disimpan.')
     }
   }
 
@@ -121,7 +121,7 @@ export function OrderWorkspacePage() {
       saveNextActionOverride(order.id, null)
       setOverrideOpen(false)
     } catch (caught) {
-      setOverrideActionError(caught instanceof Error ? caught.message : 'Override gagal dihapus.')
+      setOverrideActionError(caught instanceof Error ? caught.message : 'Penyesuaian gagal dihapus.')
     }
   }
 
@@ -174,10 +174,10 @@ export function OrderWorkspacePage() {
             <StatusChip tone={order.stage === 'CLOSED' ? 'success' : 'neutral'} dot>
               {lifecycleLabels[order.stage]}
             </StatusChip>
-            {exceptions > 0 ? <ExceptionIndicator label={`${exceptions} exception`} level="danger" /> : null}
+            {exceptions > 0 ? <ExceptionIndicator label={`${exceptions} pengecualian`} level="danger" /> : null}
           </div>
           <h1>{order.schoolName}</h1>
-          <p>{order.arkas.reference} · Diperbarui dari state operasional tersimpan</p>
+          <p>{order.arkas.reference} · Diperbarui dari status operasional tersimpan</p>
         </div>
       </header>
 
@@ -185,7 +185,7 @@ export function OrderWorkspacePage() {
         action={nextAction}
         emptyState={order.stage === 'CLOSED' ? {
           title: 'Order selesai',
-          description: 'Order sudah CLOSED dan tidak memiliki tindakan aktif. Buka Timeline untuk melihat riwayat lengkap.',
+          description: 'Order sudah selesai dan tidak memiliki tindakan aktif. Buka Timeline untuk melihat riwayat lengkap.',
         } : undefined}
         onSnooze={nextAction
           ? () => snoozeNextAction([order.id], nextAction.kind, futureIsoDate(3))
@@ -197,7 +197,7 @@ export function OrderWorkspacePage() {
         <section className="workspace-panel closed-order-recovery" aria-labelledby="closed-order-recovery-title">
           <div>
             <h2 id="closed-order-recovery-title">Pemulihan order</h2>
-            <p>Workspace tetap read-only. Jika ada koreksi operasional yang disetujui, buka kembali dengan alasan yang tercatat di Timeline.</p>
+            <p>Ruang kerja hanya baca. Jika ada koreksi operasional yang disetujui, buka kembali dengan alasan yang tercatat di Timeline.</p>
           </div>
           <Button variant="secondary" onClick={openReopen}>Buka kembali order</Button>
         </section>
@@ -209,13 +209,13 @@ export function OrderWorkspacePage() {
         onUnsnooze={(kind) => snoozeNextAction([order.id], kind, null)}
       />
 
-      <Tabs items={tabs} active={activeTab} onChange={selectTab} label="Bagian order workspace" />
+      <Tabs items={tabs} active={activeTab} onChange={selectTab} label="Bagian ruang kerja order" />
       <OrderTabContent tab={activeTab} order={order} batch={batch} />
 
       <Modal
         open={reopenOpen}
         title="Buka kembali order"
-        description="Order akan kembali ke tahap aktif yang diturunkan dari checkpoint saat ini; riwayat penutupan tidak dihapus."
+        description="Order akan kembali ke tahap aktif yang dihitung otomatis dari syarat saat ini; riwayat penutupan tidak dihapus."
         onClose={cancelReopen}
         restoreFocusRef={reopenTriggerRef}
         footer={
@@ -256,20 +256,20 @@ export function OrderWorkspacePage() {
       <Modal
         open={overrideOpen}
         title="Atur Next Action manual"
-        description="Aksi manual dapat dipin sebagai primary, tetapi kewajiban system tetap terlihat dan domain state tidak berubah."
+        description="Aksi manual dapat dipasang sebagai utama, tetapi kewajiban otomatis tetap terlihat dan tahap proses tidak berubah."
         onClose={() => setOverrideOpen(false)}
         footer={
           <>
             {order.nextActionControl.override ? (
-              <Button variant="danger" onClick={clearOverride}>Hapus override</Button>
+              <Button variant="danger" onClick={clearOverride}>Hapus penyesuaian</Button>
             ) : <span />}
-            <Button type="submit" form="override-form">Simpan next action</Button>
+            <Button type="submit" form="override-form">Simpan Next Action</Button>
           </>
         }
       >
         <form id="override-form" className="form-stack" onSubmit={submitOverride} noValidate>
-          {overrideActionError ? <div className="callout callout--danger" role="alert"><strong>Override belum tersimpan.</strong> {overrideActionError}</div> : null}
-          <FormField label="Next action" htmlFor="override-title" error={overrideError ?? undefined}>
+          {overrideActionError ? <div className="callout callout--danger" role="alert"><strong>Penyesuaian belum tersimpan.</strong> {overrideActionError}</div> : null}
+          <FormField label="Next Action" htmlFor="override-title" error={overrideError ?? undefined}>
             <input
               id="override-title"
               value={overrideTitle}
@@ -297,7 +297,7 @@ export function OrderWorkspacePage() {
               rows={3}
             />
           </FormField>
-          <FormField label="Jatuh tempo" htmlFor="override-due" hint="Opsional; tidak mengubah lifecycle order.">
+          <FormField label="Jatuh tempo" htmlFor="override-due" hint="Opsional; tidak mengubah tahap proses order.">
             <input id="override-due" type="date" value={overrideDue} onChange={(event) => setOverrideDue(event.target.value)} />
           </FormField>
         </form>

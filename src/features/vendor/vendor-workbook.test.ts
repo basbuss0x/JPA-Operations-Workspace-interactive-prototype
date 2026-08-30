@@ -8,17 +8,17 @@ import { serializeVendorWorkbook, VENDOR_WORKBOOK_SHEETS } from './vendor-workbo
 interface SummaryRow {
   'Kode Produk': string
   'Nama Buku': string
-  'Total Qty': number
+  'Total Jumlah': number
   'Jumlah Sekolah': number
 }
 
 interface BreakdownRow {
   Sekolah: string
-  'Order ID': string
+  'ID Order': string
   'Nomor SIPLah': string
   'Kode Produk': string
   'Nama Buku': string
-  Qty: number
+  Jumlah: number
 }
 
 describe('Vendor recap XLSX', () => {
@@ -52,36 +52,36 @@ describe('Vendor recap XLSX', () => {
     const summary = utils.sheet_to_json<SummaryRow>(summarySheet, { range: 7 })
     const breakdown = utils.sheet_to_json<BreakdownRow>(breakdownSheet)
 
-    expect(summary.find((row) => row['Kode Produk'] === 'BK-MTK-5')?.['Total Qty']).toBe(28)
-    expect(summary.find((row) => row['Kode Produk'] === 'BK-BINDO-5')?.['Total Qty']).toBe(21)
-    expect(summary.find((row) => row['Kode Produk'] === 'BK-IPAS-5')?.['Total Qty']).toBe(20)
+    expect(summary.find((row) => row['Kode Produk'] === 'BK-MTK-5')?.['Total Jumlah']).toBe(28)
+    expect(summary.find((row) => row['Kode Produk'] === 'BK-BINDO-5')?.['Total Jumlah']).toBe(21)
+    expect(summary.find((row) => row['Kode Produk'] === 'BK-IPAS-5')?.['Total Jumlah']).toBe(20)
     expect(breakdown.filter((row) => row['Kode Produk'] === 'BK-MTK-5')).toEqual([
       {
         Sekolah: 'SDN 40 Ambon',
-        'Order ID': 'ORD-2026-040',
+        'ID Order': 'ORD-2026-040',
         'Nomor SIPLah': 'SPL-2026-1840',
         'Kode Produk': 'BK-MTK-5',
         'Nama Buku': 'Matematika untuk SD/MI Kelas V',
-        Qty: 20,
+        Jumlah: 20,
       },
       {
         Sekolah: 'SLB Batu Merah',
-        'Order ID': 'ORD-2026-SLB',
+        'ID Order': 'ORD-2026-SLB',
         'Nomor SIPLah': 'SPL-2026-1851',
         'Kode Produk': 'BK-MTK-5',
         'Nama Buku': 'Matematika untuk SD/MI Kelas V',
-        Qty: 8,
+        Jumlah: 8,
       },
     ])
-    expect(breakdown.filter((row) => row['Kode Produk'] === 'BK-BINDO-5').map((row) => row.Qty)).toEqual([15, 6])
+    expect(breakdown.filter((row) => row['Kode Produk'] === 'BK-BINDO-5').map((row) => row.Jumlah)).toEqual([15, 6])
     expect(breakdown.filter((row) => row['Kode Produk'] === 'BK-IPAS-5')).toEqual([
       {
         Sekolah: 'SDN 40 Ambon',
-        'Order ID': 'ORD-2026-040',
+        'ID Order': 'ORD-2026-040',
         'Nomor SIPLah': 'SPL-2026-1840',
         'Kode Produk': 'BK-IPAS-5',
         'Nama Buku': 'IPAS Kelas V',
-        Qty: 20,
+        Jumlah: 20,
       },
     ])
   })

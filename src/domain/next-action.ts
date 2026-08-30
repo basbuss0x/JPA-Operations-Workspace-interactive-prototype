@@ -69,7 +69,7 @@ export function deriveActionCandidates(
       kind: 'MANUAL',
       orderId: order.id,
       title: override.title,
-      reason: override.reason || 'Next action diatur manual oleh operator.',
+      reason: override.reason || 'Tindakan berikutnya diatur manual oleh operator.',
       href: `/orders/${order.id}`,
       ctaLabel: 'Buka order',
       priority: 0,
@@ -99,7 +99,7 @@ export function deriveActionCandidates(
       action(order, now, {
         kind: 'REVIEW_HET',
         title: 'Konfirmasi Review HET',
-        reason: 'Semua exception selesai; total review masih menunggu konfirmasi eksplisit.',
+        reason: 'Semua pengecualian selesai; total review masih menunggu konfirmasi eksplisit.',
         href: `/orders/${order.id}/arkas`,
         ctaLabel: 'Konfirmasi HET',
         priority: 10,
@@ -118,7 +118,7 @@ export function deriveActionCandidates(
           : 'Belanjakan pesanan di TokoLadang/SIPLah',
         reason: order.siplah.orderPlaced
           ? 'Selesaikan Surat Pesanan: tersedia, terlampir, terverifikasi, dan sudah dikirim ke sekolah. Invoice, Kwitansi, dan BAST menyusul sebagai administrasi.'
-          : 'HET sudah disetujui; lanjutkan checkpoint SIPLah yang belum selesai.',
+          : 'HET sudah disetujui; lanjutkan syarat SIPLah yang belum selesai.',
         href: `/orders/${order.id}/siplah`,
         ctaLabel: 'Buka SIPLah',
         priority: 20,
@@ -132,7 +132,7 @@ export function deriveActionCandidates(
       action(order, now, {
         kind: 'ADD_TO_VENDOR_BATCH',
         title: 'Masukkan ke Vendor Batch',
-        reason: 'Surat Pesanan sudah lengkap untuk checkpoint procurement; Invoice, Kwitansi, dan BAST tidak memblokir kesiapan Vendor Batch.',
+        reason: 'Surat Pesanan sudah lengkap untuk syarat pembelian; Invoice, Kwitansi, dan BAST tidak memblokir kesiapan Vendor Batch.',
         href: `/orders/${order.id}?tab=vendor`,
         ctaLabel: 'Buka vendor',
         priority: 30,
@@ -160,7 +160,7 @@ export function deriveActionCandidates(
       action(order, now, {
         kind: 'CONTINUE_FULFILLMENT',
         title: `Lanjutkan pemenuhan · sisa ${order.fulfillment.remainingQty} buku`,
-        reason: `${order.fulfillment.problemCount} masalah masih tercatat di Kelengkapan Tracker.`,
+        reason: `${order.fulfillment.problemCount} masalah masih tercatat di Kelengkapan Buku Tracker.`,
         href: `/orders/${order.id}?tab=distribution`,
         ctaLabel: 'Lihat distribusi',
         priority: 50,
@@ -175,8 +175,8 @@ export function deriveActionCandidates(
       candidates.push(
         action(order, now, {
           kind: 'FOLLOW_UP_PAYMENT',
-          title: 'Follow-up pembayaran sekolah',
-          reason: 'Tanggal follow-up pembayaran sudah tercapai.',
+          title: 'Tindak lanjut pembayaran sekolah',
+          reason: 'Tanggal tindak lanjut pembayaran sudah tercapai.',
           href: `/orders/${order.id}?tab=finance`,
           ctaLabel: 'Buka pembayaran',
           priority: 60,
@@ -188,9 +188,9 @@ export function deriveActionCandidates(
         action(order, now, {
           kind: 'SCHEDULE_PAYMENT_FOLLOW_UP',
           title: 'Atur tindak lanjut pembayaran',
-          reason: `Pembayaran sekolah masih ${schoolPaymentStatusLabels.UNPAID.toLowerCase()} dan belum memiliki tanggal follow-up yang dikonfirmasi.`,
+          reason: `Pembayaran sekolah masih ${schoolPaymentStatusLabels.UNPAID.toLowerCase()} dan belum memiliki tanggal tindak lanjut yang dikonfirmasi.`,
           href: `/orders/${order.id}?tab=finance`,
-          ctaLabel: 'Atur reminder',
+          ctaLabel: 'Atur pengingat',
           priority: 60,
           dueAt: null,
         }),
@@ -225,7 +225,7 @@ export function deriveActionCandidates(
       action(order, now, {
         kind: 'CLOSE_ORDER',
         title: 'Tutup order',
-        reason: 'Checkpoint barang, SIPLah, pembayaran sekolah, dan benefit sudah lengkap.',
+        reason: 'Syarat barang, SIPLah, pembayaran sekolah, dan benefit sudah lengkap.',
         href: `/orders/${order.id}?tab=finance`,
         ctaLabel: 'Review & tutup',
         priority: 80,
@@ -251,10 +251,10 @@ export function deriveActionCandidates(
         kind: 'SCHEDULE_VENDOR_FOLLOW_UP',
         title: 'Atur tindak lanjut vendor',
         reason: batch.status === 'PARTIALLY_ARRIVED'
-          ? `Vendor Batch ${batch.id} baru tiba sebagian; order ini belum tiba penuh dan belum memiliki tanggal follow-up yang dikonfirmasi.`
-          : `Vendor Batch ${batch.id} ${vendorBatchStatusLabels.PROCESSING.toLowerCase()} tanpa tanggal follow-up yang dikonfirmasi.`,
+          ? `Vendor Batch ${batch.id} baru tiba sebagian; order ini belum tiba penuh dan belum memiliki tanggal tindak lanjut yang dikonfirmasi.`
+          : `Vendor Batch ${batch.id} ${vendorBatchStatusLabels.PROCESSING.toLowerCase()} tanpa tanggal tindak lanjut yang dikonfirmasi.`,
         href: `/vendor-batches/${batch.id}`,
-        ctaLabel: 'Atur reminder',
+        ctaLabel: 'Atur pengingat',
         priority: 61,
         dueAt: null,
       }),
@@ -268,8 +268,8 @@ export function deriveActionCandidates(
     candidates.push(
       action(order, now, {
         kind: 'FOLLOW_UP_VENDOR',
-        title: 'Follow-up vendor',
-        reason: `Reminder ${batch.id} sudah tercapai; status saat ini ${vendorBatchStatusLabels[batch.status]}.`,
+        title: 'Tindak lanjut vendor',
+        reason: `Pengingat ${batch.id} sudah tercapai; status saat ini ${vendorBatchStatusLabels[batch.status]}.`,
         href: `/vendor-batches/${batch.id}`,
         ctaLabel: 'Buka batch',
         priority: 90,

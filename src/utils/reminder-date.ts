@@ -48,7 +48,7 @@ export function futureCalendarDate(days: number, now: Date = new Date()): string
 export function validateReminderCalendarDate(
   value: string,
   now: Date = new Date(),
-  label = 'Tanggal follow-up',
+  label = 'Tanggal tindak lanjut',
 ): string | null {
   if (!value) return `${label} wajib diisi.`
   const localDate = parseCalendarDate(value)
@@ -68,7 +68,7 @@ export function validateReminderCalendarDate(
 export function validateReminderTimestamp(
   value: string,
   now: Date = new Date(),
-  label = 'Tanggal follow-up',
+  label = 'Tanggal tindak lanjut',
 ): string | null {
   if (!value) return `${label} wajib diisi.`
   const timestamp = new Date(value)
@@ -84,7 +84,7 @@ export function validateReminderTimestamp(
 
 export function calendarDateToReminderTimestamp(value: string): string {
   const localDate = parseCalendarDate(value)
-  if (!localDate) throw new Error('Tanggal reminder tidak valid.')
+  if (!localDate) throw new Error('Tanggal pengingat tidak valid.')
   return localDate.toISOString()
 }
 
