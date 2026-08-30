@@ -8,6 +8,7 @@ import {
   isSchoolEligible,
 } from '../domain/school'
 import type { ArkasExtractionResult, OrderItem, School } from '../domain/types'
+import { hetItemStatusLabels } from '../domain/presentation'
 import { usePrototypeStore } from '../store/use-prototype-store'
 import { formatCurrency } from '../utils/format'
 import { Button } from '../components/ui/button'
@@ -68,10 +69,12 @@ export function NewOrderPage() {
   const [newSchoolCity, setNewSchoolCity] = useState('')
   const [confirmedSchool, setConfirmedSchool] = useState<School | null>(null)
   const [schoolError, setSchoolError] = useState('')
+  const [schoolFieldError, setSchoolFieldError] = useState('')
   const [sourceMode, setSourceMode] = useState<SourceMode>('DEMO')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [extractionState, setExtractionState] = useState<ExtractionState>('IDLE')
   const [errorMessage, setErrorMessage] = useState('')
+  const [fileError, setFileError] = useState('')
   const [creationError, setCreationError] = useState('')
   const [extraction, setExtraction] = useState<ArkasExtractionResult | null>(null)
   const [matchedItems, setMatchedItems] = useState<OrderItem[]>([])
@@ -82,6 +85,7 @@ export function NewOrderPage() {
   const clearExtraction = () => {
     setExtractionState('IDLE')
     setErrorMessage('')
+    setFileError('')
     setCreationError('')
     setExtraction(null)
     setMatchedItems([])
@@ -94,6 +98,7 @@ export function NewOrderPage() {
     setNewSchoolCity('')
     setConfirmedSchool(null)
     setSchoolError('')
+    setSchoolFieldError('')
     clearExtraction()
   }
 
@@ -101,6 +106,7 @@ export function NewOrderPage() {
     setSelectedSchoolId(schoolId)
     setConfirmedSchool(null)
     setSchoolError('')
+    setSchoolFieldError('')
     clearExtraction()
   }
 
@@ -108,6 +114,7 @@ export function NewOrderPage() {
     setNewSchoolName(name)
     setConfirmedSchool(null)
     setSchoolError('')
+    setSchoolFieldError('')
     clearExtraction()
   }
 
@@ -115,10 +122,13 @@ export function NewOrderPage() {
     setNewSchoolCity(city)
     setConfirmedSchool(null)
     setSchoolError('')
+    setSchoolFieldError('')
     clearExtraction()
   }
 
   const confirmSchool = () => {
+    setSchoolError('')
+    setSchoolFieldError('')
     if (schoolMode === 'EXISTING') {
       const school = schools[selectedSchoolId]
       if (!school) {
@@ -141,19 +151,24 @@ export function NewOrderPage() {
       setSchoolError('')
     } catch (error) {
       setConfirmedSchool(null)
-      setSchoolError(error instanceof Error ? error.message : 'Identitas sekolah belum valid.')
+      setSchoolFieldError(error instanceof Error ? error.message : 'Identitas sekolah belum valid.')
+      document.getElementById('new-school-name')?.focus()
     }
   }
 
   const runExtraction = async () => {
+    setErrorMessage('')
+    setFileError('')
     if (!confirmedSchool) {
       setErrorMessage('Konfirmasi identitas sekolah terlebih dahulu sebelum menjalankan ekstraksi.')
       setExtractionState('ERROR')
       return
     }
     if ((sourceMode === 'PDF' || sourceMode === 'PHOTO') && !selectedFile) {
-      setErrorMessage('Pilih file sebelum menjalankan simulasi ekstraksi.')
+      const message = 'Pilih file sebelum menjalankan simulasi ekstraksi.'
+      setFileError(message)
       setExtractionState('ERROR')
+      document.getElementById('arkas-file')?.focus()
       return
     }
 
@@ -238,8 +253,15 @@ export function NewOrderPage() {
             </>
           ) : (
             <>
-              <FormField label="Nama sekolah demo" htmlFor="new-school-name" hint="Nama dinormalisasi untuk mendeteksi kemungkinan duplikat.">
-                <input id="new-school-name" value={newSchoolName} onChange={(event) => changeNewSchool(event.target.value)} placeholder="Contoh: SD Inpres Pass 2" />
+              <FormField label="Nama sekolah demo" htmlFor="new-school-name" hint="Nama dinormalisasi untuk mendeteksi kemungkinan duplikat." error={schoolFieldError || undefined}>
+                <input
+                  id="new-school-name"
+                  value={newSchoolName}
+                  onChange={(event) => changeNewSchool(event.target.value)}
+                  aria-invalid={Boolean(schoolFieldError)}
+                  aria-describedby={schoolFieldError ? 'new-school-name-error' : undefined}
+                  placeholder="Contoh: SD Inpres Pass 2"
+                />
               </FormField>
               <FormField label="Kota / kabupaten" htmlFor="new-school-city" hint="Opsional untuk fixture; identitas sekolah tetap memakai ID stabil.">
                 <input id="new-school-city" value={newSchoolCity} onChange={(event) => changeNewSchoolCity(event.target.value)} placeholder="Contoh: Ambon" />
@@ -272,12 +294,18 @@ export function NewOrderPage() {
           </div>
 
           {sourceMode === 'PDF' || sourceMode === 'PHOTO' ? (
-            <FormField label={sourceMode === 'PDF' ? 'File PDF' : 'File foto/gambar'} htmlFor="arkas-file" hint="File hanya dibaca namanya; tidak dikirim ke server.">
+            <FormField label={sourceMode === 'PDF' ? 'File PDF' : 'File foto/gambar'} htmlFor="arkas-file" hint="File hanya dibaca namanya; tidak dikirim ke server." error={fileError || undefined}>
               <input
                 id="arkas-file"
                 type="file"
                 accept={sourceMode === 'PDF' ? 'application/pdf' : 'image/*'}
-                onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+                onChange={(event) => {
+                  setSelectedFile(event.target.files?.[0] ?? null)
+                  setFileError('')
+                  setErrorMessage('')
+                }}
+                aria-invalid={Boolean(fileError)}
+                aria-describedby={fileError ? 'arkas-file-error' : undefined}
               />
             </FormField>
           ) : (
@@ -323,7 +351,7 @@ export function NewOrderPage() {
                 {matchedItems.map((item) => (
                   <article key={item.id}>
                     <div><strong>{item.arkasTitle}</strong><span>{item.quantity} × {formatCurrency(item.arkasUnitPrice)}</span></div>
-                    <StatusChip tone={statusTone(item)}>{item.matchStatus.replaceAll('_', ' ')}</StatusChip>
+                    <StatusChip tone={statusTone(item)}>{hetItemStatusLabels[item.matchStatus]}</StatusChip>
                   </article>
                 ))}
               </div>

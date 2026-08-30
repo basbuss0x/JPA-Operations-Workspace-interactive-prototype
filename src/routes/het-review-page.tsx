@@ -4,6 +4,7 @@ import { PRODUCT_MASTER } from '../data/product-master'
 import { searchProductMaster } from '../domain/intake'
 import { deriveActionCandidates, derivePrimaryNextAction } from '../domain/next-action'
 import { getHetExceptionCount } from '../domain/order-state'
+import { hetItemStatusLabels, hetResolutionTypeLabels } from '../domain/presentation'
 import { calculateReviewedHetAmount } from '../domain/transitions'
 import type { OrderItem } from '../domain/types'
 import { usePrototypeStore } from '../store/use-prototype-store'
@@ -16,13 +17,13 @@ import { StatusChip } from '../components/ui/status-chip'
 
 type EditorMode = 'ACTIONS' | 'PRODUCT' | 'MANUAL'
 
+interface ManualFieldErrors {
+  price?: string
+  reason?: string
+}
+
 function exceptionLabel(status: OrderItem['matchStatus']): string {
-  switch (status) {
-    case 'PRICE_MISMATCH': return 'Harga berbeda'
-    case 'AMBIGUOUS_MATCH': return 'Match ambigu'
-    case 'NO_MATCH': return 'Tidak ada match'
-    default: return status.replaceAll('_', ' ')
-  }
+  return hetItemStatusLabels[status]
 }
 
 export function HetReviewPage() {
@@ -39,6 +40,8 @@ export function HetReviewPage() {
   const [manualPrice, setManualPrice] = useState('')
   const [reopenReason, setReopenReason] = useState('')
   const [reopenError, setReopenError] = useState('')
+  const [reopenActionError, setReopenActionError] = useState('')
+  const [manualFieldErrors, setManualFieldErrors] = useState<ManualFieldErrors>({})
   const [formError, setFormError] = useState('')
   const [renderedAt] = useState(() => new Date())
 
@@ -60,18 +63,31 @@ export function HetReviewPage() {
     setProductQuery(mode === 'PRODUCT' ? (item.productCode ?? item.arkasTitle) : '')
     setManualReason('')
     setManualPrice(String(item.hetUnitPrice ?? item.arkasUnitPrice))
+    setManualFieldErrors({})
     setFormError('')
   }
 
   const submitManualOverride = (event: FormEvent<HTMLFormElement>, item: OrderItem) => {
     event.preventDefault()
+    setManualFieldErrors({})
+    setFormError('')
+    const nextErrors: ManualFieldErrors = {}
+    const price = Number(manualPrice)
+    if (!manualPrice.trim()) nextErrors.price = 'Harga review per item wajib diisi.'
+    else if (!Number.isFinite(price) || price <= 0) nextErrors.price = 'Harga review per item harus berupa angka lebih dari nol.'
+    if (!manualReason.trim()) nextErrors.reason = 'Alasan manual override wajib diisi.'
+    if (nextErrors.price || nextErrors.reason) {
+      setManualFieldErrors(nextErrors)
+      const fieldPrefix = resolvedItems.some((candidate) => candidate.id === item.id) ? 'resolved-manual' : 'manual'
+      document.getElementById(nextErrors.price ? `${fieldPrefix}-price-${item.id}` : `${fieldPrefix}-reason-${item.id}`)?.focus()
+      return
+    }
     try {
       manualOverride(order.id, item.id, {
-        reviewedUnitPrice: Number(manualPrice),
-        reason: manualReason,
+        reviewedUnitPrice: price,
+        reason: manualReason.trim(),
       })
       setEditor(null)
-      setFormError('')
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'Manual override gagal.')
     }
@@ -88,12 +104,20 @@ export function HetReviewPage() {
 
   const reopenReview = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setReopenError('')
+    setReopenActionError('')
+    const trimmedReason = reopenReason.trim()
+    if (!trimmedReason) {
+      const message = 'Alasan membuka kembali HET wajib diisi.'
+      setReopenError(message)
+      document.getElementById('het-reopen-reason')?.focus()
+      return
+    }
     try {
-      reopenHet(order.id, reopenReason)
-      setReopenError('')
+      reopenHet(order.id, trimmedReason)
       setReopenReason('')
     } catch (error) {
-      setReopenError(error instanceof Error ? error.message : 'HET review belum dapat dibuka kembali.')
+      setReopenActionError(error instanceof Error ? error.message : 'HET review belum dapat dibuka kembali.')
     }
   }
 
@@ -137,13 +161,26 @@ export function HetReviewPage() {
               <div><h2>Buka kembali review HET</h2><p>Dapat dilakukan sebelum order SIPLah dibuat. Alasan operator wajib dicatat dan approval sebelumnya akan dihapus.</p></div>
               <StatusChip tone="warning">Koreksi sebelum SIPLah</StatusChip>
             </div>
-            <form className="inline-action-form" onSubmit={reopenReview}>
-              <FormField label="Alasan wajib" htmlFor="het-reopen-reason">
-                <textarea id="het-reopen-reason" value={reopenReason} onChange={(event) => setReopenReason(event.target.value)} placeholder="Contoh: sekolah mengirim harga ARKAS terbaru." rows={3} required />
+            <form className="inline-action-form" onSubmit={reopenReview} noValidate>
+              <FormField label="Alasan wajib" htmlFor="het-reopen-reason" error={reopenError || undefined}>
+                <textarea
+                  id="het-reopen-reason"
+                  value={reopenReason}
+                  onChange={(event) => {
+                    setReopenReason(event.target.value)
+                    setReopenError('')
+                    setReopenActionError('')
+                  }}
+                  aria-invalid={Boolean(reopenError)}
+                  aria-describedby={reopenError ? 'het-reopen-reason-error' : undefined}
+                  placeholder="Contoh: sekolah mengirim harga ARKAS terbaru."
+                  rows={3}
+                  required
+                />
               </FormField>
               <Button variant="secondary" type="submit">Buka kembali review HET</Button>
             </form>
-            {reopenError ? <div className="callout callout--danger">{reopenError}</div> : null}
+            {reopenActionError ? <div className="callout callout--danger" role="alert"><strong>Review HET belum dibuka kembali.</strong> {reopenActionError}</div> : null}
           </section>
         )}
       </div>
@@ -248,16 +285,41 @@ export function HetReviewPage() {
                 ) : null}
 
                 {editorOpen && editor.mode === 'MANUAL' ? (
-                  <form className="inline-editor form-stack" onSubmit={(event) => submitManualOverride(event, item)}>
+                  <form className="inline-editor form-stack" onSubmit={(event) => submitManualOverride(event, item)} noValidate>
                     <div className="form-grid">
-                      <FormField label="Harga review per item" htmlFor={`manual-price-${item.id}`}>
-                        <input id={`manual-price-${item.id}`} type="number" min="1" value={manualPrice} onChange={(event) => setManualPrice(event.target.value)} required />
+                      <FormField label="Harga review per item" htmlFor={`manual-price-${item.id}`} error={manualFieldErrors.price}>
+                        <input
+                          id={`manual-price-${item.id}`}
+                          type="number"
+                          min="1"
+                          value={manualPrice}
+                          onChange={(event) => {
+                            setManualPrice(event.target.value)
+                            setManualFieldErrors({})
+                            setFormError('')
+                          }}
+                          aria-invalid={Boolean(manualFieldErrors.price)}
+                          aria-describedby={manualFieldErrors.price ? `manual-price-${item.id}-error` : undefined}
+                          required
+                        />
                       </FormField>
-                      <FormField label="Alasan wajib" htmlFor={`manual-reason-${item.id}`}>
-                        <input id={`manual-reason-${item.id}`} value={manualReason} onChange={(event) => setManualReason(event.target.value)} placeholder="Kenapa tidak memakai Product Master?" required />
+                      <FormField label="Alasan wajib" htmlFor={`manual-reason-${item.id}`} error={manualFieldErrors.reason}>
+                        <input
+                          id={`manual-reason-${item.id}`}
+                          value={manualReason}
+                          onChange={(event) => {
+                            setManualReason(event.target.value)
+                            setManualFieldErrors({})
+                            setFormError('')
+                          }}
+                          aria-invalid={Boolean(manualFieldErrors.reason)}
+                          aria-describedby={manualFieldErrors.reason ? `manual-reason-${item.id}-error` : undefined}
+                          placeholder="Kenapa tidak memakai Product Master?"
+                          required
+                        />
                       </FormField>
                     </div>
-                    {formError ? <p className="form-error">{formError}</p> : null}
+                    {formError ? <div className="callout callout--danger" role="alert"><strong>Manual override belum tersimpan.</strong> {formError}</div> : null}
                     <div><Button size="sm" type="submit">Simpan manual override</Button></div>
                   </form>
                 ) : null}
@@ -268,7 +330,7 @@ export function HetReviewPage() {
       ) : (
         <section className="workspace-panel review-ready">
           <div className="workflow-success__mark">✓</div>
-          <div><h2>Semua exception sudah diputuskan</h2><p>Status belum APPROVED. Periksa total lalu konfirmasi secara eksplisit.</p></div>
+          <div><h2>Semua exception sudah diputuskan</h2><p>Status belum disetujui. Periksa total lalu konfirmasi secara eksplisit.</p></div>
         </section>
       )}
 
@@ -281,7 +343,7 @@ export function HetReviewPage() {
               <article key={item.id}>
                 <div className="matched-item-summary">
                   <span><strong>{item.arkasTitle}</strong><small>ARKAS immutable · {item.quantity} × {formatCurrency(item.arkasUnitPrice)}</small></span>
-                  <span><StatusChip tone="success">{item.resolutionType?.replaceAll('_', ' ') ?? 'MATCHED'}</StatusChip><small>{item.masterProductTitle} · {item.hetUnitPrice === null ? 'Harga belum ada' : formatCurrency(item.hetUnitPrice)}</small></span>
+                  <span><StatusChip tone="success">{item.resolutionType ? hetResolutionTypeLabels[item.resolutionType] : 'Cocok'}</StatusChip><small>{item.masterProductTitle} · {item.hetUnitPrice === null ? 'Harga belum ada' : formatCurrency(item.hetUnitPrice)}</small></span>
                   <Button variant="ghost" size="sm" onClick={() => openEditor(item, 'ACTIONS')}>Edit</Button>
                 </div>
 
@@ -318,16 +380,41 @@ export function HetReviewPage() {
                 ) : null}
 
                 {editorOpen && editor.mode === 'MANUAL' ? (
-                  <form className="inline-editor form-stack" onSubmit={(event) => submitManualOverride(event, item)}>
+                  <form className="inline-editor form-stack" onSubmit={(event) => submitManualOverride(event, item)} noValidate>
                     <div className="form-grid">
-                      <FormField label="Harga review per item" htmlFor={`resolved-manual-price-${item.id}`}>
-                        <input id={`resolved-manual-price-${item.id}`} type="number" min="1" value={manualPrice} onChange={(event) => setManualPrice(event.target.value)} required />
+                      <FormField label="Harga review per item" htmlFor={`resolved-manual-price-${item.id}`} error={manualFieldErrors.price}>
+                        <input
+                          id={`resolved-manual-price-${item.id}`}
+                          type="number"
+                          min="1"
+                          value={manualPrice}
+                          onChange={(event) => {
+                            setManualPrice(event.target.value)
+                            setManualFieldErrors({})
+                            setFormError('')
+                          }}
+                          aria-invalid={Boolean(manualFieldErrors.price)}
+                          aria-describedby={manualFieldErrors.price ? `resolved-manual-price-${item.id}-error` : undefined}
+                          required
+                        />
                       </FormField>
-                      <FormField label="Alasan wajib" htmlFor={`resolved-manual-reason-${item.id}`}>
-                        <input id={`resolved-manual-reason-${item.id}`} value={manualReason} onChange={(event) => setManualReason(event.target.value)} placeholder="Mengapa hasil review sebelumnya dikoreksi?" required />
+                      <FormField label="Alasan wajib" htmlFor={`resolved-manual-reason-${item.id}`} error={manualFieldErrors.reason}>
+                        <input
+                          id={`resolved-manual-reason-${item.id}`}
+                          value={manualReason}
+                          onChange={(event) => {
+                            setManualReason(event.target.value)
+                            setManualFieldErrors({})
+                            setFormError('')
+                          }}
+                          aria-invalid={Boolean(manualFieldErrors.reason)}
+                          aria-describedby={manualFieldErrors.reason ? `resolved-manual-reason-${item.id}-error` : undefined}
+                          placeholder="Mengapa hasil review sebelumnya dikoreksi?"
+                          required
+                        />
                       </FormField>
                     </div>
-                    {formError ? <p className="form-error">{formError}</p> : null}
+                    {formError ? <div className="callout callout--danger" role="alert"><strong>Manual override belum tersimpan.</strong> {formError}</div> : null}
                     <div><Button size="sm" type="submit">Simpan manual override</Button></div>
                   </form>
                 ) : null}
@@ -352,7 +439,7 @@ export function HetReviewPage() {
           </div>
           <Button onClick={confirmReview} disabled={getHetExceptionCount(order) > 0}>Confirm HET Review</Button>
         </div>
-        {formError ? <div className="callout callout--danger">{formError}</div> : null}
+        {formError && !editor ? <div className="callout callout--danger" role="alert"><strong>Tindakan HET gagal.</strong> {formError}</div> : null}
       </section>
 
       <section className="workflow-context-strip">

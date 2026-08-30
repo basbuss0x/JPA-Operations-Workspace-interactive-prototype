@@ -1,4 +1,5 @@
 import { getHetExceptionCount, isCompletionReady, isSiplahReadyForVendor } from './order-state'
+import { schoolPaymentStatusLabels, vendorBatchStatusLabels } from './presentation-labels'
 import {
   isActionSnoozable,
   type ActionDerivationContext,
@@ -187,7 +188,7 @@ export function deriveActionCandidates(
         action(order, now, {
           kind: 'SCHEDULE_PAYMENT_FOLLOW_UP',
           title: 'Atur tindak lanjut pembayaran',
-          reason: 'Pembayaran sekolah masih UNPAID dan belum memiliki tanggal follow-up yang dikonfirmasi.',
+          reason: `Pembayaran sekolah masih ${schoolPaymentStatusLabels.UNPAID.toLowerCase()} dan belum memiliki tanggal follow-up yang dikonfirmasi.`,
           href: `/orders/${order.id}?tab=finance`,
           ctaLabel: 'Atur reminder',
           priority: 60,
@@ -251,7 +252,7 @@ export function deriveActionCandidates(
         title: 'Atur tindak lanjut vendor',
         reason: batch.status === 'PARTIALLY_ARRIVED'
           ? `Vendor Batch ${batch.id} baru tiba sebagian; order ini belum tiba penuh dan belum memiliki tanggal follow-up yang dikonfirmasi.`
-          : `Vendor Batch ${batch.id} sedang PROCESSING tanpa tanggal follow-up yang dikonfirmasi.`,
+          : `Vendor Batch ${batch.id} ${vendorBatchStatusLabels.PROCESSING.toLowerCase()} tanpa tanggal follow-up yang dikonfirmasi.`,
         href: `/vendor-batches/${batch.id}`,
         ctaLabel: 'Atur reminder',
         priority: 61,
@@ -268,7 +269,7 @@ export function deriveActionCandidates(
       action(order, now, {
         kind: 'FOLLOW_UP_VENDOR',
         title: 'Follow-up vendor',
-        reason: `Reminder ${batch.id} sudah tercapai; status saat ini ${batch.status.replaceAll('_', ' ')}.`,
+        reason: `Reminder ${batch.id} sudah tercapai; status saat ini ${vendorBatchStatusLabels[batch.status]}.`,
         href: `/vendor-batches/${batch.id}`,
         ctaLabel: 'Buka batch',
         priority: 90,

@@ -8,7 +8,7 @@ import {
   isSiplahAdminComplete,
   isSiplahReadyForVendor,
 } from '../domain/selectors'
-import { lifecycleLabels } from '../domain/types'
+import { benefitStatusLabels, lifecycleLabels } from '../domain/presentation'
 import type { Order, VendorBatch } from '../domain/types'
 import { usePrototypeStore } from '../store/use-prototype-store'
 import { Button } from '../components/ui/button'
@@ -39,7 +39,7 @@ function getPipelineSignals(order: Order): PipelineSignal[] {
     signals.push({ label: `Sisa ${order.fulfillment.remainingQty} buku`, tone: 'warning' })
   }
   if (order.benefit.status === 'ELIGIBLE') {
-    signals.push({ label: 'Benefit ELIGIBLE', tone: 'warning' })
+    signals.push({ label: benefitStatusLabels.ELIGIBLE, tone: 'warning' })
   }
   if (order.schoolPayment.status === 'UNPAID' && order.finalInvoiceAmount !== null) {
     signals.push({ label: 'Pembayaran belum dikonfirmasi', tone: 'warning' })
@@ -125,7 +125,7 @@ export function PipelinePage() {
       <PageHeader
         eyebrow="View sekunder · lintas order"
         title="Pipeline"
-        description="Lihat pesanan sekolah tersebar di tahap mana. Posisi di sini diturunkan dari lifecycle order; pekerjaan utama tetap dimulai dari Kerjakan Sekarang."
+        description="Lihat pesanan sekolah tersebar di tahap mana. Posisi di sini diturunkan dari tahap proses order; pekerjaan utama tetap dimulai dari Kerjakan Sekarang."
         actions={
           <Button
             variant="secondary"
@@ -146,13 +146,13 @@ export function PipelinePage() {
         ) : null}
       </div>
 
-      <section className="pipeline-board" aria-label="Pipeline lifecycle">
+      <section className="pipeline-board" aria-label="Pipeline tahap proses">
         {columns.map((column) => (
           <section className="pipeline-column" data-stage={column.stage} key={column.stage} aria-labelledby={`pipeline-column-${column.stage}`}>
             <header className="pipeline-column__header">
               <div>
                 <h2 id={`pipeline-column-${column.stage}`}>{lifecycleLabels[column.stage]}</h2>
-                <span>{column.stage === 'CLOSED' ? 'Selesai' : 'Posisi lifecycle'}</span>
+                <span>{column.stage === 'CLOSED' ? 'Selesai' : 'Posisi tahap proses'}</span>
               </div>
               <StatusChip tone={column.stage === 'CLOSED' ? 'success' : 'neutral'}>{column.orders.length}</StatusChip>
             </header>
@@ -160,7 +160,7 @@ export function PipelinePage() {
               {column.orders.length > 0 ? column.orders.map((order) => (
                 <PipelineCard key={order.id} order={order} vendorBatches={vendorBatches} now={renderedAt} />
               )) : (
-                <EmptyState title="Belum ada order" description="Order akan muncul di sini saat lifecycle masuk tahap ini." />
+                <EmptyState title="Belum ada order" description="Order akan muncul di sini saat tahap proses masuk ke posisi ini." />
               )}
             </div>
           </section>

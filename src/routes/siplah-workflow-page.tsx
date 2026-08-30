@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { deriveActionCandidates, derivePrimaryNextAction } from '../domain/next-action'
 import { isSiplahAdminComplete, isSiplahReadyForVendor } from '../domain/order-state'
+import { benefitStatusLabels, schoolPaymentStatusLabels } from '../domain/presentation'
 import type { SiplahDocument } from '../domain/types'
 import { usePrototypeStore } from '../store/use-prototype-store'
 import { formatCurrency, formatDateTime } from '../utils/format'
@@ -25,6 +26,12 @@ function documentRequirementLabel(document: SiplahDocument): string {
   return 'Opsional arsip'
 }
 
+interface TransactionFieldErrors {
+  amount?: string
+  orderNumber?: string
+  confirmation?: string
+}
+
 export function SiplahWorkflowPage() {
   const { orderId } = useParams()
   const order = usePrototypeStore((state) => orderId ? state.orders[orderId] : undefined)
@@ -38,6 +45,7 @@ export function SiplahWorkflowPage() {
   const [orderNumber, setOrderNumber] = useState('SPL-2026-DEMO-240')
   const [finalAmount, setFinalAmount] = useState(() => order?.hetReviewedAmount === null || order?.hetReviewedAmount === undefined ? '' : String(order.hetReviewedAmount))
   const [amountConfirmed, setAmountConfirmed] = useState(false)
+  const [transactionFieldErrors, setTransactionFieldErrors] = useState<TransactionFieldErrors>({})
   const [errorMessage, setErrorMessage] = useState('')
   const [renderedAt] = useState(() => new Date())
 
@@ -49,12 +57,24 @@ export function SiplahWorkflowPage() {
 
   const submitOrder = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setErrorMessage('')
+    setTransactionFieldErrors({})
+    const nextErrors: TransactionFieldErrors = {}
+    const amount = Number(finalAmount)
+    if (!finalAmount.trim()) nextErrors.amount = 'Nominal final transaksi SIPLah wajib diisi.'
+    else if (!Number.isFinite(amount) || amount <= 0) nextErrors.amount = 'Nominal final transaksi SIPLah harus berupa angka lebih dari nol.'
+    if (!orderNumber.trim()) nextErrors.orderNumber = 'Nomor order SIPLah wajib diisi.'
+    if (!amountConfirmed) nextErrors.confirmation = 'Konfirmasi nominal transaksi wajib dicentang.'
+    if (nextErrors.amount || nextErrors.orderNumber || nextErrors.confirmation) {
+      setTransactionFieldErrors(nextErrors)
+      document.getElementById(nextErrors.amount ? 'siplah-final-amount' : nextErrors.orderNumber ? 'siplah-order-number' : 'siplah-amount-confirmation')?.focus()
+      return
+    }
     try {
       saveSiplahOrder(order.id, {
-        orderNumber,
-        finalInvoiceAmount: Number(finalAmount),
+        orderNumber: orderNumber.trim(),
+        finalInvoiceAmount: amount,
       })
-      setErrorMessage('')
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Transaksi SIPLah gagal dicatat.')
     }
@@ -151,7 +171,7 @@ export function SiplahWorkflowPage() {
           ) : order.siplah.orderNumber ? (
             <div className="recorded-value"><span>Nomor order SIPLah · nominal final</span><strong>{order.siplah.orderNumber} · {order.finalInvoiceAmount === null ? 'Belum ditetapkan' : formatCurrency(order.finalInvoiceAmount)}</strong></div>
           ) : (
-            <form className="inline-action-form siplah-transaction-form" onSubmit={submitOrder}>
+            <form className="inline-action-form siplah-transaction-form" onSubmit={submitOrder} noValidate>
               <div className="totals-strip totals-strip--four">
                 <div><span>ARKAS source</span><strong>{formatCurrency(order.arkasBudgetAmount)}</strong></div>
                 <div><span>Reviewed HET</span><strong>{reviewedAmount === null ? 'Belum ada' : formatCurrency(reviewedAmount)}</strong></div>
@@ -159,7 +179,7 @@ export function SiplahWorkflowPage() {
                 <div><span>Selisih</span><strong>—</strong></div>
               </div>
               <div className="form-grid">
-                <FormField label="Nominal final transaksi SIPLah" htmlFor="siplah-final-amount" hint="Prefill dari reviewed HET; ubah jika nominal transaksi aktual berbeda.">
+                <FormField label="Nominal final transaksi SIPLah" htmlFor="siplah-final-amount" hint="Prefill dari reviewed HET; ubah jika nominal transaksi aktual berbeda." error={transactionFieldErrors.amount}>
                   <input
                     id="siplah-final-amount"
                     type="number"
@@ -169,18 +189,51 @@ export function SiplahWorkflowPage() {
                     onChange={(event) => {
                       setFinalAmount(event.target.value)
                       setAmountConfirmed(false)
+                      setTransactionFieldErrors({})
+                      setErrorMessage('')
                     }}
+                    aria-invalid={Boolean(transactionFieldErrors.amount)}
+                    aria-describedby={transactionFieldErrors.amount ? 'siplah-final-amount-error' : undefined}
                     required
                   />
                 </FormField>
-                <FormField label="Nomor order SIPLah" htmlFor="siplah-order-number">
-                  <input id="siplah-order-number" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} placeholder="SPL-2026-…" readOnly={isClosed} required />
+                <FormField label="Nomor order SIPLah" htmlFor="siplah-order-number" error={transactionFieldErrors.orderNumber}>
+                  <input
+                    id="siplah-order-number"
+                    value={orderNumber}
+                    onChange={(event) => {
+                      setOrderNumber(event.target.value)
+                      setTransactionFieldErrors({})
+                      setErrorMessage('')
+                    }}
+                    aria-invalid={Boolean(transactionFieldErrors.orderNumber)}
+                    aria-describedby={transactionFieldErrors.orderNumber ? 'siplah-order-number-error' : undefined}
+                    placeholder="SPL-2026-…"
+                    readOnly={isClosed}
+                    required
+                  />
                 </FormField>
               </div>
-              <label className="confirmation-checkbox">
-                <input type="checkbox" checked={amountConfirmed} onChange={(event) => setAmountConfirmed(event.target.checked)} disabled={isClosed} required />
-                <span>Saya mengonfirmasi nominal final sesuai transaksi SIPLah aktual.</span>
-              </label>
+              <div className="confirmation-checkbox-field">
+                <label className="confirmation-checkbox" htmlFor="siplah-amount-confirmation">
+                  <input
+                    id="siplah-amount-confirmation"
+                    type="checkbox"
+                    checked={amountConfirmed}
+                    onChange={(event) => {
+                      setAmountConfirmed(event.target.checked)
+                      setTransactionFieldErrors({})
+                      setErrorMessage('')
+                    }}
+                    aria-invalid={Boolean(transactionFieldErrors.confirmation)}
+                    aria-describedby={transactionFieldErrors.confirmation ? 'siplah-amount-confirmation-error' : undefined}
+                    disabled={isClosed}
+                    required
+                  />
+                  <span>Saya mengonfirmasi nominal final sesuai transaksi SIPLah aktual.</span>
+                </label>
+                {transactionFieldErrors.confirmation ? <span id="siplah-amount-confirmation-error" className="form-error" role="alert">{transactionFieldErrors.confirmation}</span> : null}
+              </div>
               <Button type="submit" disabled={isClosed || !amountConfirmed}>Konfirmasi nominal & catat order</Button>
             </form>
           )}
@@ -256,7 +309,7 @@ export function SiplahWorkflowPage() {
           <strong>Siap masuk Vendor Batch.</strong> Surat Pesanan sudah memenuhi checkpoint procurement. Invoice, Kwitansi, dan BAST masih terlihat belum lengkap sebagai administrasi SIPLah lanjutan dan tidak memblokir Vendor Batch.
         </section>
       ) : null}
-      {errorMessage ? <div className="callout callout--danger">{errorMessage}</div> : null}
+      {errorMessage ? <div className="callout callout--danger" role="alert"><strong>Perubahan SIPLah belum tersimpan.</strong> {errorMessage}</div> : null}
 
       <section className={readyForVendor ? 'siplah-completion is-complete' : 'siplah-completion'}>
         <div>
@@ -279,7 +332,7 @@ export function SiplahWorkflowPage() {
 
       <section className="workspace-panel siplah-admin-status-panel">
         <div className="panel-heading">
-          <div><h2>Administrasi SIPLah</h2><p>Derived dari order, nomor transaksi, dan dokumen yang ditetapkan untuk completion; bukan checkbox manual.</p></div>
+          <div><h2>Administrasi SIPLah</h2><p>Dihitung otomatis dari order, nomor transaksi, dan dokumen yang ditetapkan untuk penyelesaian; bukan checkbox manual.</p></div>
           <StatusChip tone={adminComplete ? 'success' : 'warning'}>{adminComplete ? 'Administrasi SIPLah lengkap' : 'Administrasi SIPLah belum lengkap'}</StatusChip>
         </div>
         <p>{adminComplete
@@ -288,8 +341,8 @@ export function SiplahWorkflowPage() {
       </section>
 
       <section className="independence-strip">
-        <div><span>Pembayaran sekolah</span><StatusChip tone={order.schoolPayment.status === 'LUNAS' ? 'success' : 'neutral'}>{order.schoolPayment.status}</StatusChip></div>
-        <div><span>Benefit</span><StatusChip tone={order.benefit.status === 'ELIGIBLE' ? 'warning' : order.benefit.status === 'PAID' ? 'success' : 'neutral'}>{order.benefit.status.replaceAll('_', ' ')}</StatusChip></div>
+        <div><span>Pembayaran sekolah</span><StatusChip tone={order.schoolPayment.status === 'LUNAS' ? 'success' : 'neutral'}>{schoolPaymentStatusLabels[order.schoolPayment.status]}</StatusChip></div>
+        <div><span>Benefit</span><StatusChip tone={order.benefit.status === 'ELIGIBLE' ? 'warning' : order.benefit.status === 'PAID' ? 'success' : 'neutral'}>{benefitStatusLabels[order.benefit.status]}</StatusChip></div>
         <p>SIPLah readiness dan administrasi tidak mengubah dua state finansial ini.</p>
       </section>
 

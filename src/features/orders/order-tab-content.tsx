@@ -5,6 +5,11 @@ import {
   isSiplahReadyForVendor,
   isVendorBatchEligible,
 } from '../../domain/selectors'
+import {
+  benefitStatusLabels,
+  hetReviewStatusLabels,
+  vendorBatchStatusLabels,
+} from '../../domain/presentation'
 import type { Order, VendorBatch } from '../../domain/types'
 import { formatCurrency, formatDate, formatDateTime } from '../../utils/format'
 import { ExceptionIndicator } from '../../components/ui/exception-indicator'
@@ -54,7 +59,7 @@ function OverviewTab({ order, batch }: { order: Order; batch: VendorBatch | null
         <div className="panel-heading">
           <div>
             <h2>Kondisi operasional</h2>
-            <p>State penting tetap independen; posisi lifecycle tidak menutupi masalah lain.</p>
+            <p>State penting tetap independen; tahap proses tidak menutupi masalah lain.</p>
           </div>
           {exceptions > 0 ? <ExceptionIndicator label={`${exceptions} blocker HET`} level="danger" /> : null}
         </div>
@@ -96,7 +101,7 @@ function OverviewTab({ order, batch }: { order: Order; batch: VendorBatch | null
             />
           ) : null}
           {order.benefit.status === 'ELIGIBLE' ? (
-            <DetailRow label="Benefit" detail="10% dari invoice final" value={<StatusChip tone="warning">Siap dibayar</StatusChip>} />
+            <DetailRow label="Benefit" detail="10% dari invoice final" value={<StatusChip tone="warning">{benefitStatusLabels.ELIGIBLE}</StatusChip>} />
           ) : null}
           {exceptions === 0 &&
           isSiplahAdminComplete(order) &&
@@ -149,7 +154,7 @@ function ArkasTab({ order }: { order: Order }) {
           <p>{order.arkas.fileName} · {order.arkas.reference}</p>
         </div>
         <StatusChip tone={exceptions.length > 0 ? 'danger' : 'success'}>
-          {order.het.status.replaceAll('_', ' ')}
+          {hetReviewStatusLabels[order.het.status]}
         </StatusChip>
       </div>
 
@@ -240,12 +245,12 @@ function SiplahTab({ order }: { order: Order }) {
         <ChecklistItem
           done={isSiplahReadyForVendor(order)}
           label="Siap masuk Vendor Batch"
-          detail="Derived dari HET APPROVED, akses, transaksi, nomor order, dan Surat Pesanan."
+          detail="Dihitung otomatis dari HET yang disetujui, akses, transaksi, nomor order, dan Surat Pesanan."
         />
         <ChecklistItem
           done={isSiplahAdminComplete(order)}
           label="Administrasi SIPLah lengkap"
-          detail="Derived dari dokumen administrasi lanjutan; tidak diperlukan untuk Vendor readiness."
+          detail="Dihitung otomatis dari dokumen administrasi lanjutan; tidak diperlukan untuk kesiapan Vendor."
         />
       </ol>
       {!isSiplahReadyForVendor(order) ? (
@@ -270,16 +275,16 @@ function VendorTab({ order, batch }: { order: Order; batch: VendorBatch | null }
       <div className="panel-heading">
         <div>
           <h2>Konteks Vendor</h2>
-          <p>Keanggotaan order dan lifecycle batch ditampilkan terpisah dari SIPLah.</p>
+          <p>Keanggotaan order dan tahap proses batch ditampilkan terpisah dari SIPLah.</p>
         </div>
         <StatusChip tone={batch ? 'info' : isVendorBatchEligible(order) ? 'warning' : 'neutral'}>
-          {batch?.status.replaceAll('_', ' ') ?? (isVendorBatchEligible(order) ? 'Siap masuk batch' : 'Belum eligible')}
+          {batch ? vendorBatchStatusLabels[batch.status] : isVendorBatchEligible(order) ? 'Siap masuk batch' : 'Belum siap masuk batch'}
         </StatusChip>
       </div>
       {batch ? (
         <div className="detail-list">
           <DetailRow label="Vendor Batch" value={<Link className="text-link" to={`/vendor-batches/${batch.id}`}>{batch.id} →</Link>} />
-          <DetailRow label="Status batch" detail="Status ini tidak berasal dari lifecycle order" value={<StatusChip tone="info">{batch.status.replaceAll('_', ' ')}</StatusChip>} />
+          <DetailRow label="Status batch" detail="Status ini tidak berasal dari tahap proses order" value={<StatusChip tone="info">{vendorBatchStatusLabels[batch.status]}</StatusChip>} />
           <DetailRow label="Anggota batch" detail="Aggregate lengkap tersedia di Batch Workspace" value={`${batch.orderIds.length} order`} />
           <DetailRow label="Dibuat" value={formatDate(batch.createdAt)} />
           <DetailRow label="Recap dibuat" value={formatDate(batch.recapGeneratedAt)} />

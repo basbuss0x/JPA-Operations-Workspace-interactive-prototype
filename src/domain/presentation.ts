@@ -1,6 +1,28 @@
 import { getHetExceptionCount, isSiplahAdminComplete, isSiplahReadyForVendor, isVendorBatchEligible } from './selectors'
 import type { Order, VendorBatch } from './types'
 
+export {
+  arrivalTypeLabels,
+  benefitRecipientTypeLabels,
+  benefitStatusLabels,
+  hetItemStatusLabels,
+  hetResolutionTypeLabels,
+  hetReviewStatusLabels,
+  lifecycleLabels,
+  schoolPaymentStatusLabels,
+  siplahDocumentKindLabels,
+  supplierPaymentStatusLabels,
+  timelineEventTypeLabels,
+  vendorBatchStatusLabels,
+} from './presentation-labels'
+import {
+  arrivalTypeLabels,
+  benefitStatusLabels,
+  hetReviewStatusLabels,
+  schoolPaymentStatusLabels,
+  vendorBatchStatusLabels,
+} from './presentation-labels'
+
 export interface OrderStateItem {
   label: string
   value: string
@@ -14,12 +36,12 @@ export function getOrderStateItems(
   const exceptions = getHetExceptionCount(order)
   const fulfillmentText = order.goods.arrivedAt
     ? `${order.fulfillment.progressPercent}% · sisa ${order.fulfillment.remainingQty}`
-    : 'Belum tiba'
+    : arrivalTypeLabels[order.goods.arrivalType]
 
   return [
     {
       label: 'HET',
-      value: exceptions > 0 ? `${exceptions} selisih` : order.het.status === 'APPROVED' ? 'Disetujui' : 'Belum direview',
+      value: exceptions > 0 ? `${exceptions} selisih` : hetReviewStatusLabels[order.het.status],
       tone: exceptions > 0 ? 'danger' : order.het.status === 'APPROVED' ? 'success' : 'neutral',
     },
     {
@@ -35,7 +57,7 @@ export function getOrderStateItems(
     },
     {
       label: 'Vendor',
-      value: batch?.status.replaceAll('_', ' ') ?? (isVendorBatchEligible(order) ? 'Siap batch' : 'Belum ada'),
+      value: batch ? vendorBatchStatusLabels[batch.status] : isVendorBatchEligible(order) ? 'Siap masuk batch' : 'Belum ada',
       tone: batch?.status === 'ARRIVED' ? 'success' : batch ? 'info' : isVendorBatchEligible(order) ? 'warning' : 'neutral',
     },
     {
@@ -45,12 +67,12 @@ export function getOrderStateItems(
     },
     {
       label: 'Bayar',
-      value: order.schoolPayment.status,
+      value: schoolPaymentStatusLabels[order.schoolPayment.status],
       tone: order.schoolPayment.status === 'LUNAS' ? 'success' : 'neutral',
     },
     {
       label: 'Benefit',
-      value: order.benefit.status.replaceAll('_', ' '),
+      value: benefitStatusLabels[order.benefit.status],
       tone: order.benefit.status === 'PAID' ? 'success' : order.benefit.status === 'ELIGIBLE' ? 'warning' : 'neutral',
     },
   ]

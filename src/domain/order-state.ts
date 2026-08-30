@@ -1,3 +1,4 @@
+import { schoolPaymentStatusLabels, supplierPaymentStatusLabels } from './presentation-labels'
 import type { Order } from './types'
 
 const unresolvedHetStatuses = new Set(['PRICE_MISMATCH', 'AMBIGUOUS_MATCH', 'NO_MATCH'])
@@ -124,7 +125,7 @@ export function getClosureChecklist(order: Order): ClosureChecklistItem[] {
     },
     {
       key: 'SCHOOL_PAYMENT',
-      label: 'Pembayaran sekolah LUNAS',
+      label: `Pembayaran sekolah ${schoolPaymentStatusLabels.LUNAS}`,
       complete: order.schoolPayment.status === 'LUNAS',
       blocking: true,
       detail: order.schoolPayment.status === 'LUNAS'
@@ -133,7 +134,7 @@ export function getClosureChecklist(order: Order): ClosureChecklistItem[] {
     },
     {
       key: 'BENEFIT',
-      label: 'Benefit sekolah PAID',
+      label: 'Benefit sekolah sudah dibayar',
       complete: order.benefit.status === 'PAID',
       blocking: true,
       detail: order.benefit.status === 'PAID'
@@ -146,8 +147,8 @@ export function getClosureChecklist(order: Order): ClosureChecklistItem[] {
       complete: supplierComplete,
       blocking: false,
       detail: supplierComplete
-        ? 'Supplier sudah PAID.'
-        : `Status supplier ${order.supplierPayment.status}; tidak memblokir penutupan order.`,
+        ? 'Supplier sudah dibayar.'
+        : `Status supplier ${supplierPaymentStatusLabels[order.supplierPayment.status]}; tidak memblokir penutupan order.`,
     },
   ]
 }

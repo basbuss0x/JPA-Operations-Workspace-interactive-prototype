@@ -1,10 +1,10 @@
 # JPA Post-Audit Correction Map
 
-Status: JPA-COR-07–10 implemented; Review Gate A pending
+Status: JPA-COR-07–11 implemented; Review Gate A pending
 Baseline: `00a747e` on `prototype/pass-5-final-integration`  
 Audit source: `outputs/jpa-ui-ux-audit/JPA-Operations-Workspace-UI-UX-Audit.md`  
 Design plan: `outputs/jpa-ui-ux-audit/JPA-Graph-First-Correction-Plan.md`
-Decision provenance: #1–#3 were explicitly reconfirmed by the user on 2026-08-29 before the follow-up correction pass.
+Decision provenance: #1–#3 were explicitly reconfirmed by the user on 2026-08-29; #4 was explicitly confirmed by the user on 2026-08-30 before JPA-COR-11.
 
 This is the canonical post-audit task map. Detailed implementation cards are assets linked from each prototype ticket. Execute one numbered ticket per agent session unless the map explicitly describes a review gate.
 
@@ -122,7 +122,7 @@ Which English domain terms are familiar enough to keep, and which raw statuses m
 
 ### Answer
 
-Pending operator confirmation. Use the audit section 10 recommendations as the initial vocabulary: keep ARKAS, HET, SIPLah, Surat Pesanan, Invoice, BAST, and Vendor Batch; localize raw enums and implementation language. Gross/net may remain only with plain-language explanations.
+Confirmed: use the recommended operator vocabulary without renaming domain/internal enums. Keep ARKAS, HET, SIPLah, Surat Pesanan, Invoice, BAST, and Vendor Batch. Use **Sedang diproses vendor**, **Tiba sebagian**, **Benefit wajib dibayar**, **Belum wajib dibayar**, **Belum tiba** only for goods-arrival status, **Belum ditetapkan**, **Rekap dibuat, belum dikirim**, **Otomatis**, and **Catatan operator** in the appropriate operator-facing contexts. Keep the mapping centralized so pages do not drift; gross/net and derived values require plain-language explanations.
 
 ## #5: What metadata makes the Vendor XLSX send-ready?
 
@@ -225,7 +225,7 @@ Can critical forms use local inline errors, clear stale errors on correction, an
 
 ### Answer
 
-Pending implementation and interactive browser proof.
+Implemented with shared inline error rendering and controlled validation: critical payment, benefit, HET override/reopen, reminder, New Order, SIPLah transaction, closure, and Timeline inputs now use Indonesian field errors, stable error IDs, `aria-invalid`/`aria-describedby`, first-invalid focus, explicit `noValidate` forms, stale-error clearing, and separate action/persistence feedback. Decision #4 operator labels are centralized in `src/domain/presentation-labels.ts` without changing canonical enum values. Automated regression coverage includes desktop and 390 px browser paths for mismatch correction, conditional TRANSFER/CASH reference behavior, HET reason, missing New Order context/file, Timeline note, persistence failure retention, and mobile modal usability.
 
 ## Review Gate A: field-test blocker review
 

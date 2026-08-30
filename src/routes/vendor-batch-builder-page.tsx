@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { buildVendorRecap, isVendorBatchEligible, proposeVendorBatchId } from '../domain/selectors'
+import { hetReviewStatusLabels } from '../domain/presentation'
 import { usePrototypeStore } from '../store/use-prototype-store'
 import { formatCurrency } from '../utils/format'
 import { Button } from '../components/ui/button'
@@ -118,7 +119,7 @@ export function VendorBatchBuilderPage() {
                   <div className="eligible-order__facts">
                     <span>{order.items.length} product lines</span>
                     <span>{totalBooks} buku</span>
-                    <StatusChip tone="success">HET APPROVED</StatusChip>
+                    <StatusChip tone="success">HET {hetReviewStatusLabels.APPROVED}</StatusChip>
                     <StatusChip tone="info">SIPLah siap Vendor</StatusChip>
                   </div>
                 </label>

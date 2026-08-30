@@ -3,7 +3,7 @@ import { derivePrimaryNextAction, getActiveActionCandidates } from '../../domain
 import { getOrderActionCandidates } from '../../domain/selectors'
 import { getHetExceptionCount } from '../../domain/selectors'
 import type { Order, VendorBatch } from '../../domain/types'
-import { lifecycleLabels } from '../../domain/types'
+import { lifecycleLabels } from '../../domain/presentation'
 import { ExceptionIndicator } from '../ui/exception-indicator'
 import { StatusChip } from '../ui/status-chip'
 

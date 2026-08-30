@@ -11,7 +11,7 @@ import {
   matchesOrderSearch,
   type OrderFilter,
 } from '../domain/selectors'
-import { lifecycleLabels } from '../domain/types'
+import { lifecycleLabels } from '../domain/presentation'
 import { usePrototypeStore } from '../store/use-prototype-store'
 import { EmptyState } from '../components/ui/empty-state'
 import { ExceptionIndicator } from '../components/ui/exception-indicator'
@@ -26,7 +26,7 @@ const filters: Array<{ id: OrderFilter; label: string }> = [
   { id: 'ready-vendor', label: 'Siap Vendor' },
   { id: 'goods-arrived', label: 'Barang tiba' },
   { id: 'unpaid', label: 'Belum dibayar' },
-  { id: 'benefit-eligible', label: 'Benefit eligible' },
+  { id: 'benefit-eligible', label: 'Benefit wajib dibayar' }
 ]
 
 function isOrderFilter(value: string | null): value is OrderFilter {

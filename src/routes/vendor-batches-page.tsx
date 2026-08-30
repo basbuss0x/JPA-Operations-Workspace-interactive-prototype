@@ -5,6 +5,7 @@ import {
   getVendorBatchOperationalState,
   getVendorBatchOrders,
 } from '../domain/selectors'
+import { vendorBatchStatusLabels } from '../domain/presentation'
 import type { VendorBatch } from '../domain/types'
 import { usePrototypeStore } from '../store/use-prototype-store'
 import { formatDate } from '../utils/format'
@@ -64,7 +65,7 @@ export function VendorBatchesPage() {
                 <span>Dibuat {formatDate(batch.createdAt)}</span>
               </div>
               <div className="vendor-batch-row__status">
-                <StatusChip tone={statusTone(batch.status)} dot>{batch.status.replaceAll('_', ' ')}</StatusChip>
+                <StatusChip tone={statusTone(batch.status)} dot>{vendorBatchStatusLabels[batch.status]}</StatusChip>
                 <small>{batch.recapGeneratedAt ? `Recap ${batch.recapGenerationCount}×` : 'Recap belum dibuat'}</small>
               </div>
               {recap ? (

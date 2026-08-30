@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { buildVendorRecap, getVendorBatchOrders } from '../domain/selectors'
+import { arrivalTypeLabels, vendorBatchStatusLabels } from '../domain/presentation'
 import type { GoodsArrivalAllocation } from '../domain/types'
 import { usePrototypeStore } from '../store/use-prototype-store'
 import { formatDate, formatDateTime } from '../utils/format'
@@ -13,7 +14,7 @@ import { StatusChip } from '../components/ui/status-chip'
 import { VendorRecapView } from '../features/vendor/vendor-recap-view'
 
 const arrivalOptions = [
-  { value: 'NONE', label: 'Tidak dicatat' },
+  { value: 'NONE', label: arrivalTypeLabels.NONE },
   { value: 'PARTIAL', label: 'Tiba sebagian' },
   { value: 'FULL', label: 'Tiba penuh' },
 ] as const
@@ -119,8 +120,8 @@ export function VendorBatchDetailPage() {
       <PageHeader
         eyebrow="Vendor Batch detail"
         title={batch.id}
-        description={`${memberOrders.length} order anggota · dibuat ${formatDate(batch.createdAt)}. Quantity recap selalu derived dari OrderItem.`}
-        actions={<StatusChip tone={batch.status === 'ARRIVED' ? 'success' : batch.status === 'DRAFT' ? 'warning' : 'info'} dot>{batch.status.replaceAll('_', ' ')}</StatusChip>}
+        description={`${memberOrders.length} order anggota · dibuat ${formatDate(batch.createdAt)}. Quantity recap selalu dihitung otomatis dari OrderItem.`}
+        actions={<StatusChip tone={batch.status === 'ARRIVED' ? 'success' : batch.status === 'DRAFT' ? 'warning' : 'info'} dot>{vendorBatchStatusLabels[batch.status]}</StatusChip>}
       />
 
       {batch.status === 'RECAP_GENERATED' ? (
@@ -133,7 +134,7 @@ export function VendorBatchDetailPage() {
 
       <section className="workspace-panel batch-actions-panel" aria-labelledby="batch-actions-title">
         <div className="panel-heading">
-          <div><h2 id="batch-actions-title">Tindakan lifecycle</h2><p>Setiap tombol mencatat satu kejadian bisnis; tidak ada “Advance status”.</p></div>
+          <div><h2 id="batch-actions-title">Tindakan tahap proses</h2><p>Setiap tombol mencatat satu kejadian bisnis; tidak ada tombol “lanjutkan status” generik.</p></div>
         </div>
         <div className="batch-lifecycle-actions">
           {batch.status === 'DRAFT' ? <Button onClick={generateAndDownload} disabled={exporting}>{exporting ? 'Generating recap…' : 'Generate recap .xlsx'}</Button> : null}
@@ -156,7 +157,7 @@ export function VendorBatchDetailPage() {
         <section className="workspace-panel vendor-reminder-panel" aria-labelledby="vendor-reminder-title">
           <div>
             <h2 id="vendor-reminder-title">Vendor follow-up reminder</h2>
-            <p>PROCESSING tetap pasif sampai tanggal eksplisit ini tercapai. Tidak ada stale threshold otomatis.</p>
+            <p>{vendorBatchStatusLabels.PROCESSING} tetap pasif sampai tanggal eksplisit ini tercapai. Tidak ada ambang otomatis.</p>
           </div>
           <ReminderForm
             inputId="vendor-follow-up-date"
@@ -188,7 +189,7 @@ export function VendorBatchDetailPage() {
           {memberOrders.map((order) => (
             <article key={order.id} className="batch-member-row">
               <div><Link to={`/orders/${order.id}?tab=vendor`}>{order.schoolName}</Link><span>{order.id} · {order.siplah.orderNumber}</span></div>
-              <div><StatusChip tone={order.goods.arrivalType === 'FULL' ? 'success' : order.goods.arrivalType === 'PARTIAL' ? 'warning' : 'neutral'}>Barang {order.goods.arrivalType}</StatusChip><strong>{order.items.reduce((total, item) => total + item.quantity, 0)} buku</strong></div>
+              <div><StatusChip tone={order.goods.arrivalType === 'FULL' ? 'success' : order.goods.arrivalType === 'PARTIAL' ? 'warning' : 'neutral'}>Barang · {arrivalTypeLabels[order.goods.arrivalType]}</StatusChip><strong>{order.items.reduce((total, item) => total + item.quantity, 0)} buku</strong></div>
             </article>
           ))}
         </div>
@@ -224,7 +225,7 @@ export function VendorBatchDetailPage() {
         <div className="arrival-allocation-list">
           {memberOrders.map((order) => (
             <fieldset key={order.id} disabled={order.goods.arrivalType === 'FULL'}>
-              <legend>{order.schoolName}<small>{order.id} · saat ini {order.goods.arrivalType}</small></legend>
+              <legend>{order.schoolName}<small>{order.id} · saat ini {arrivalTypeLabels[order.goods.arrivalType]}</small></legend>
               <div>
                 {arrivalOptions.map((option) => (
                   <label key={option.value}>

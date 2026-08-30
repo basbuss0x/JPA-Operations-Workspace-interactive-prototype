@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { getMockTrackerRefresh, type MockTrackerOutcome } from '../../data/tracker-fixtures'
 import { isReadyToDeliver } from '../../domain/selectors'
 import type { Order, VendorBatch } from '../../domain/types'
+import { arrivalTypeLabels, vendorBatchStatusLabels } from '../../domain/presentation'
 import { usePrototypeStore } from '../../store/use-prototype-store'
 import { formatDate, formatDateTime } from '../../utils/format'
 import { Button } from '../../components/ui/button'
@@ -79,13 +80,13 @@ export function DistributionWorkspace({ order, batch }: { order: Order; batch: V
         <div className="panel-heading">
           <div><h2>Barang dari Vendor</h2><p>Kedatangan vendor ke JPA tetap dikendalikan oleh alokasi Vendor Batch.</p></div>
           <StatusChip tone={order.goods.arrivalType === 'FULL' ? 'success' : order.goods.arrivalType === 'PARTIAL' ? 'warning' : 'neutral'}>
-            Arrival {order.goods.arrivalType}
+            {arrivalTypeLabels[order.goods.arrivalType]}
           </StatusChip>
         </div>
         <div className="detail-list">
           <StateRow label="Vendor Batch" value={batch ? <Link className="text-link" to={`/vendor-batches/${batch.id}`}>{batch.id} →</Link> : '—'} />
-          <StateRow label="Status batch" value={batch ? <StatusChip tone="info">{batch.status.replaceAll('_', ' ')}</StatusChip> : '—'} />
-          <StateRow label="Tipe kedatangan order" value={order.goods.arrivalType} />
+          <StateRow label="Status batch" value={batch ? <StatusChip tone="info">{vendorBatchStatusLabels[batch.status]}</StatusChip> : '—'} />
+          <StateRow label="Tipe kedatangan order" value={arrivalTypeLabels[order.goods.arrivalType]} />
           <StateRow label="Tiba di JPA" value={formatDate(order.goods.arrivedAt)} />
           <StateRow
             label="Pemeriksaan pra-kirim"
@@ -93,7 +94,7 @@ export function DistributionWorkspace({ order, batch }: { order: Order; batch: V
             value={<StatusChip tone={order.goods.preDeliveryCheckCompleted ? 'success' : order.goods.arrivedAt ? 'warning' : 'neutral'}>{order.goods.preDeliveryCheckCompleted ? 'Selesai' : 'Belum selesai'}</StatusChip>}
           />
           <StateRow label="Checked at" value={formatDate(order.goods.checkedAt)} />
-          <StateRow label="Kesiapan distribusi" detail="Derived dari kedatangan + pemeriksaan, bukan delivery sekolah" value={<StatusChip tone={isReadyToDeliver(order) ? 'success' : 'neutral'}>{isReadyToDeliver(order) ? 'Siap didistribusikan' : 'Belum siap'}</StatusChip>} />
+          <StateRow label="Kesiapan distribusi" detail="Dihitung otomatis dari kedatangan + pemeriksaan, bukan delivery sekolah" value={<StatusChip tone={isReadyToDeliver(order) ? 'success' : 'neutral'}>{isReadyToDeliver(order) ? 'Siap didistribusikan' : 'Belum siap'}</StatusChip>} />
         </div>
         {order.stage !== 'CLOSED' && !order.goods.preDeliveryCheckCompleted && order.goods.arrivedAt ? (
           <Button onClick={() => setCheckOpen(true)}>Cek barang selesai</Button>

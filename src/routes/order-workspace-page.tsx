@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type FormEvent, type MouseEvent } from 'reac
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { derivePrimaryNextAction } from '../domain/next-action'
 import { getHetExceptionCount, getOrderActionCandidates, getOrderBatch } from '../domain/selectors'
-import { lifecycleLabels } from '../domain/types'
+import { lifecycleLabels } from '../domain/presentation'
 import { OrderTabContent, type OrderTab } from '../features/orders/order-tab-content'
 import { usePrototypeStore } from '../store/use-prototype-store'
 import { futureIsoDate } from '../utils/format'
@@ -49,10 +49,13 @@ export function OrderWorkspacePage() {
   const [overrideTitle, setOverrideTitle] = useState('')
   const [overrideReason, setOverrideReason] = useState('')
   const [overrideDue, setOverrideDue] = useState('')
+  const [overrideError, setOverrideError] = useState<string | null>(null)
+  const [overrideActionError, setOverrideActionError] = useState<string | null>(null)
   const [reopenOpen, setReopenOpen] = useState(false)
   const reopenTriggerRef = useRef<HTMLButtonElement | null>(null)
   const [reopenReason, setReopenReason] = useState('')
   const [reopenError, setReopenError] = useState<string | null>(null)
+  const [reopenActionError, setReopenActionError] = useState<string | null>(null)
   const [reopenSubmitting, setReopenSubmitting] = useState(false)
 
   const batch = order ? getOrderBatch(order, vendorBatches) : null
@@ -85,49 +88,70 @@ export function OrderWorkspacePage() {
     setOverrideTitle(order.nextActionControl.override?.title ?? '')
     setOverrideReason(order.nextActionControl.override?.reason ?? '')
     setOverrideDue(toDateInput(order.nextActionControl.override?.dueAt ?? null))
+    setOverrideError(null)
+    setOverrideActionError(null)
     setOverrideOpen(true)
   }
 
   const submitOverride = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!overrideTitle.trim()) return
-    saveNextActionOverride(order.id, {
-      title: overrideTitle.trim(),
-      reason: overrideReason.trim(),
-      dueAt: overrideDue ? `${overrideDue}T08:00:00.000Z` : null,
-    })
-    setOverrideOpen(false)
+    setOverrideError(null)
+    setOverrideActionError(null)
+    const trimmedTitle = overrideTitle.trim()
+    if (!trimmedTitle) {
+      setOverrideError('Next action wajib diisi.')
+      document.getElementById('override-title')?.focus()
+      return
+    }
+    try {
+      saveNextActionOverride(order.id, {
+        title: trimmedTitle,
+        reason: overrideReason.trim(),
+        dueAt: overrideDue ? `${overrideDue}T08:00:00.000Z` : null,
+      })
+      setOverrideOpen(false)
+    } catch (caught) {
+      setOverrideActionError(caught instanceof Error ? caught.message : 'Next action manual gagal disimpan.')
+    }
   }
 
   const clearOverride = () => {
-    saveNextActionOverride(order.id, null)
-    setOverrideOpen(false)
+    setOverrideActionError(null)
+    try {
+      saveNextActionOverride(order.id, null)
+      setOverrideOpen(false)
+    } catch (caught) {
+      setOverrideActionError(caught instanceof Error ? caught.message : 'Override gagal dihapus.')
+    }
   }
 
   const openReopen = (event: MouseEvent<HTMLButtonElement>) => {
     reopenTriggerRef.current = event.currentTarget
     setReopenReason('')
     setReopenError(null)
+    setReopenActionError(null)
     setReopenOpen(true)
   }
 
   const submitReopen = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setReopenError(null)
+    setReopenActionError(null)
     const trimmedReason = reopenReason.trim()
     if (!trimmedReason) {
       setReopenError('Alasan membuka kembali order wajib diisi.')
+      document.getElementById('reopen-order-reason')?.focus()
       return
     }
     if (reopenSubmitting) return
     setReopenSubmitting(true)
-    setReopenError(null)
     try {
       reopenSchoolOrder(order.id, trimmedReason)
       setReopenOpen(false)
       setReopenReason('')
       setReopenSubmitting(false)
     } catch (caught) {
-      setReopenError(caught instanceof Error ? caught.message : 'Order gagal dibuka kembali.')
+      setReopenActionError(caught instanceof Error ? caught.message : 'Order gagal dibuka kembali.')
       setReopenSubmitting(false)
     }
   }
@@ -136,6 +160,7 @@ export function OrderWorkspacePage() {
     if (reopenSubmitting) return
     setReopenOpen(false)
     setReopenError(null)
+    setReopenActionError(null)
   }
 
   return (
@@ -202,11 +227,12 @@ export function OrderWorkspacePage() {
           </>
         }
       >
-        <form id="reopen-order-form" className="form-stack" onSubmit={submitReopen}>
+        <form id="reopen-order-form" className="form-stack" onSubmit={submitReopen} noValidate>
           <FormField
             label="Alasan membuka kembali order (wajib)"
             htmlFor="reopen-order-reason"
             hint="Contoh: koreksi bukti pembayaran sebelum audit internal."
+            error={reopenError ?? undefined}
           >
             <textarea
               id="reopen-order-reason"
@@ -214,15 +240,16 @@ export function OrderWorkspacePage() {
               onChange={(event) => {
                 setReopenReason(event.target.value)
                 setReopenError(null)
+                setReopenActionError(null)
               }}
               aria-invalid={Boolean(reopenError)}
-              aria-describedby={reopenError ? 'reopen-order-error' : undefined}
+              aria-describedby={reopenError ? 'reopen-order-reason-error' : undefined}
               rows={4}
               autoFocus
               data-autofocus="true"
             />
-            {reopenError ? <span id="reopen-order-error" className="form-error" role="alert">{reopenError}</span> : null}
           </FormField>
+          {reopenActionError ? <div className="callout callout--danger" role="alert"><strong>Order belum dibuka kembali.</strong> {reopenActionError}</div> : null}
         </form>
       </Modal>
 
@@ -240,12 +267,19 @@ export function OrderWorkspacePage() {
           </>
         }
       >
-        <form id="override-form" className="form-stack" onSubmit={submitOverride}>
-          <FormField label="Next action" htmlFor="override-title">
+        <form id="override-form" className="form-stack" onSubmit={submitOverride} noValidate>
+          {overrideActionError ? <div className="callout callout--danger" role="alert"><strong>Override belum tersimpan.</strong> {overrideActionError}</div> : null}
+          <FormField label="Next action" htmlFor="override-title" error={overrideError ?? undefined}>
             <input
               id="override-title"
               value={overrideTitle}
-              onChange={(event) => setOverrideTitle(event.target.value)}
+              onChange={(event) => {
+                setOverrideTitle(event.target.value)
+                setOverrideError(null)
+                setOverrideActionError(null)
+              }}
+              aria-invalid={Boolean(overrideError)}
+              aria-describedby={overrideError ? 'override-title-error' : undefined}
               placeholder="Contoh: Hubungi kepala sekolah"
               required
               autoFocus
@@ -255,7 +289,10 @@ export function OrderWorkspacePage() {
             <textarea
               id="override-reason"
               value={overrideReason}
-              onChange={(event) => setOverrideReason(event.target.value)}
+              onChange={(event) => {
+                setOverrideReason(event.target.value)
+                setOverrideActionError(null)
+              }}
               placeholder="Kenapa tindakan ini lebih penting dari rekomendasi sistem?"
               rows={3}
             />

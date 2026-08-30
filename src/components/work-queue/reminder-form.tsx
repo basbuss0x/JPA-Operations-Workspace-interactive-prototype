@@ -65,6 +65,7 @@ export function ReminderForm({
     const error = validateReminderCalendarDate(calendarDate)
     if (error) {
       setValidationError(error)
+      document.getElementById(inputId)?.focus()
       return
     }
 
@@ -111,8 +112,13 @@ export function ReminderForm({
           <strong>Reminder belum tersimpan.</strong> {actionError} Coba lagi tanpa memasukkan ulang tanggal.
         </div>
       ) : null}
-      <form className="inline-action-form" onSubmit={submit}>
-        <FormField label="Tanggal follow-up" htmlFor={inputId} hint={hint}>
+      <form className="inline-action-form" onSubmit={submit} noValidate>
+        <FormField
+          label="Tanggal follow-up"
+          htmlFor={inputId}
+          hint={hint}
+          error={validationError ?? undefined}
+        >
           <input
             id={inputId}
             type="date"
@@ -125,9 +131,6 @@ export function ReminderForm({
               onBeforeAction?.()
             }}
           />
-          {validationError ? (
-            <span id={`${inputId}-error`} className="form-error" role="alert">{validationError}</span>
-          ) : null}
         </FormField>
         <div className="reminder-form-actions">
           <Button variant="secondary" type="submit" disabled={submitting}>Simpan reminder</Button>

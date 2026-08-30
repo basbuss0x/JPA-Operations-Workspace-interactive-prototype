@@ -362,13 +362,4 @@ export interface VendorRecap {
   totalQuantity: number
 }
 
-export const lifecycleLabels: Record<LifecycleStage, string> = {
-  INTAKE: 'Intake',
-  HET_REVIEW: 'Review HET',
-  SIPLAH: 'SIPLah',
-  VENDOR: 'Vendor',
-  GOODS_ARRIVED: 'Barang tiba',
-  DISTRIBUTION: 'Distribusi',
-  COMPLETION: 'Penyelesaian',
-  CLOSED: 'Selesai',
-}
+export { lifecycleLabels } from './presentation-labels'
