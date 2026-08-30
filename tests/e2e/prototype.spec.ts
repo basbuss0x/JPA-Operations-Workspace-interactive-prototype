@@ -541,7 +541,7 @@ test('COR-09 requires explicit eligible school context before ARKAS extraction',
   await expect(extractionButton).toBeDisabled()
 })
 
-test('Pass 2 journey reaches Vendor readiness while admin documents remain later', async ({ page }, testInfo) => {
+test('Pass 2 journey reaches Vendor readiness before expanding later admin documents', async ({ page }, testInfo) => {
   test.setTimeout(60_000)
   await page.goto('/orders/new')
   await expect(page.getByRole('heading', { name: 'Pesanan Baru' })).toBeVisible()
@@ -673,17 +673,39 @@ test('Pass 2 journey reaches Vendor readiness while admin documents remain later
 
   await expect(page.getByRole('heading', { name: 'Siap masuk Vendor Batch' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Masukkan ke Vendor Batch' })).toBeVisible()
-  await expect(page.getByText('Administrasi SIPLah belum lengkap')).toBeVisible()
-  await expect(page.getByText('Invoice SIPLah')).toBeVisible()
-  await expect(page.locator('.siplah-document-row').filter({ hasText: 'Invoice SIPLah' }).getByText('Belum tersedia')).toBeVisible()
+  const adminDocuments = page.locator('details.siplah-admin-documents')
+  const optionalDocuments = page.locator('details.siplah-optional-documents')
+  const invoice = adminDocuments.locator('.siplah-document-row').filter({ hasText: 'Invoice SIPLah' })
+  await expect(page.locator('.workflow-steps')).toContainText('Siap Vendor')
+  await expect(page.locator('.workflow-steps')).toContainText('Administrasi menyusul')
+  await expect(adminDocuments.locator('summary')).toContainText('Administrasi menyusul')
+  await expect(adminDocuments.locator('summary')).toContainText('tidak memblokir')
+  await expect(optionalDocuments.locator('summary')).toContainText('Arsip PDF SIPLah')
+  await expect(adminDocuments.locator('.siplah-document-row').filter({ hasText: 'Arsip PDF SIPLah' })).toHaveCount(0)
+  await expect(adminDocuments).not.toHaveAttribute('open', '')
+  await expect(invoice).toBeHidden()
   await expect(page.getByText('Belum dibayar')).toBeVisible()
   await expect(page.getByText('Belum wajib dibayar')).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('desktop-siplah.png'), fullPage: true })
 
+  await adminDocuments.locator('summary').click()
+  await expect(invoice).toBeVisible()
+  await expect(invoice).toContainText('Belum tersedia')
+
+  for (const documentLabel of ['Invoice SIPLah', 'Kwitansi', 'BAST']) {
+    const documentRow = adminDocuments.locator('.siplah-document-row').filter({ hasText: documentLabel })
+    await documentRow.getByRole('button', { name: 'Lampirkan demo' }).click()
+    await documentRow.getByRole('button', { name: 'Verifikasi' }).click()
+    await expect(documentRow.getByText('Lengkap', { exact: true })).toBeVisible()
+  }
+  await expect(adminDocuments.locator('.siplah-admin-documents__status')).toContainText('Lengkap')
+  await expect(page.getByText('Syarat pembelian dan administrasi SIPLah sudah lengkap.')).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('desktop-siplah-admin-expanded.png'), fullPage: true })
+
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Siap masuk Vendor Batch' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Masukkan ke Vendor Batch' })).toBeVisible()
-  await expect(page.getByText('Administrasi SIPLah belum lengkap')).toBeVisible()
+  await expect(page.locator('details.siplah-admin-documents .siplah-admin-documents__status')).toContainText('Lengkap')
 
   await page.goto('/orders/ORD-2026-240?tab=timeline')
   await expect(page.getByText('HET disetujui')).toBeVisible()
@@ -1296,7 +1318,13 @@ test.describe('mobile operations layout', () => {
 
     await page.goto('/orders/ORD-2026-071/siplah')
     await expect(page.getByRole('heading', { name: 'Alur SIPLah' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Dokumen SIPLah' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Dokumen untuk kesiapan Vendor' })).toBeVisible()
+    const mobileAdminDocuments = page.locator('details.siplah-admin-documents')
+    await expect(mobileAdminDocuments.locator('summary')).toContainText('Administrasi menyusul')
+    await expect(mobileAdminDocuments).not.toHaveAttribute('open', '')
+    await expect(page.locator('.siplah-document-row--primary .document-action-note')).toContainText('Aktif setelah pesanan SIPLah dibuat.')
+    await expect(mobileAdminDocuments.locator('.siplah-document-row').filter({ hasText: 'Invoice SIPLah' })).toBeHidden()
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
     await page.screenshot({ path: testInfo.outputPath('mobile-siplah.png'), fullPage: true })
   })
 })

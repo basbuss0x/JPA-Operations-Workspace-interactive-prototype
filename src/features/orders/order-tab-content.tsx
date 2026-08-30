@@ -208,6 +208,13 @@ function ArkasTab({ order }: { order: Order }) {
 
 function SiplahTab({ order }: { order: Order }) {
   const process = order.siplah
+  const vendorDocuments = process.documents.filter((document) => document.requiredForVendorReady)
+  const laterAdminDocuments = process.documents.filter((document) => document.requiredForAdminCompletion && !document.requiredForVendorReady)
+  const optionalDocuments = process.documents.filter((document) => !document.requiredForVendorReady && !document.requiredForAdminCompletion)
+  const completedLaterAdminDocuments = laterAdminDocuments.filter((document) =>
+    document.available && Boolean(document.fileName) && document.verified && (!document.sendToSchoolRequired || document.sentToSchool),
+  ).length
+
   return (
     <section className="workspace-panel focused-workflow">
       <div className="panel-heading">
@@ -223,17 +230,14 @@ function SiplahTab({ order }: { order: Order }) {
         <ChecklistItem done={process.accessAvailable} label="Akses sekolah tersedia" detail="Kredensial asli tidak disimpan di prototipe." />
         <ChecklistItem done={process.orderPlaced} label="Pesanan dibuat di JPA/TokoLadang" />
         <ChecklistItem done={Boolean(process.orderNumber)} label="Nomor order SIPLah tercatat" detail={process.orderNumber ?? 'Belum ada nomor order'} />
-        {process.documents.map((document) => {
+        {vendorDocuments.map((document) => {
           const complete =
             document.available &&
             Boolean(document.fileName) &&
             document.verified &&
             (!document.sendToSchoolRequired || document.sentToSchool)
-          const requirement = document.requiredForVendorReady
-            ? 'wajib untuk kesiapan Vendor'
-            : document.requiredForAdminCompletion ? 'administrasi lanjutan' : 'opsional untuk arsip'
           const status = [
-            requirement,
+            'memblokir kesiapan Vendor',
             document.available ? 'tersedia' : 'belum tersedia',
             document.fileName ? 'terlampir' : 'belum terlampir',
             document.verified ? 'terverifikasi' : 'belum diverifikasi',
@@ -250,9 +254,16 @@ function SiplahTab({ order }: { order: Order }) {
         />
         <ChecklistItem
           done={isSiplahAdminComplete(order)}
-          label="Administrasi SIPLah lengkap"
-          detail="Dihitung otomatis dari dokumen administrasi lanjutan; tidak diperlukan untuk kesiapan Vendor."
+          label="Administrasi menyusul"
+          detail={`${completedLaterAdminDocuments} dari ${laterAdminDocuments.length} dokumen lanjutan lengkap; Invoice, Kwitansi, dan BAST tidak memblokir Vendor.`}
         />
+        {optionalDocuments.length > 0 ? (
+          <ChecklistItem
+            done={optionalDocuments.every((document) => document.available && Boolean(document.fileName) && document.verified)}
+            label="Arsip PDF SIPLah (opsional)"
+            detail="Tidak diperlukan untuk kesiapan Vendor atau penyelesaian administrasi."
+          />
+        ) : null}
       </ol>
       {!isSiplahReadyForVendor(order) ? (
         <div className="deferred-action-note">

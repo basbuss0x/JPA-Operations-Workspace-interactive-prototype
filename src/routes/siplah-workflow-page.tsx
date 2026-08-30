@@ -26,9 +26,24 @@ function documentComplete(document: SiplahDocument): boolean {
 }
 
 function documentRequirementLabel(document: SiplahDocument): string {
-  if (document.requiredForVendorReady) return 'Wajib untuk kesiapan Vendor'
-  if (document.requiredForAdminCompletion) return 'Administrasi lanjutan'
+  if (document.requiredForVendorReady) return 'Memblokir kesiapan Vendor'
+  if (document.requiredForAdminCompletion) return 'Administrasi menyusul'
   return 'Opsional untuk arsip'
+}
+
+function isLaterAdminDocument(document: SiplahDocument): boolean {
+  return document.requiredForAdminCompletion && !document.requiredForVendorReady
+}
+
+function documentStatusSummary(document: SiplahDocument): string {
+  return [
+    document.available ? siplahDocumentStatusLabels.available : siplahDocumentStatusLabels.unavailable,
+    document.fileName ? siplahDocumentStatusLabels.attached : siplahDocumentStatusLabels.unattached,
+    document.verified ? siplahDocumentStatusLabels.verified : siplahDocumentStatusLabels.unverified,
+    document.sendToSchoolRequired
+      ? document.sentToSchool ? siplahDocumentStatusLabels.sent : siplahDocumentStatusLabels.unsent
+      : siplahDocumentStatusLabels.notSentRequired,
+  ].join(' · ')
 }
 
 interface TransactionFieldErrors {
@@ -59,6 +74,11 @@ export function SiplahWorkflowPage() {
   }
 
   const isClosed = order.stage === 'CLOSED'
+  const vendorDocuments = order.siplah.documents.filter((document) => document.requiredForVendorReady)
+  const laterAdminDocuments = order.siplah.documents.filter(isLaterAdminDocument)
+  const optionalDocuments = order.siplah.documents.filter((document) => !document.requiredForVendorReady && !document.requiredForAdminCompletion)
+  const completedVendorDocuments = vendorDocuments.filter(documentComplete).length
+  const completedLaterAdminDocuments = laterAdminDocuments.filter(documentComplete).length
 
   const submitOrder = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -87,8 +107,8 @@ export function SiplahWorkflowPage() {
 
   const attachRequiredDemoPackage = () => {
     try {
-      for (const document of order.siplah.documents.filter((candidate) => candidate.requiredForAdminCompletion)) {
-        attachDocument(order.id, document.kind, `${document.kind}-${order.id}.pdf`)
+      for (const document of laterAdminDocuments) {
+        if (!documentComplete(document)) attachDocument(order.id, document.kind, `${document.kind}-${order.id}.pdf`)
       }
       setErrorMessage('')
     } catch (error) {
@@ -101,14 +121,48 @@ export function SiplahWorkflowPage() {
   const primaryAction = derivePrimaryNextAction(
     deriveActionCandidates(order, { vendorBatch: null }, renderedAt),
   )
-  const vendorDocuments = order.siplah.documents.filter((document) => document.requiredForVendorReady)
-  const adminDocuments = order.siplah.documents.filter((document) => document.requiredForAdminCompletion)
-  const completedVendorDocuments = vendorDocuments.filter(documentComplete).length
-  const completedAdminDocuments = adminDocuments.filter(documentComplete).length
   const reviewedAmount = order.hetReviewedAmount
   const finalDifference = order.finalInvoiceAmount === null || reviewedAmount === null
     ? null
     : order.finalInvoiceAmount - reviewedAmount
+
+  const renderDocumentRow = (
+    document: SiplahDocument,
+    emphasis: 'primary' | 'later' | 'optional',
+  ) => {
+    const completeDocument = documentComplete(document)
+    return (
+      <article className={`siplah-document-row siplah-document-row--${emphasis}`} key={document.kind}>
+        <div className="siplah-document-row__identity">
+          <span className={completeDocument ? 'document-icon is-complete' : 'document-icon'}>{completeDocument ? '✓' : '▤'}</span>
+          <div><strong>{document.label}</strong><small>{siplahDocumentKindLabels[document.kind]} · {documentRequirementLabel(document)}</small></div>
+        </div>
+        <div className="document-statuses">
+          <StatusChip tone={completeDocument ? 'success' : document.requiredForVendorReady ? 'warning' : 'neutral'}>
+            {completeDocument ? 'Lengkap' : document.requiredForVendorReady ? 'Menghambat Vendor' : 'Belum lengkap'}
+          </StatusChip>
+          <span className="document-status-detail">{documentStatusSummary(document)}</span>
+        </div>
+        {document.fileName ? <span className="document-file-name">{document.fileName}</span> : null}
+        <div className="siplah-document-row__actions">
+          {!document.available ? (
+            <Button size="sm" variant="secondary" onClick={() => markDocumentAvailable(order.id, document.kind)} disabled={isClosed || !order.siplah.orderPlaced}>Tandai tersedia</Button>
+          ) : null}
+          {!document.fileName ? (
+            <Button size="sm" variant="secondary" onClick={() => attachDocument(order.id, document.kind, `${document.kind}-${order.id}.pdf`)} disabled={isClosed || !order.siplah.orderPlaced}>Lampirkan demo</Button>
+          ) : null}
+          {document.fileName && !document.verified ? (
+            <Button size="sm" onClick={() => verifyDocument(order.id, document.kind)} disabled={isClosed}>Verifikasi</Button>
+          ) : null}
+          {document.sendToSchoolRequired && document.verified && !document.sentToSchool ? (
+            <Button size="sm" onClick={() => sendDocument(order.id, document.kind)} disabled={isClosed}>Tandai dikirim</Button>
+          ) : null}
+          {!order.siplah.orderPlaced ? <span className="document-action-note">Aktif setelah pesanan SIPLah dibuat.</span> : null}
+          {completeDocument ? <span className="document-done">Selesai</span> : null}
+        </div>
+      </article>
+    )
+  }
 
   return (
     <div className="page-stack focused-route siplah-workflow-page">
@@ -140,8 +194,8 @@ export function SiplahWorkflowPage() {
       <ol className="workflow-steps" aria-label="Tahapan SIPLah">
         <li className={order.siplah.accessAvailable ? 'is-active' : ''}><span>1</span>Akses</li>
         <li className={order.siplah.orderPlaced && order.siplah.orderNumber && order.finalInvoiceAmount !== null ? 'is-active' : ''}><span>2</span>Order & nominal</li>
-        <li className={adminComplete ? 'is-active' : ''}><span>3</span>Administrasi</li>
-        <li className={readyForVendor ? 'is-active' : ''}><span>4</span>Siap Vendor</li>
+        <li className={readyForVendor ? 'is-active' : ''}><span>3</span>Siap Vendor</li>
+        <li className={adminComplete ? 'is-active' : ''}><span>4</span>Administrasi menyusul</li>
       </ol>
 
       <section className="workspace-panel siplah-checkpoint-card">
@@ -258,56 +312,66 @@ export function SiplahWorkflowPage() {
         </div>
       </section>
 
-      <section className="workspace-panel siplah-documents-section">
+      <section className={`workspace-panel siplah-documents-section siplah-documents-section--primary ${readyForVendor ? 'is-ready' : 'is-blocking'}`}>
         <div className="panel-heading">
           <div>
-            <span className="checkpoint-kicker">SYARAT 3</span>
-            <h2>Dokumen SIPLah</h2>
-            <p>{completedVendorDocuments} dari {vendorDocuments.length} dokumen untuk Vendor lengkap · {completedAdminDocuments} dari {adminDocuments.length} dokumen administrasi lengkap. Invoice, Kwitansi, dan BAST dapat dilengkapi setelah order masuk Vendor.</p>
+            <span className="checkpoint-kicker">PRIORITAS VENDOR</span>
+            <h2>Dokumen untuk kesiapan Vendor</h2>
+            <p>Surat Pesanan adalah dokumen yang menentukan kesiapan masuk Vendor Batch. Lengkapi lampiran, verifikasi, dan pengirimannya di sini.</p>
           </div>
-          <Button variant="secondary" size="sm" onClick={attachRequiredDemoPackage} disabled={isClosed || !order.siplah.orderPlaced}>
-            Lampirkan paket administrasi demo
-          </Button>
+          <StatusChip tone={readyForVendor ? 'success' : 'warning'}>
+            {readyForVendor ? 'Siap untuk Vendor' : `${completedVendorDocuments} dari ${vendorDocuments.length} lengkap`}
+          </StatusChip>
         </div>
-
         <div className="siplah-document-list">
-          {order.siplah.documents.map((document) => {
-            const completeDocument = documentComplete(document)
-            return (
-              <article className="siplah-document-row" key={document.kind}>
-                <div className="siplah-document-row__identity">
-                  <span className={completeDocument ? 'document-icon is-complete' : 'document-icon'}>{completeDocument ? '✓' : '▤'}</span>
-                  <div><strong>{document.label}</strong><small>{siplahDocumentKindLabels[document.kind]} · {documentRequirementLabel(document)}</small></div>
-                </div>
-                <div className="document-statuses">
-                  <StatusChip tone={document.available ? 'success' : 'neutral'}>{document.available ? siplahDocumentStatusLabels.available : siplahDocumentStatusLabels.unavailable}</StatusChip>
-                  <StatusChip tone={document.fileName ? 'success' : 'neutral'}>{document.fileName ? siplahDocumentStatusLabels.attached : siplahDocumentStatusLabels.unattached}</StatusChip>
-                  <StatusChip tone={document.verified ? 'success' : 'warning'}>{document.verified ? siplahDocumentStatusLabels.verified : siplahDocumentStatusLabels.unverified}</StatusChip>
-                  {document.sendToSchoolRequired ? (
-                    <StatusChip tone={document.sentToSchool ? 'success' : 'warning'}>{document.sentToSchool ? siplahDocumentStatusLabels.sent : siplahDocumentStatusLabels.unsent}</StatusChip>
-                  ) : <StatusChip>{siplahDocumentStatusLabels.notSentRequired}</StatusChip>}
-                </div>
-                {document.fileName ? <span className="document-file-name">{document.fileName}</span> : null}
-                <div className="siplah-document-row__actions">
-                  {!document.available ? (
-                    <Button size="sm" variant="secondary" onClick={() => markDocumentAvailable(order.id, document.kind)} disabled={isClosed || !order.siplah.orderPlaced}>Tandai tersedia</Button>
-                  ) : null}
-                  {!document.fileName ? (
-                    <Button size="sm" variant="secondary" onClick={() => attachDocument(order.id, document.kind, `${document.kind}-${order.id}.pdf`)} disabled={isClosed || !order.siplah.orderPlaced}>Lampirkan demo</Button>
-                  ) : null}
-                  {document.fileName && !document.verified ? (
-                    <Button size="sm" onClick={() => verifyDocument(order.id, document.kind)} disabled={isClosed}>Verifikasi</Button>
-                  ) : null}
-                  {document.sendToSchoolRequired && document.verified && !document.sentToSchool ? (
-                    <Button size="sm" onClick={() => sendDocument(order.id, document.kind)} disabled={isClosed}>Tandai dikirim</Button>
-                  ) : null}
-                  {completeDocument ? <span className="document-done">Selesai</span> : null}
-                </div>
-              </article>
-            )
-          })}
+          {vendorDocuments.map((document) => renderDocumentRow(document, 'primary'))}
         </div>
       </section>
+
+      <details className="workspace-panel siplah-admin-documents">
+        <summary className="siplah-admin-documents__summary">
+          <div>
+            <span className="checkpoint-kicker">ADMINISTRASI MENYUSUL</span>
+            <h2>Administrasi menyusul</h2>
+            <p>Invoice, Kwitansi, dan BAST dapat dilengkapi setelah order masuk Vendor; bagian ini tidak memblokir kesiapan Vendor Batch.</p>
+          </div>
+          <div className="siplah-admin-documents__status">
+            <StatusChip tone={adminComplete ? 'success' : 'neutral'}>{adminComplete ? 'Lengkap' : 'Menyusul'}</StatusChip>
+            <small>{completedLaterAdminDocuments} dari {laterAdminDocuments.length} dokumen lanjutan lengkap</small>
+          </div>
+        </summary>
+        <div className="siplah-admin-documents__body">
+          <div className="siplah-admin-documents__toolbar">
+            <p>Status setiap dokumen tetap dapat dilihat dan diselesaikan satu per satu.</p>
+            {laterAdminDocuments.some((document) => !documentComplete(document)) ? (
+              <Button variant="secondary" size="sm" onClick={attachRequiredDemoPackage} disabled={isClosed || !order.siplah.orderPlaced}>
+                Lampirkan paket administrasi demo
+              </Button>
+            ) : null}
+          </div>
+          <div className="siplah-document-list">
+            {laterAdminDocuments.map((document) => renderDocumentRow(document, 'later'))}
+          </div>
+        </div>
+      </details>
+
+      {optionalDocuments.length > 0 ? (
+        <details className="workspace-panel siplah-optional-documents">
+          <summary className="siplah-optional-documents__summary">
+            <div>
+              <span className="checkpoint-kicker">ARSIP OPSIONAL</span>
+              <h2>Arsip PDF SIPLah</h2>
+              <p>Dokumen ini tidak diperlukan untuk Vendor maupun penyelesaian administrasi.</p>
+            </div>
+            <StatusChip tone={optionalDocuments.every(documentComplete) ? 'success' : 'neutral'}>
+              {optionalDocuments.every(documentComplete) ? 'Lengkap' : 'Opsional'}
+            </StatusChip>
+          </summary>
+          <div className="siplah-document-list">
+            {optionalDocuments.map((document) => renderDocumentRow(document, 'optional'))}
+          </div>
+        </details>
+      ) : null}
 
       {readyForVendor && !adminComplete ? (
         <section className="callout callout--info">
@@ -333,16 +397,6 @@ export function SiplahWorkflowPage() {
             {primaryAction?.kind === 'ADD_TO_VENDOR_BATCH' ? primaryAction.title : 'Lihat area Vendor'}
           </Link>
         ) : null}
-      </section>
-
-      <section className="workspace-panel siplah-admin-status-panel">
-        <div className="panel-heading">
-          <div><h2>Administrasi SIPLah</h2><p>Dihitung otomatis dari order, nomor transaksi, dan dokumen yang ditetapkan untuk penyelesaian; bukan kotak centang manual.</p></div>
-          <StatusChip tone={adminComplete ? 'success' : 'warning'}>{adminComplete ? 'Administrasi SIPLah lengkap' : 'Administrasi SIPLah belum lengkap'}</StatusChip>
-        </div>
-        <p>{adminComplete
-          ? 'Dokumen administrasi yang ditetapkan sudah tersedia, terlampir, terverifikasi, dan dikirim bila memang diwajibkan.'
-          : 'Invoice, Kwitansi, dan BAST tetap menjadi pekerjaan administrasi lanjutan. Ketidaklengkapan ini tidak membatalkan kesiapan Vendor Batch.'}</p>
       </section>
 
       <section className="independence-strip">

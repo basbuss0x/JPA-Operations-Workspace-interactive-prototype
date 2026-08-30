@@ -1,6 +1,6 @@
 # JPA Post-Audit Correction Map
 
-Status: JPA-COR-07–14 implemented (COR-14.1 relevance refinement); Review Gate B pending
+Status: JPA-COR-07–15 implemented (COR-14.1 relevance refinement); Review Gate B pending
 Baseline: `00a747e` on `prototype/pass-5-final-integration`  
 Audit source: `outputs/jpa-ui-ux-audit/JPA-Operations-Workspace-UI-UX-Audit.md`  
 Design plan: `outputs/jpa-ui-ux-audit/JPA-Graph-First-Correction-Plan.md`
@@ -291,7 +291,7 @@ Can Surat Pesanan remain visibly primary while Invoice/Kwitansi/BAST become one 
 
 ### Answer
 
-Pending implementation and interactive browser proof.
+Implemented locally: the SIPLah route now presents Surat Pesanan as the primary Vendor blocker, keeps Invoice/Kwitansi/BAST in a collapsed **Administrasi menyusul** disclosure with individual actions after expansion, and separates the optional PDF archive. Step order and copy place Vendor readiness before later administration; the existing derived readiness and admin-completion rules remain unchanged. Unit, typecheck, lint, build, diff, full E2E, and desktop/390 px browser checks pass. Independent review and Review Gate B remain pending.
 
 ## #16: Can the Vendor workbook be sent without manual cleanup?
 

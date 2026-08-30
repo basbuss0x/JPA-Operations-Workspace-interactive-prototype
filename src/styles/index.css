@@ -2513,6 +2513,123 @@ p {
   gap: 16px;
 }
 
+.siplah-documents-section--primary {
+  border-left: 4px solid var(--warning);
+}
+
+.siplah-documents-section--primary.is-ready {
+  border-left-color: var(--success);
+}
+
+.siplah-document-row--primary {
+  padding-right: 12px;
+  padding-left: 12px;
+  background: var(--warning-bg);
+}
+
+.siplah-documents-section--primary.is-ready .siplah-document-row--primary {
+  background: var(--success-bg);
+}
+
+.siplah-admin-documents,
+.siplah-optional-documents {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.siplah-admin-documents__summary,
+.siplah-optional-documents__summary {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 48px 20px 20px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.siplah-admin-documents__summary::-webkit-details-marker,
+.siplah-optional-documents__summary::-webkit-details-marker {
+  display: none;
+}
+
+.siplah-admin-documents__summary:hover,
+.siplah-optional-documents__summary:hover {
+  background: var(--surface-muted);
+}
+
+.siplah-admin-documents__summary::after,
+.siplah-optional-documents__summary::after {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  color: var(--forest-700);
+  content: "+";
+  font-size: 1.2rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.siplah-admin-documents[open] > summary,
+.siplah-optional-documents[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.siplah-admin-documents[open] > summary::after,
+.siplah-optional-documents[open] > summary::after {
+  content: "−";
+}
+
+.siplah-admin-documents__summary > div:first-child,
+.siplah-optional-documents__summary > div:first-child {
+  min-width: 0;
+}
+
+.siplah-admin-documents__summary p,
+.siplah-optional-documents__summary p {
+  max-width: 760px;
+  margin-bottom: 0;
+  font-size: 0.72rem;
+}
+
+.siplah-admin-documents__status {
+  display: grid;
+  flex: 0 0 auto;
+  justify-items: end;
+  gap: 4px;
+}
+
+.siplah-admin-documents__status small {
+  color: var(--muted);
+  font-size: 0.62rem;
+  white-space: nowrap;
+}
+
+.siplah-admin-documents__body {
+  display: grid;
+  gap: 16px;
+  padding: 16px 20px 20px;
+}
+
+.siplah-admin-documents__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.siplah-admin-documents__toolbar p {
+  margin: 0;
+  font-size: 0.72rem;
+}
+
+.siplah-optional-documents .siplah-document-list {
+  margin: 0 20px 20px;
+}
+
 .checkpoint-kicker {
   color: var(--forest-700);
   font-size: 0.62rem;
@@ -2576,7 +2693,14 @@ p {
 .document-statuses {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  align-items: center;
+  gap: 6px 9px;
+}
+
+.document-status-detail {
+  color: var(--muted);
+  font-size: 0.62rem;
+  line-height: 1.4;
 }
 
 .document-file-name {
@@ -2592,10 +2716,19 @@ p {
   gap: 5px;
 }
 
-.document-done {
-  color: var(--success);
+.document-done,
+.document-action-note {
   font-size: 0.7rem;
   font-weight: 750;
+}
+
+.document-done {
+  color: var(--success);
+}
+
+.document-action-note {
+  color: var(--muted);
+  line-height: 1.4;
 }
 
 .siplah-completion {
@@ -2796,8 +2929,28 @@ p {
     padding: 14px;
   }
 
-  .siplah-documents-section .panel-heading {
+  .siplah-documents-section .panel-heading,
+  .siplah-admin-documents__summary,
+  .siplah-optional-documents__summary,
+  .siplah-admin-documents__toolbar {
     display: grid;
+  }
+
+  .siplah-admin-documents__summary,
+  .siplah-optional-documents__summary {
+    gap: 12px;
+  }
+
+  .siplah-admin-documents__status {
+    justify-items: start;
+  }
+
+  .siplah-admin-documents__status small {
+    white-space: normal;
+  }
+
+  .siplah-admin-documents__toolbar .button {
+    width: 100%;
   }
 
   .document-statuses,
