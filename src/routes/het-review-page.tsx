@@ -44,9 +44,15 @@ function HetProductPicker({
   onChoose,
 }: HetProductPickerProps) {
   const hasQuery = query.trim().length > 0
-  const currentCode = item.productCode
+  const currentProduct = PRODUCT_MASTER.find((product) => (
+    product.code === item.productCode ||
+    (product.title === item.masterProductTitle && product.hetUnitPrice === item.hetUnitPrice)
+  ))
+  const currentCode = currentProduct?.code ?? item.productCode
+  const currentTitle = currentProduct?.title ?? item.masterProductTitle
+  const currentPrice = currentProduct?.hetUnitPrice ?? item.hetUnitPrice
   const currentLabel = item.resolutionType === null ? 'Saran saat ini' : 'Produk saat ini'
-  const hasCurrentProduct = Boolean(item.masterProductTitle && currentCode && item.hetUnitPrice !== null)
+  const hasCurrentProduct = Boolean(currentTitle && currentCode && currentPrice !== null)
   const products = hasQuery
     ? searchProductMaster(query, PRODUCT_MASTER)
     : rankProductAlternatives(item, PRODUCT_MASTER)
@@ -60,12 +66,12 @@ function HetProductPicker({
       </FormField>
 
       {!hasQuery && hasCurrentProduct ? (
-        <div className="product-picker__current" aria-label={`${currentLabel}: ${item.masterProductTitle}`}>
+        <div className="product-picker__current" aria-label={`${currentLabel}: ${currentTitle}`}>
           <div>
             <span>{currentLabel}</span>
-            <strong>{item.masterProductTitle}</strong>
+            <strong>{currentTitle}</strong>
             <small>{currentCode}</small>
-            <small>HET {formatCurrency(item.hetUnitPrice ?? 0)}</small>
+            <small>HET {formatCurrency(currentPrice ?? 0)}</small>
           </div>
           <small>ARKAS {formatCurrency(item.arkasUnitPrice)} sebagai pembanding</small>
         </div>
@@ -89,8 +95,10 @@ function HetProductPicker({
           </button>
         )) : (
           <div className="product-search-empty">
-            <p>Tidak ada produk yang cocok dengan pencarian. Hapus kata pencarian atau cari dengan judul/kode Product Master.</p>
-            <Button variant="ghost" size="sm" onClick={() => onQueryChange('')}>Hapus pencarian</Button>
+            <p>{hasQuery
+              ? 'Tidak ada produk yang cocok dengan pencarian. Hapus kata pencarian atau cari dengan judul/kode Product Master.'
+              : 'Belum ada alternatif bermakna dari data Product Master. Cari dengan judul atau kode untuk melihat hasil lain.'}</p>
+            {hasQuery ? <Button variant="ghost" size="sm" onClick={() => onQueryChange('')}>Hapus pencarian</Button> : null}
           </div>
         )}
       </div>

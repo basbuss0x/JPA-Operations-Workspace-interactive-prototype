@@ -3,6 +3,7 @@ import { DEMO_ARKAS_FIXTURE, extractArkasFixture } from '../data/arkas-fixtures'
 import { PRODUCT_MASTER } from '../data/product-master'
 import {
   calculateArkasBudgetAmount,
+  isRelevantProductAlternative,
   matchExtractedItems,
   rankProductAlternatives,
   searchProductMaster,
@@ -41,7 +42,7 @@ describe('deterministic ARKAS extraction and HET matching', () => {
     if (!religion) throw new Error('Missing ambiguous religion item')
 
     const ranked = rankProductAlternatives(religion, PRODUCT_MASTER)
-    expect(ranked.slice(0, 2).map((product) => product.code)).toEqual([
+    expect(ranked.map((product) => product.code)).toEqual([
       'BK-PAI-5',
       'BK-PAK-5',
     ])
@@ -49,7 +50,19 @@ describe('deterministic ARKAS extraction and HET matching', () => {
 
     const pai = PRODUCT_MASTER.find((product) => product.code === 'BK-PAI-5')
     const pak = PRODUCT_MASTER.find((product) => product.code === 'BK-PAK-5')
-    if (!pai || !pak) throw new Error('Missing religion Product Master fixtures')
+    const ppkn = PRODUCT_MASTER.find((product) => product.code === 'BK-PPKN-5')
+    const seni = PRODUCT_MASTER.find((product) => product.code === 'BK-SENI-5')
+    const english = PRODUCT_MASTER.find((product) => product.code === 'BK-ENG-5')
+    if (!pai || !pak || !ppkn || !seni || !english) throw new Error('Missing religion Product Master fixtures')
+    expect(isRelevantProductAlternative(religion, pai)).toBe(true)
+    expect(isRelevantProductAlternative(religion, pak)).toBe(true)
+    expect(isRelevantProductAlternative(religion, ppkn)).toBe(false)
+    expect(isRelevantProductAlternative(religion, seni)).toBe(false)
+    expect(isRelevantProductAlternative(religion, english)).toBe(false)
+    expect(rankProductAlternatives(religion, [pai, pak, ppkn, seni, english]).map((product) => product.code)).toEqual([
+      'BK-PAI-5',
+      'BK-PAK-5',
+    ])
     expect(rankProductAlternatives(religion, [pai, pak, pak]).map((product) => product.code)).toEqual([
       'BK-PAI-5',
       'BK-PAK-5',

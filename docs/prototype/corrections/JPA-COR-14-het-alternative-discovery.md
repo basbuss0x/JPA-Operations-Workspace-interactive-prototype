@@ -45,7 +45,7 @@ HET exception
 
 ## Acceptance criteria
 
-- [ ] **Pilih produk lain** shows at least two meaningful alternatives for the canonical ambiguous Religion item before typing.
+- [ ] **Pilih produk lain** shows the current suggestion plus at least one meaningful alternative for the canonical ambiguous Religion item before typing.
 - [ ] Current suggestion is explicitly labeled and not confused with alternatives.
 - [ ] Search still finds product by title and code.
 - [ ] Empty/no-result search has clear recovery copy.
@@ -54,6 +54,8 @@ HET exception
 - [ ] Final approval remains separately confirmed.
 - [ ] Reopened/resolved item editing behaves consistently.
 - [ ] Candidate comparison is readable and tappable at 390 px.
+
+For the canonical Religion fixture, the current Product Master contains two relevant options: `BK-PAI-5` and `BK-PAK-5`. The acceptance proof is therefore the current `BK-PAI-5` suggestion plus the meaningful `BK-PAK-5` alternative; the picker must not pad the recommended list with unrelated class/price matches. Additional products remain discoverable through explicit title/code search.
 
 ## Automated verification
 
@@ -67,4 +69,4 @@ Use the canonical Religion ambiguity. Open alternatives without typing, compare 
 
 ## Stop conditions
 
-Stop if meaningful ranking requires product metadata that does not exist. Return the minimum additional fixture field needed rather than inventing opaque scoring.
+Stop if meaningful ranking requires product metadata that does not exist. Return the minimum additional fixture field needed rather than inventing opaque scoring or adding a synthetic third Religion product.

@@ -13,15 +13,38 @@ function normalize(value: string): string {
 }
 
 const productRankingStopWords = new Set(['buku', 'dan', 'kelas', 'mi', 'sd', 'untuk'])
+const productRankingGenericTokens = new Set(['pendidikan'])
+const gradeTokenPattern = /^(?:0?[1-6]|i|ii|iii|iv|v|vi)$/
 
 function meaningfulTokens(value: string): string[] {
   return normalize(value)
     .split(' ')
-    .filter((token) => token.length > 0 && !productRankingStopWords.has(token))
+    .filter((token) => (
+      token.length > 0 &&
+      !productRankingStopWords.has(token) &&
+      !productRankingGenericTokens.has(token) &&
+      !gradeTokenPattern.test(token)
+    ))
 }
 
 function sharedTokenCount(sourceTokens: Set<string>, candidate: string): number {
   return meaningfulTokens(candidate).filter((token) => sourceTokens.has(token)).length
+}
+
+function productTexts(product: ProductMasterItem): string[] {
+  return [product.title, ...product.aliases]
+}
+
+export function isRelevantProductAlternative(
+  item: Pick<OrderItem, 'arkasTitle'>,
+  product: ProductMasterItem,
+): boolean {
+  const sourceTitle = normalize(item.arkasTitle)
+  if (!sourceTitle) return false
+  const texts = productTexts(product)
+  if (texts.some((value) => normalize(value) === sourceTitle)) return true
+  const sourceTokens = new Set(meaningfulTokens(item.arkasTitle))
+  return sourceTokens.size > 0 && texts.some((value) => sharedTokenCount(sourceTokens, value) > 0)
 }
 
 export function rankProductAlternatives(
@@ -38,10 +61,11 @@ export function rankProductAlternatives(
   })
 
   return uniqueProducts
+    .filter((product) => isRelevantProductAlternative(item, product))
     .map((product, index) => {
-      const productTexts = [product.title, ...product.aliases]
-      const exactTitleMatch = productTexts.some((value) => normalize(value) === sourceTitle)
-      const overlap = Math.max(...productTexts.map((value) => sharedTokenCount(sourceTokens, value)))
+      const texts = productTexts(product)
+      const exactTitleMatch = texts.some((value) => normalize(value) === sourceTitle)
+      const overlap = Math.max(...texts.map((value) => sharedTokenCount(sourceTokens, value)))
       return {
         product,
         index,
