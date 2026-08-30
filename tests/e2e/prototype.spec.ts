@@ -950,8 +950,9 @@ test.describe('mobile operations layout', () => {
     await page.goto('/orders/ORD-2026-065?tab=distribution')
     await expect(page.getByRole('heading', { name: 'Barang dari Vendor' })).toBeVisible()
     await expect(page.getByText('Sisa 67 buku')).toBeVisible()
-    await expect(page.getByRole('tab', { name: 'Overview' })).toBeVisible()
-    await expect(page.getByRole('tab', { name: 'Timeline' })).toBeVisible()
+    const sectionPicker = page.getByRole('combobox', { name: 'Bagian order workspace' })
+    await expect(sectionPicker).toHaveValue('distribution')
+    await expect(sectionPicker.locator('option')).toHaveCount(7)
     await page.screenshot({ path: testInfo.outputPath('mobile-order-workspace.png'), fullPage: true })
 
     await page.goto('/pipeline')
@@ -959,6 +960,73 @@ test.describe('mobile operations layout', () => {
     await expect(page.locator('.pipeline-column[data-stage="DISTRIBUTION"]')).toContainText('SDN 65 Ambon')
     await expect(page.locator('.pipeline-board')).toHaveCSS('overflow-x', 'visible')
     await page.screenshot({ path: testInfo.outputPath('mobile-pipeline.png'), fullPage: true })
+  })
+
+  test('makes workspace sections and Orders filters explicit on mobile', async ({ page }) => {
+    await page.goto('/orders/ORD-2026-065')
+    const sectionPicker = page.getByRole('combobox', { name: 'Bagian order workspace' })
+
+    await expect(page.locator('.tabs')).toBeHidden()
+    await expect(page.locator('.tabs__mobile-picker')).toBeVisible()
+    await expect(sectionPicker).toHaveValue('overview')
+    await expect(sectionPicker.locator('option')).toHaveCount(7)
+    expect(await sectionPicker.locator('option').evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value))).toEqual([
+      'overview', 'arkas', 'siplah', 'vendor', 'distribution', 'finance', 'timeline',
+    ])
+    await expect(sectionPicker.locator('option').last()).toHaveText('Timeline')
+
+    await sectionPicker.selectOption('finance')
+    await expect(page).toHaveURL(/\/orders\/ORD-2026-065\?tab=finance$/)
+    await expect(sectionPicker).toHaveValue('finance')
+    await expect(page.getByRole('heading', { name: 'Pembayaran sekolah' })).toBeVisible()
+
+    await sectionPicker.selectOption('arkas')
+    await expect(page).toHaveURL(/\/orders\/ORD-2026-065\?tab=arkas$/)
+    await expect(page.getByRole('heading', { name: 'ARKAS & Review HET' })).toBeVisible()
+
+    await sectionPicker.selectOption('timeline')
+    await expect(page).toHaveURL(/\/orders\/ORD-2026-065\?tab=timeline$/)
+    await page.goBack()
+    await expect(page).toHaveURL(/\/orders\/ORD-2026-065\?tab=arkas$/)
+    await expect(sectionPicker).toHaveValue('arkas')
+    await page.goForward()
+    await expect(page).toHaveURL(/\/orders\/ORD-2026-065\?tab=timeline$/)
+    await page.reload()
+    await expect(sectionPicker).toHaveValue('timeline')
+    await expect(page.getByRole('heading', { name: 'Timeline order' })).toBeVisible()
+
+    await page.goto('/orders?filter=benefit-eligible')
+    const filterPicker = page.getByRole('combobox', { name: 'Filter cepat' })
+    await expect(page.locator('.quick-filters')).toBeHidden()
+    await expect(page.locator('.quick-filter-picker')).toBeVisible()
+    await expect(filterPicker).toHaveValue('benefit-eligible')
+    await expect(filterPicker.locator('option')).toHaveCount(8)
+    await expect(filterPicker.locator('option').last()).toHaveText('Benefit wajib dibayar')
+    for (const filter of ['all', 'needs-action', 'het-problem', 'ready-siplah', 'ready-vendor', 'goods-arrived', 'unpaid', 'benefit-eligible']) {
+      await filterPicker.selectOption(filter)
+      await expect(filterPicker).toHaveValue(filter)
+    }
+    await filterPicker.selectOption('unpaid')
+    await expect(page).toHaveURL(/\/orders\?filter=unpaid$/)
+    await expect(filterPicker).toHaveValue('unpaid')
+
+    const lastNavItem = page.locator('.mobile-nav__link').last()
+    const lastNavBox = await lastNavItem.boundingBox()
+    expect(lastNavBox).not.toBeNull()
+    if (lastNavBox) expect(lastNavBox.x + lastNavBox.width).toBeLessThanOrEqual(390)
+    const resetButton = page.getByRole('button', { name: 'Reset Demo Data' })
+    await expect(resetButton).toHaveClass(/topbar__reset/)
+    expect(Number(await resetButton.evaluate((element) => getComputedStyle(element).opacity))).toBeLessThan(1)
+
+    await page.setViewportSize({ width: 1366, height: 768 })
+    await page.goto('/orders/ORD-2026-065?tab=finance')
+    await expect(page.locator('.tabs')).toBeVisible()
+    await expect(page.locator('.tabs__mobile-picker')).toBeHidden()
+    await expect(page.getByRole('tab', { name: 'Pembayaran', selected: true })).toBeVisible()
+    await page.goto('/orders?filter=benefit-eligible')
+    await expect(page.locator('.quick-filters')).toBeVisible()
+    await expect(page.locator('.quick-filter-picker')).toBeHidden()
+    await expect(page.getByRole('button', { name: 'Benefit wajib dibayar' })).toHaveClass(/filter-chip--active/)
   })
 
   test('keeps reminder setup, validation, and persistence usable on mobile', async ({ page }, testInfo) => {
@@ -1015,16 +1083,16 @@ test.describe('mobile operations layout', () => {
     await expect(page.getByRole('heading', { name: 'Order selesai' })).toHaveCount(2)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
 
-    await page.getByRole('tab', { name: 'Barang & Distribusi' }).click()
+    await page.getByRole('combobox', { name: 'Bagian order workspace' }).selectOption('distribution')
     await expect(page.getByRole('button', { name: 'Refresh summary' })).toHaveCount(0)
-    await page.getByRole('tab', { name: 'Timeline' }).click()
+    await page.getByRole('combobox', { name: 'Bagian order workspace' }).selectOption('timeline')
     await expect(page.getByLabel('Add Note')).toHaveCount(0)
 
     await page.getByRole('button', { name: 'Buka kembali order' }).click()
     await page.getByLabel('Alasan membuka kembali order (wajib)').fill('Koreksi dokumen pada kunjungan sekolah.')
     await page.getByRole('button', { name: 'Konfirmasi buka kembali' }).click()
     await expect(page.getByText('Penyelesaian', { exact: true }).first()).toBeVisible()
-    await page.getByRole('tab', { name: 'Pembayaran' }).click()
+    await page.getByRole('combobox', { name: 'Bagian order workspace' }).selectOption('finance')
     await expect(page.getByRole('button', { name: 'Review penutupan' })).toBeVisible()
   })
 
@@ -1076,7 +1144,7 @@ test.describe('mobile operations layout', () => {
     await expect(paymentDialog.locator('#school-paid-gross-error')).toHaveCount(0)
     await page.getByRole('button', { name: 'Batal' }).click()
 
-    await page.getByRole('tab', { name: 'Timeline' }).click()
+    await page.getByRole('combobox', { name: 'Bagian order workspace' }).selectOption('timeline')
     await expect(page.getByLabel('Add Note')).toBeVisible()
   })
 

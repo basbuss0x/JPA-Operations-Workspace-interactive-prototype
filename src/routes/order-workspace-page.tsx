@@ -81,7 +81,7 @@ export function OrderWorkspacePage() {
     const next = new URLSearchParams(searchParams)
     if (tab === 'overview') next.delete('tab')
     else next.set('tab', tab)
-    setSearchParams(next, { replace: true })
+    setSearchParams(next)
   }
 
   const openOverride = () => {

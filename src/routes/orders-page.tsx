@@ -93,6 +93,12 @@ export function OrdersPage() {
             </button>
           ))}
         </div>
+        <label className="quick-filter-picker">
+          <span>Filter cepat</span>
+          <select aria-label="Filter cepat" value={activeFilter} onChange={(event) => updateParam('filter', event.target.value)}>
+            {filters.map((filter) => <option key={filter.id} value={filter.id}>{filter.label}</option>)}
+          </select>
+        </label>
       </section>
 
       <div className="result-count">

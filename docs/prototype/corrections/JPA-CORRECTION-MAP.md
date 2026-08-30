@@ -1,6 +1,6 @@
 # JPA Post-Audit Correction Map
 
-Status: JPA-COR-07–11 implemented; Review Gate A pending
+Status: JPA-COR-07–12 implemented; Review Gate B pending
 Baseline: `00a747e` on `prototype/pass-5-final-integration`  
 Audit source: `outputs/jpa-ui-ux-audit/JPA-Operations-Workspace-UI-UX-Audit.md`  
 Design plan: `outputs/jpa-ui-ux-audit/JPA-Graph-First-Correction-Plan.md`
@@ -246,7 +246,7 @@ Can a one-handed operator discover every order section and filter while preservi
 
 ### Answer
 
-Pending implementation and interactive browser proof.
+Implemented with an explicit mobile section picker and filter picker: all seven order workspace sections remain discoverable at 390 px, the selected section stays visible and URL-backed, browser back/forward/reload preserve context, and desktop tabs remain unchanged. Narrow Orders filters use the same explicit picker pattern. Mobile top/bottom safe-area spacing, modal footer reachability, and secondary Reset Demo Data treatment were added. Automated and interactive browser checks cover 390 px and desktop regression paths; the remaining Phase 2/COR-18 scenario matrix is pending.
 
 ## #13: Can UI and Timeline speak one operator language?
 

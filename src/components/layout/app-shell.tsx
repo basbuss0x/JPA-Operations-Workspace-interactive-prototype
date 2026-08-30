@@ -67,7 +67,7 @@ export function AppShell() {
             <span className="prototype-dot" />
             State demo tersimpan lokal
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setResetOpen(true)}>
+          <Button className="topbar__reset" variant="ghost" size="sm" onClick={() => setResetOpen(true)}>
             Reset Demo Data
           </Button>
         </header>
